@@ -141,3 +141,7 @@ vite.config.ts.timestamp-*
 # JetBrains
 .idea/
 *.iml
+
+# Claude Code
+.claude/memory/
+.claude/worktrees/
