@@ -1,0 +1,33 @@
+{
+  "name": "yukibot",
+  "version": "1.0.0",
+  "description": "Telegram group moderation bot",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "node dist/index.js",
+    "dev": "nodemon src/index.ts",
+    "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yuki44/YukiBot-Telegram-Admin.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Yuki44/YukiBot-Telegram-Admin/issues"
+  },
+  "homepage": "https://github.com/Yuki44/YukiBot-Telegram-Admin#readme",
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "grammy": "^1.41.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "nodemon": "^3.1.14",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
