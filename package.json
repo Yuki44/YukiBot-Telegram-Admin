@@ -22,9 +22,11 @@
   "homepage": "https://github.com/Yuki44/YukiBot-Telegram-Admin#readme",
   "dependencies": {
     "dotenv": "^17.3.1",
-    "grammy": "^1.41.1"
+    "grammy": "^1.41.1",
+    "mongoose": "^9.3.1"
   },
   "devDependencies": {
+    "@types/mongoose": "^5.11.96",
     "@types/node": "^25.5.0",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
