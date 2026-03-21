@@ -18,6 +18,10 @@ const adminSchema = new Schema<IAdmin>({
     type: Number,
     required: true,
   },
+  chatName: {
+    type: String,
+    required: true,
+  },
   role: {
     type: String,
     enum: ["owner", "admin"],

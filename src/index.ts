@@ -6,6 +6,7 @@ import { BotContext } from "./types";
 import { connectDB } from "./db/connection";
 import { loadChat } from "./bot/middleware/loadChat";
 import { isAdmin } from "./bot/middleware/isAdmin";
+import { adminOnlyCommands } from "./bot/middleware/adminOnlyCommands";
 import { topicFiltering } from "./features/topicFiltering";
 import { setupHandler } from "./bot/commands/setup";
 import { addTopicHandler } from "./bot/commands/addTopic";
@@ -22,6 +23,7 @@ const bot = new Bot<BotContext>(token);
 // Register global middleware
 bot.use(loadChat);
 bot.use(isAdmin);
+bot.use(adminOnlyCommands);
 
 // Register commands
 bot.command("setup", setupHandler);

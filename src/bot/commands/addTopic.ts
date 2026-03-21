@@ -34,8 +34,8 @@ export async function addTopicHandler(ctx: CommandContext<BotContext>) {
 
     if (args.length < 2) {
       await ctx.reply(
-        "Usage: /addtopic <topicId> <allowedTypes>\n" +
-          "Example: /addtopic 12283 photo,video\n" +
+        "Usage: /addtopic <topicId> <allowedTypes> [name]\n" +
+          "Example: /addtopic 12283 photo,video General Chat\n" +
           "Valid types: photo, video, sticker, audio, voice, document, text"
       );
       return;
@@ -64,8 +64,7 @@ export async function addTopicHandler(ctx: CommandContext<BotContext>) {
       return;
     }
 
-    // Use topicId as name fallback since Grammy cannot fetch topic names directly
-    const topicName = `Topic ${topicId}`;
+    const topicName = args.length >= 3 ? args.slice(2).join(" ") : `Topic ${topicId}`;
 
     // Upsert Topic document
     await Topic.findOneAndUpdate(
@@ -87,11 +86,12 @@ export async function addTopicHandler(ctx: CommandContext<BotContext>) {
       username: ctx.from?.username,
       chatId,
       topicId,
+      topicName,
       allowedMsgTypes: validTypes,
     });
 
     await ctx.reply(
-      `Topic ${topicId} registered with types: ${validTypes.join(", ")}`
+      `Topic '${topicName}' (${topicId}) registered with types: ${validTypes.join(", ")}`
     );
   } catch (error) {
     logger.error({

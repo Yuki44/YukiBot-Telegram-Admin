@@ -1,7 +1,7 @@
 import { CommandContext } from "grammy";
 import { BotContext } from "../../types";
 import { chatRepository } from "../../db/repositories/chatRepository";
-import { Admin } from "../../db/models/Admin";
+import { adminRepository } from "../../db/repositories/adminRepository";
 import { logger } from "../../utils/logger";
 
 export async function setupHandler(ctx: CommandContext<BotContext>) {
@@ -25,18 +25,29 @@ export async function setupHandler(ctx: CommandContext<BotContext>) {
     // Determine type
     const chatType = "is_forum" in chat && chat.is_forum ? "topics" : "normal";
 
+    const chatTitle = ("title" in chat && chat.title) ? chat.title : "Unknown";
+
     // Upsert Chat document
+    const features =
+      chatType === "topics"
+        ? {
+            languageDetection: false,
+            spamDetection: false,
+            topicFiltering: false,
+            commands: false,
+          }
+        : {
+            languageDetection: false,
+            spamDetection: false,
+            commands: false,
+          };
+
     await chatRepository.upsert({
       chatId,
-      name: "title" in chat ? chat.title : "Unknown",
+      name: chatTitle,
       type: chatType,
       isActive: true,
-      features: {
-        languageDetection: false,
-        spamDetection: false,
-        topicFiltering: false,
-        commands: false,
-      },
+      features,
     });
 
     // Fetch and upsert admins
@@ -47,19 +58,14 @@ export async function setupHandler(ctx: CommandContext<BotContext>) {
         .filter(Boolean)
         .join(" ");
 
-      await Admin.findOneAndUpdate(
-        { userId: admin.user.id, chatId },
-        {
-          $set: {
-            userId: admin.user.id,
-            username: admin.user.username || "",
-            name: fullName || "Unknown",
-            chatId,
-            role: admin.status === "creator" ? "owner" : "admin",
-          },
-        },
-        { upsert: true, new: true }
-      );
+      await adminRepository.upsert({
+        userId: admin.user.id,
+        username: admin.user.username || "",
+        name: fullName || "Unknown",
+        chatId,
+        chatName: chatTitle,
+        role: admin.status === "creator" ? "owner" : "admin",
+      });
     }
 
     logger.info({

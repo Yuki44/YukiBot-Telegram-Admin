@@ -31,8 +31,8 @@ export async function editTopicHandler(ctx: CommandContext<BotContext>) {
 
     if (args.length < 2) {
       await ctx.reply(
-        "Usage: /edittopic <topicId> <allowedTypes>\n" +
-          "Example: /edittopic 12283 photo,video\n" +
+        "Usage: /edittopic <topicId> <allowedTypes> [name]\n" +
+          "Example: /edittopic 12283 photo,video General Chat\n" +
           "Valid types: photo, video, sticker, audio, voice, document, text"
       );
       return;
@@ -57,6 +57,8 @@ export async function editTopicHandler(ctx: CommandContext<BotContext>) {
       return;
     }
 
+    const newName = args.length >= 3 ? args.slice(2).join(" ") : null;
+
     const topic = await topicRepository.findByChatAndTopic(chatId, topicId);
     if (!topic) {
       await ctx.reply(
@@ -66,6 +68,9 @@ export async function editTopicHandler(ctx: CommandContext<BotContext>) {
     }
 
     topic.allowedMsgTypes = allowedMsgTypes;
+    if (newName !== null) {
+      topic.name = newName;
+    }
     await topic.save();
 
     logger.info({
@@ -75,10 +80,12 @@ export async function editTopicHandler(ctx: CommandContext<BotContext>) {
       chatId,
       topicId,
       allowedMsgTypes,
+      ...(newName !== null && { topicName: newName }),
     });
 
+    const nameInfo = newName !== null ? ` ('${newName}')` : ` ('${topic.name}')`;
     await ctx.reply(
-      `Topic ${topicId} updated. Now allows: ${allowedMsgTypes.join(", ")}`
+      `Topic ${topicId}${nameInfo} updated. Now allows: ${allowedMsgTypes.join(", ")}`
     );
   } catch (error) {
     logger.error({

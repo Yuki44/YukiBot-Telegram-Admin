@@ -21,7 +21,7 @@ export interface IChat extends Document {
   features: {
     languageDetection: boolean;
     spamDetection: boolean;
-    topicFiltering: boolean;
+    topicFiltering?: boolean;
     commands: boolean;
   };
 }
@@ -31,6 +31,7 @@ export interface IAdmin extends Document {
   username: string;
   name: string;
   chatId: number;
+  chatName: string;
   role: "owner" | "admin";
 }
 

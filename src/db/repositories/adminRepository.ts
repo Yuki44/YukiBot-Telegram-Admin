@@ -10,4 +10,20 @@ export const adminRepository = {
     const admin = await Admin.findOne({ userId, chatId });
     return admin !== null;
   },
+
+  async upsert(data: {
+    userId: number;
+    username: string;
+    name: string;
+    chatId: number;
+    chatName: string;
+    role: "owner" | "admin";
+  }): Promise<IAdmin> {
+    const result = await Admin.findOneAndUpdate(
+      { userId: data.userId, chatId: data.chatId },
+      { $set: data },
+      { upsert: true, new: true }
+    );
+    return result!;
+  },
 };
