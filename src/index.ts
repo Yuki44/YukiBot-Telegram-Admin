@@ -37,11 +37,11 @@ bot.command("syncadmins", syncAdminsHandler);
 bot.command("edittopic", editTopicHandler);
 bot.command("removetopic", removeTopicHandler);
 bot.command("togglefeature", toggleFeatureHandler);
-bot.command("avisar", avisarHandler);
-bot.command("elavisar", elAvisarHandler);
-bot.command("quitaraviso", quitarAvisoHandler);
-bot.command("avisos", avisosHandler);
-bot.command("perdonarban", perdonarbanHandler);
+bot.command("av", avisarHandler);
+bot.command("elav", elAvisarHandler);
+bot.command("qav", quitarAvisoHandler);
+bot.command("avs", avisosHandler);
+bot.command("pban", perdonarbanHandler);
 
 // Register chat_member handler
 bot.on("chat_member", chatMemberHandler);
