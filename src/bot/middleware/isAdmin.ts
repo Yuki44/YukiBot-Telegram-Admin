@@ -9,16 +9,12 @@ export const isAdmin: Middleware<BotContext> = async (ctx, next) => {
 
     if (!userId || !chatId) {
       ctx.isAdmin = false;
-      return await next();
+    } else {
+      ctx.isAdmin = await adminRepository.isChatAdmin(userId, chatId);
     }
-
-    const adminStatus = await adminRepository.isChatAdmin(userId, chatId);
-    ctx.isAdmin = adminStatus;
-
-    await next();
   } catch (error) {
     console.error("Error checking admin status:", error);
     ctx.isAdmin = false;
-    await next();
   }
+  await next();
 };
