@@ -17,6 +17,8 @@ import { toggleFeatureHandler } from "./bot/commands/toggleFeature";
 import { avisarHandler, elAvisarHandler } from "./bot/commands/avisar";
 import { quitarAvisoHandler } from "./bot/commands/quitaraviso";
 import { avisosHandler } from "./bot/commands/avisos";
+import { chatMemberHandler } from "./bot/handlers/chatMemberHandler";
+import { perdonarbanHandler } from "./bot/commands/perdonarban";
 
 const token = process.env.BOT_TOKEN;
 if (!token) throw new Error("BOT_TOKEN is not set in .env");
@@ -39,6 +41,10 @@ bot.command("avisar", avisarHandler);
 bot.command("elavisar", elAvisarHandler);
 bot.command("quitaraviso", quitarAvisoHandler);
 bot.command("avisos", avisosHandler);
+bot.command("perdonarban", perdonarbanHandler);
+
+// Register chat_member handler
+bot.on("chat_member", chatMemberHandler);
 
 // Register message handler with topic filtering
 bot.on("message", topicFiltering);
@@ -46,7 +52,9 @@ bot.on("message", topicFiltering);
 // Start bot
 async function start() {
   await connectDB();
-  await bot.start();
+  await bot.start({
+    allowed_updates: ["message", "chat_member", "callback_query"],
+  });
   console.log("YukiBot is running...");
 }
 

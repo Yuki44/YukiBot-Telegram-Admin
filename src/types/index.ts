@@ -23,6 +23,7 @@ export interface IChat extends Document {
     spamDetection: boolean;
     topicFiltering?: boolean;
     commands: boolean;
+    autoBan: boolean;
   };
 }
 

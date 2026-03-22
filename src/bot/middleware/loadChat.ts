@@ -8,21 +8,13 @@ export const loadChat: Middleware<BotContext> = async (ctx, next) => {
 
     if (!chatId) {
       ctx.chatConfig = null;
-      return await next();
-    }
-
-    const chatConfig = await chatRepository.findByChatId(chatId);
-
-    if (!chatConfig || !chatConfig.isActive) {
-      ctx.chatConfig = null;
     } else {
-      ctx.chatConfig = chatConfig;
+      const chatConfig = await chatRepository.findByChatId(chatId);
+      ctx.chatConfig = chatConfig?.isActive ? chatConfig : null;
     }
-
-    await next();
   } catch (error) {
     console.error("Error loading chat config:", error);
     ctx.chatConfig = null;
-    await next();
   }
+  await next();
 };

@@ -37,6 +37,10 @@ const chatSchema = new Schema<IChat>({
       type: Boolean,
       default: false,
     },
+    autoBan: {
+      type: Boolean,
+      default: false,
+    },
   },
 });
 
