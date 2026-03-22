@@ -46,7 +46,9 @@ export interface IUser extends Document {
   userId: number;
   chatId: number;
   username?: string;
+  name?: string;
   warnings: number;
+  warningReasons: string[];
   isMuted: boolean;
   muteUntil?: Date;
   isBanned: boolean;
