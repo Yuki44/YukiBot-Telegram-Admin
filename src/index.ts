@@ -14,6 +14,9 @@ import { syncAdminsHandler } from "./bot/commands/syncAdmins";
 import { editTopicHandler } from "./bot/commands/editTopic";
 import { removeTopicHandler } from "./bot/commands/removeTopic";
 import { toggleFeatureHandler } from "./bot/commands/toggleFeature";
+import { avisarHandler, elAvisarHandler } from "./bot/commands/avisar";
+import { quitarAvisoHandler } from "./bot/commands/quitaraviso";
+import { avisosHandler } from "./bot/commands/avisos";
 
 const token = process.env.BOT_TOKEN;
 if (!token) throw new Error("BOT_TOKEN is not set in .env");
@@ -32,6 +35,10 @@ bot.command("syncadmins", syncAdminsHandler);
 bot.command("edittopic", editTopicHandler);
 bot.command("removetopic", removeTopicHandler);
 bot.command("togglefeature", toggleFeatureHandler);
+bot.command("avisar", avisarHandler);
+bot.command("elavisar", elAvisarHandler);
+bot.command("quitaraviso", quitarAvisoHandler);
+bot.command("avisos", avisosHandler);
 
 // Register message handler with topic filtering
 bot.on("message", topicFiltering);

@@ -13,9 +13,16 @@ const userSchema = new Schema<IUser>({
   username: {
     type: String,
   },
+  name: {
+    type: String,
+  },
   warnings: {
     type: Number,
     default: 0,
+  },
+  warningReasons: {
+    type: [String],
+    default: [],
   },
   isMuted: {
     type: Boolean,
