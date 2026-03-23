@@ -49,6 +49,7 @@ export async function setupHandler(ctx: CommandContext<BotContext>) {
       name: chatTitle,
       type: chatType,
       isActive: true,
+      whitelist: false,
       features,
     });
 
