@@ -20,6 +20,10 @@ const chatSchema = new Schema<IChat>({
     type: Boolean,
     default: true,
   },
+  whitelist: {
+    type: Boolean,
+    default: false,
+  },
   features: {
     languageDetection: {
       type: Boolean,

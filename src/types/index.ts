@@ -18,6 +18,7 @@ export interface IChat extends Document {
   name: string;
   type: "topics" | "normal";
   isActive: boolean;
+  whitelist: boolean;
   features: {
     languageDetection: boolean;
     spamDetection: boolean;
