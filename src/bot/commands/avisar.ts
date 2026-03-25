@@ -1,15 +1,7 @@
 import { BotContext } from "../../types";
 import { resolveTarget } from "../helpers/resolveTarget";
-import { userRepository } from "../../db/repositories/userRepository";
 import { adminRepository } from "../../db/repositories/adminRepository";
-
-function esc(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function displayName(name: string, username?: string): string {
-  return username ? `${esc(name)} (@${esc(username)})` : esc(name);
-}
+import { applyWarn } from "../helpers/applyWarn";
 
 async function executeAvisar(ctx: BotContext, deleteReplied: boolean): Promise<void> {
   if (!ctx.chatConfig) return;
@@ -41,9 +33,6 @@ async function executeAvisar(ctx: BotContext, deleteReplied: boolean): Promise<v
     return;
   }
 
-  const user = await userRepository.incrementWarning(target.userId, chatId, reason, target.username, target.name);
-  const dn = displayName(target.name, target.username);
-
   if (deleteReplied && ctx.message?.reply_to_message?.message_id) {
     try {
       await ctx.api.deleteMessage(chatId, ctx.message.reply_to_message.message_id);
@@ -52,25 +41,7 @@ async function executeAvisar(ctx: BotContext, deleteReplied: boolean): Promise<v
     }
   }
 
-  if (user.warnings >= 3) {
-    let banMsg = `🚫 <b>${dn} ha sido baneado</b> tras recibir 3 avisos.\n📋 Última razón: ${esc(reason)}`;
-    try {
-      await ctx.api.banChatMember(chatId, target.userId);
-    } catch {
-      banMsg += "\n<i>(Error al ejecutar el ban, hazlo manualmente.)</i>";
-    }
-    await ctx.reply(banMsg, { parse_mode: "HTML" });
-  } else if (user.warnings === 2) {
-    await ctx.reply(
-      `⚠️ <b>Aviso ${user.warnings}/3</b> para ${dn}\n📋 Razón: ${esc(reason)}\n❗ Un aviso más y será baneado.`,
-      { parse_mode: "HTML" }
-    );
-  } else {
-    await ctx.reply(
-      `⚠️ <b>Aviso ${user.warnings}/3</b> para ${dn}\n📋 Razón: ${esc(reason)}`,
-      { parse_mode: "HTML" }
-    );
-  }
+  await applyWarn(ctx, target.userId, chatId, target.name, target.username, reason);
 
   try { await ctx.deleteMessage(); } catch { /* ignore */ }
 }
