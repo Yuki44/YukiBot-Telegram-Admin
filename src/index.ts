@@ -19,6 +19,10 @@ import { quitarAvisoHandler } from "./bot/commands/quitaraviso";
 import { avisosHandler } from "./bot/commands/avisos";
 import { chatMemberHandler } from "./bot/handlers/chatMemberHandler";
 import { perdonarbanHandler } from "./bot/commands/perdonarban";
+import { silHandler } from "./bot/commands/sil";
+import { elsilHandler } from "./bot/commands/elsil";
+import { silavHandler } from "./bot/commands/silav";
+import { elsilavHandler } from "./bot/commands/elsilav";
 
 const token = process.env.BOT_TOKEN;
 if (!token) throw new Error("BOT_TOKEN is not set in .env");
@@ -42,6 +46,10 @@ bot.command("elav", elAvisarHandler);
 bot.command("qav", quitarAvisoHandler);
 bot.command("avs", avisosHandler);
 bot.command("pban", perdonarbanHandler);
+bot.command("sil", silHandler);
+bot.command("elsil", elsilHandler);
+bot.command("silav", silavHandler);
+bot.command("elsilav", elsilavHandler);
 
 // Register chat_member handler
 bot.on("chat_member", chatMemberHandler);
