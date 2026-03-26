@@ -23,6 +23,7 @@ import { silHandler } from "./bot/commands/sil";
 import { elsilHandler } from "./bot/commands/elsil";
 import { silavHandler } from "./bot/commands/silav";
 import { elsilavHandler } from "./bot/commands/elsilav";
+import { qsilHandler } from "./bot/commands/qsil";
 
 const token = process.env.BOT_TOKEN;
 if (!token) throw new Error("BOT_TOKEN is not set in .env");
@@ -50,6 +51,7 @@ bot.command("sil", silHandler);
 bot.command("elsil", elsilHandler);
 bot.command("silav", silavHandler);
 bot.command("elsilav", elsilavHandler);
+bot.command("qsil", qsilHandler);
 
 // Register chat_member handler
 bot.on("chat_member", chatMemberHandler);
