@@ -1,4 +1,6 @@
 import { BotContext } from "../../types";
+import { adminRepository } from "../../db/repositories/adminRepository";
+import { silenceUser } from "../helpers/silenceUser";
 import { sendAndAutoDelete } from "../helpers/sendAndAutoDelete";
 
 export async function elsilHandler(ctx: BotContext): Promise<void> {
@@ -12,11 +14,35 @@ export async function elsilHandler(ctx: BotContext): Promise<void> {
       return;
     }
 
+    const replyFrom = ctx.message.reply_to_message.from;
+    if (!replyFrom) {
+      await ctx.reply("⚠️ No se pudo identificar al usuario.", { parse_mode: "HTML" });
+      return;
+    }
+
+    const targetUserId = replyFrom.id;
+    const targetUsername = replyFrom.username;
+    const targetName = replyFrom.first_name + (replyFrom.last_name ? ` ${replyFrom.last_name}` : "");
     const targetMessageId = ctx.message.reply_to_message.message_id;
-    await ctx.api.deleteMessage(chatId, targetMessageId);
-    console.log(`[DELETE] message ${targetMessageId} deleted in ${chatId}`);
-    try { await ctx.deleteMessage(); } catch { /* ignore */ }
-    await sendAndAutoDelete(ctx, `🗑️ Mensaje eliminado.`, 1000);
+
+    const isTargetAdmin = await adminRepository.isChatAdmin(targetUserId, chatId);
+    if (isTargetAdmin) {
+      await ctx.reply("❌ No puedes silenciar a un administrador.", { parse_mode: "HTML" });
+      return;
+    }
+
+    try {
+      await ctx.api.deleteMessage(chatId, targetMessageId);
+    } catch { /* ignore */ }
+
+    const success = await silenceUser(ctx, targetUserId, chatId);
+    if (success) {
+      try { await ctx.deleteMessage(); } catch { /* ignore */ }
+      const mention = targetUsername ? `@${targetUsername}` : targetName;
+      await sendAndAutoDelete(ctx, `🔇 ${mention} ha sido silenciado por 1 semana.`, 1000);
+    } else {
+      await ctx.reply("⚠️ No se pudo silenciar. ¿Tengo permisos?", { parse_mode: "HTML" });
+    }
   } catch {
     // silent fail
   }
