@@ -63,6 +63,10 @@ export const userRepository = {
     return user;
   },
 
+  async remove(userId: number, chatId: number): Promise<void> {
+    await User.deleteOne({ userId, chatId });
+  },
+
   async decrementWarning(userId: number, chatId: number): Promise<IUser | null> {
     const user = await User.findOne({ userId, chatId });
     if (!user) return null;

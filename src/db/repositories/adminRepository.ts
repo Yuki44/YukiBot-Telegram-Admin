@@ -11,6 +11,10 @@ export const adminRepository = {
     return admin !== null;
   },
 
+  async findByUsername(username: string, chatId: number): Promise<IAdmin | null> {
+    return await Admin.findOne({ username, chatId });
+  },
+
   async upsert(data: {
     userId: number;
     username: string;
@@ -25,5 +29,9 @@ export const adminRepository = {
       { upsert: true, new: true }
     );
     return result!;
+  },
+
+  async remove(userId: number, chatId: number): Promise<void> {
+    await Admin.deleteOne({ userId, chatId });
   },
 };

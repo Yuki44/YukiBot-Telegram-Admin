@@ -2,6 +2,7 @@ import { CommandContext } from "grammy";
 import { BotContext } from "../../types";
 import { chatRepository } from "../../db/repositories/chatRepository";
 import { adminRepository } from "../../db/repositories/adminRepository";
+import { userRepository } from "../../db/repositories/userRepository";
 import { logger } from "../../utils/logger";
 
 export async function setupHandler(ctx: CommandContext<BotContext>) {
@@ -69,6 +70,9 @@ export async function setupHandler(ctx: CommandContext<BotContext>) {
         chatName: chatTitle,
         role: admin.status === "creator" ? "owner" : "admin",
       });
+
+      // Also populate User collection so @username lookups work
+      await userRepository.findOrCreate(admin.user.id, chatId, admin.user.username, admin.user.first_name);
     }
 
     logger.info({
