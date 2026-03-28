@@ -14,7 +14,10 @@ export async function silavHandler(ctx: BotContext): Promise<void> {
 
     const target = await resolveTarget(ctx, args);
     if (!target) {
-      await ctx.reply("⚠️ Especifica un usuario.", { parse_mode: "HTML" });
+      const msg = args.length > 0 || ctx.message?.reply_to_message
+        ? "⚠️ No se encontró al usuario."
+        : "⚠️ Especifica un usuario.";
+      await ctx.reply(msg, { parse_mode: "HTML" });
       return;
     }
 

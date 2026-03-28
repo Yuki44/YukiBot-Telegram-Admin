@@ -13,7 +13,10 @@ async function executeAvisar(ctx: BotContext, deleteReplied: boolean): Promise<v
   const target = await resolveTarget(ctx, args);
 
   if (!target) {
-    await ctx.reply("⚠️ Debes especificar un usuario o responder a su mensaje.", { parse_mode: "HTML" });
+    const msg = args.length > 0 || ctx.message?.reply_to_message
+      ? "⚠️ No se encontró al usuario."
+      : "⚠️ Debes especificar un usuario o responder a su mensaje.";
+    await ctx.reply(msg, { parse_mode: "HTML" });
     return;
   }
 
