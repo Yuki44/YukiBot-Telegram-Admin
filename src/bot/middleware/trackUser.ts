@@ -13,7 +13,6 @@ export const trackUser: Middleware<BotContext> = async (ctx, next) => {
     const key = `${from.id}:${chatId}`;
     if (!seen.has(key)) {
       seen.add(key);
-      console.log(`[trackUser] Updating DB for user ${from.id} (${from.username || 'no username'}) in chat ${chatId}`);
       userRepository
         .findOrCreate(from.id, chatId, from.username, from.first_name)
         .catch((err) => console.error(`[trackUser] Error updating user ${from.id}:`, err));
