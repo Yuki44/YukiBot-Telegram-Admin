@@ -17,7 +17,11 @@ export async function silavHandler(ctx: BotContext): Promise<void> {
       const msg = args.length > 0 || ctx.message?.reply_to_message
         ? "⚠️ No se encontró al usuario."
         : "⚠️ Especifica un usuario.";
-      await ctx.reply(msg, { parse_mode: "HTML" });
+      await ctx.reply(msg, {
+        parse_mode: "HTML",
+        message_thread_id: ctx.message?.message_thread_id,
+      });
+      try { await ctx.deleteMessage(); } catch { /* ignore */ }
       return;
     }
 
@@ -25,13 +29,21 @@ export async function silavHandler(ctx: BotContext): Promise<void> {
     const reason = reasonArgs.join(" ").trim();
 
     if (!reason) {
-      await ctx.reply("⚠️ Especifica una razón.", { parse_mode: "HTML" });
+      await ctx.reply("⚠️ Especifica una razón.", {
+        parse_mode: "HTML",
+        message_thread_id: ctx.message?.message_thread_id,
+      });
+      try { await ctx.deleteMessage(); } catch { /* ignore */ }
       return;
     }
 
     const isTargetAdmin = await adminRepository.isChatAdmin(target.userId, chatId);
     if (isTargetAdmin) {
-      await ctx.reply("❌ No puedes silenciar a un administrador.", { parse_mode: "HTML" });
+      await ctx.reply("❌ No puedes silenciar a un administrador.", {
+        parse_mode: "HTML",
+        message_thread_id: ctx.message?.message_thread_id,
+      });
+      try { await ctx.deleteMessage(); } catch { /* ignore */ }
       return;
     }
 
@@ -42,7 +54,10 @@ export async function silavHandler(ctx: BotContext): Promise<void> {
       await sendAndAutoDelete(ctx, `🔇 ${mention} ha sido silenciado por 1 semana.`, 1000);
       await applyWarn(ctx, target.userId, chatId, target.name, target.username, reason);
     } else {
-      await ctx.reply("⚠️ No se pudo silenciar. ¿Tengo permisos?", { parse_mode: "HTML" });
+      await ctx.reply("⚠️ No se pudo silenciar. ¿Tengo permisos?", {
+        parse_mode: "HTML",
+        message_thread_id: ctx.message?.message_thread_id,
+      });
     }
   } catch {
     // silent fail

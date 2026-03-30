@@ -7,7 +7,10 @@ export async function sendAndAutoDelete(
 ): Promise<void> {
   let sent: Awaited<ReturnType<typeof ctx.reply>> | undefined;
   try {
-    sent = await ctx.reply(text, { parse_mode: "HTML" });
+    sent = await ctx.reply(text, {
+      parse_mode: "HTML",
+      message_thread_id: ctx.message?.message_thread_id,
+    });
   } catch (err) {
     console.error("[AUTO-DELETE] failed to send message:", err);
     return;

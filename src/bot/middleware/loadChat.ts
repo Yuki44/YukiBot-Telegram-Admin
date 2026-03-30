@@ -9,9 +9,8 @@ export const loadChat: Middleware<BotContext> = async (ctx, next) => {
     if (!chatId) {
       ctx.chatConfig = null;
     } else {
-      const chatConfig = await chatRepository.findByChatId(chatId);
+      const chatConfig = await chatRepository.findByChatId(Number(chatId));
       if (chatConfig && !chatConfig.whitelist) {
-        console.log(`[WHITELIST] chat ${chatId} not whitelisted, ignoring`);
         ctx.chatConfig = null;
       } else {
         ctx.chatConfig = chatConfig?.isActive ? chatConfig : null;

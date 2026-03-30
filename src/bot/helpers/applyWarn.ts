@@ -28,16 +28,25 @@ export async function applyWarn(
       } catch {
         banMsg += "\n<i>(Error al ejecutar el ban, hazlo manualmente.)</i>";
       }
-      await ctx.reply(banMsg, { parse_mode: "HTML" });
+      await ctx.reply(banMsg, {
+        parse_mode: "HTML",
+        message_thread_id: ctx.message?.message_thread_id,
+      });
     } else if (user.warnings === 2) {
       await ctx.reply(
         `⚠️ <b>Aviso ${user.warnings}/3</b> para ${dn}\n📋 Razón: ${esc(reason)}\n❗ Un aviso más y será baneado.`,
-        { parse_mode: "HTML" }
+        {
+          parse_mode: "HTML",
+          message_thread_id: ctx.message?.message_thread_id,
+        }
       );
     } else {
       await ctx.reply(
         `⚠️ <b>Aviso ${user.warnings}/3</b> para ${dn}\n📋 Razón: ${esc(reason)}`,
-        { parse_mode: "HTML" }
+        {
+          parse_mode: "HTML",
+          message_thread_id: ctx.message?.message_thread_id,
+        }
       );
     }
   } catch {

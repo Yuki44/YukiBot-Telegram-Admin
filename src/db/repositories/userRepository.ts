@@ -23,32 +23,56 @@ export const userRepository = {
   },
 
   async findOrCreate(userId: number, chatId: number, username?: string, name?: string): Promise<IUser> {
-    const setFields: Record<string, unknown> = {};
+    const update: any = {
+      $setOnInsert: {
+        userId,
+        chatId,
+        warnings: 0,
+        warningReasons: [],
+        isBanned: false,
+        wasBanned: false,
+      },
+    };
+
+    const setFields: Record<string, any> = {};
     if (username) setFields.username = username;
     if (name) setFields.name = name;
 
+    if (Object.keys(setFields).length > 0) {
+      update.$set = setFields;
+    }
+
     return await User.findOneAndUpdate(
       { userId, chatId },
-      {
-        $setOnInsert: { userId, chatId, warnings: 0, warningReasons: [], isBanned: false, wasBanned: false },
-        ...(Object.keys(setFields).length > 0 ? { $set: setFields } : {}),
-      },
-      { upsert: true, returnDocument: "after" }
+      update,
+      { upsert: true, new: true, setDefaultsOnInsert: true }
     );
   },
 
   async incrementWarning(userId: number, chatId: number, reason?: string, username?: string, name?: string): Promise<IUser> {
-    const setFields: Record<string, unknown> = {};
+    const update: any = {
+      $setOnInsert: {
+        userId,
+        chatId,
+        warnings: 0,
+        warningReasons: [],
+        isBanned: false,
+        wasBanned: false,
+      },
+    };
+
+    const setFields: Record<string, any> = {};
     if (username) setFields.username = username;
     if (name) setFields.name = name;
 
+    if (Object.keys(setFields).length > 0) {
+      update.$set = setFields;
+    }
+
     const user = await User.findOneAndUpdate(
       { userId, chatId },
-      {
-        $setOnInsert: { userId, chatId, warnings: 0, warningReasons: [], isBanned: false, wasBanned: false },
-        ...(Object.keys(setFields).length > 0 ? { $set: setFields } : {}),
-      },
-      { upsert: true, returnDocument: "after" }
+      update,
+      { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
     user.warnings += 1;

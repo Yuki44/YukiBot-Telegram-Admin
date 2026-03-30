@@ -8,7 +8,11 @@ export const adminRepository = {
 
   async isChatAdmin(userId: number, chatId: number): Promise<boolean> {
     const admin = await Admin.findOne({ userId, chatId });
-    return admin !== null;
+    const exists = admin !== null;
+    if (exists) {
+      console.log(`[adminRepository.isChatAdmin] User ${userId} is admin in chat ${chatId} (DB Match)`);
+    }
+    return exists;
   },
 
   async findByUsername(username: string, chatId: number): Promise<IAdmin | null> {
