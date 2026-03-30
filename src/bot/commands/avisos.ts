@@ -21,7 +21,11 @@ export async function avisosHandler(ctx: BotContext): Promise<void> {
       const msg = args.length > 0 || ctx.message?.reply_to_message
         ? "⚠️ No se encontró al usuario."
         : "⚠️ Debes especificar un usuario o responder a su mensaje.";
-      await ctx.reply(msg, { parse_mode: "HTML" });
+      await ctx.reply(msg, {
+        parse_mode: "HTML",
+        message_thread_id: ctx.message?.message_thread_id,
+      });
+      try { await ctx.deleteMessage(); } catch { /* ignore */ }
       return;
     }
 
@@ -38,7 +42,10 @@ export async function avisosHandler(ctx: BotContext): Promise<void> {
       });
     }
 
-    await ctx.reply(msg, { parse_mode: "HTML" });
+    await ctx.reply(msg, {
+      parse_mode: "HTML",
+      message_thread_id: ctx.message?.message_thread_id,
+    });
     try { await ctx.deleteMessage(); } catch { /* ignore */ }
   } catch {
     // Silently ignore errors

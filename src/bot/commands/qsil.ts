@@ -15,7 +15,11 @@ export async function qsilHandler(ctx: BotContext): Promise<void> {
       const msg = args.length > 0 || ctx.message?.reply_to_message
         ? "⚠️ No se encontró al usuario."
         : "⚠️ Especifica un usuario.";
-      await ctx.reply(msg, { parse_mode: "HTML" });
+      await ctx.reply(msg, {
+        parse_mode: "HTML",
+        message_thread_id: ctx.message?.message_thread_id,
+      });
+      try { await ctx.deleteMessage(); } catch { /* ignore */ }
       return;
     }
 
@@ -25,7 +29,10 @@ export async function qsilHandler(ctx: BotContext): Promise<void> {
       const mention = target.username ? `@${target.username}` : target.name;
       await sendAndAutoDelete(ctx, `🕊️ ${mention} ha recuperado su voz.`, 3000);
     } else {
-      await ctx.reply("⚠️ No se pudo des-silenciar. ¿Tengo permisos?", { parse_mode: "HTML" });
+      await ctx.reply("⚠️ No se pudo des-silenciar. ¿Tengo permisos?", {
+        parse_mode: "HTML",
+        message_thread_id: ctx.message?.message_thread_id,
+      });
     }
   } catch {
     // silent fail

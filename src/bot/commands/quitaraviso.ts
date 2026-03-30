@@ -20,7 +20,11 @@ async function executeQuitarAviso(ctx: BotContext, deleteReplied: boolean): Prom
     const msg = args.length > 0 || ctx.message?.reply_to_message
       ? "⚠️ No se encontró al usuario."
       : "⚠️ Debes especificar un usuario o responder a su mensaje.";
-    await ctx.reply(msg, { parse_mode: "HTML" });
+    await ctx.reply(msg, {
+      parse_mode: "HTML",
+      message_thread_id: ctx.message?.message_thread_id,
+    });
+    try { await ctx.deleteMessage(); } catch { /* ignore */ }
     return;
   }
 
@@ -28,7 +32,11 @@ async function executeQuitarAviso(ctx: BotContext, deleteReplied: boolean): Prom
   const user = await userRepository.decrementWarning(target.userId, chatId);
 
   if (!user) {
-    await ctx.reply("❌ Este usuario no tiene avisos registrados.", { parse_mode: "HTML" });
+    await ctx.reply("❌ Este usuario no tiene avisos registrados.", {
+      parse_mode: "HTML",
+      message_thread_id: ctx.message?.message_thread_id,
+    });
+    try { await ctx.deleteMessage(); } catch { /* ignore */ }
     return;
   }
 
@@ -43,7 +51,10 @@ async function executeQuitarAviso(ctx: BotContext, deleteReplied: boolean): Prom
   const dn = displayName(target.name, target.username);
   await ctx.reply(
     `✅ Aviso eliminado para ${dn}.\n📋 Avisos actuales: ${user.warnings}/3`,
-    { parse_mode: "HTML" }
+    {
+      parse_mode: "HTML",
+      message_thread_id: ctx.message?.message_thread_id,
+    }
   );
 
   try { await ctx.deleteMessage(); } catch { /* ignore */ }

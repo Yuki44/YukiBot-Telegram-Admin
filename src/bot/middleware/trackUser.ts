@@ -9,13 +9,13 @@ export const trackUser: Middleware<BotContext> = async (ctx, next) => {
   const from = ctx.from;
   const chatId = ctx.chat?.id;
 
-  if (from && chatId && !from.is_bot && ctx.chatConfig) {
+  if (from && !from.is_bot && chatId) {
     const key = `${from.id}:${chatId}`;
     if (!seen.has(key)) {
       seen.add(key);
       userRepository
         .findOrCreate(from.id, chatId, from.username, from.first_name)
-        .catch(() => {/* ignore */});
+        .catch((err) => console.error(`[trackUser] Error updating user ${from.id}:`, err));
     }
   }
 

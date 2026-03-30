@@ -19,9 +19,23 @@ export async function resolveTarget(
   const message = ctx.message;
   const chatId = ctx.chat!.id;
 
-  // Priority 1: reply — full user object, zero API calls
-  if (message?.reply_to_message?.from) {
+  console.log(`[resolveTarget] Resolving target in chat ${chatId}. Args:`, args);
+
+  // Check if args[0] is a potential target BEFORE checking for reply_to_message.
+  // This avoids accidental self-targets or misidentifications when a reply exists but isn't the intended target.
+  const hasTargetInArgs = args[0] && (
+    args[0].startsWith("@") ||        // Mention or username
+    /^\d+$/.test(args[0]) ||          // Numeric user ID
+    message?.entities?.some(e => e.type === "text_mention" && (e.offset === 0 || (message.text || message.caption || "").substring(0, e.offset).trim() === ""))
+  );
+
+  // Priority 1: If an explicit target is in the arguments, it OVERRIDES the reply
+  if (hasTargetInArgs) {
+    console.log(`[resolveTarget] Explicit target found in args[0]: ${args[0]}. Skipping reply check.`);
+  } else if (message?.reply_to_message?.from) {
+    // Priority 2: reply — only if NO target in args
     const u = message.reply_to_message.from;
+    console.log(`[resolveTarget] Resolved from reply: ${u.id} (${u.username || 'no username'})`);
     return {
       userId: u.id,
       username: u.username,
@@ -37,6 +51,7 @@ export async function resolveTarget(
     (e): e is TextMentionEntity => e.type === "text_mention"
   );
   if (mention) {
+    console.log(`[resolveTarget] Resolved from text_mention: ${mention.user.id} (${mention.user.username || 'no username'})`);
     return {
       userId: mention.user.id,
       username: mention.user.username,
@@ -48,10 +63,12 @@ export async function resolveTarget(
   // Priority 3: @username string
   if (args[0].startsWith("@")) {
     const usernameWithoutAt = args[0].slice(1);
+    console.log(`[resolveTarget] Attempting resolution for username: ${usernameWithoutAt}`);
 
     // 3a: DB cache (populated by trackUser middleware) — zero API calls
-    const cached = await userRepository.findByUsername(usernameWithoutAt, chatId);
+    const cached = await userRepository.findByUsername(usernameWithoutAt, Number(chatId));
     if (cached) {
+      console.log(`[resolveTarget] Resolved from User DB cache: ${cached.userId}`);
       return {
         userId: cached.userId,
         username: cached.username,
@@ -61,8 +78,9 @@ export async function resolveTarget(
     }
 
     // 3b: Admin collection fallback (admins may not be in User collection for older chats)
-    const cachedAdmin = await adminRepository.findByUsername(usernameWithoutAt, chatId);
+    const cachedAdmin = await adminRepository.findByUsername(usernameWithoutAt, Number(chatId));
     if (cachedAdmin) {
+      console.log(`[resolveTarget] Resolved from Admin DB cache: ${cachedAdmin.userId}`);
       // Populate User collection for future lookups
       userRepository
         .findOrCreate(cachedAdmin.userId, chatId, cachedAdmin.username || undefined, cachedAdmin.name)
@@ -75,37 +93,26 @@ export async function resolveTarget(
       };
     }
 
-    // 3c: API fallback for users not yet in cache — may work if Telegram resolves the username
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const member = await ctx.api.getChatMember(chatId, args[0] as any);
-      // Cache for future lookups
-      userRepository
-        .findOrCreate(member.user.id, chatId, member.user.username, member.user.first_name)
-        .catch(() => {/* ignore */});
-      return {
-        userId: member.user.id,
-        username: member.user.username,
-        name: member.user.first_name,
-        resolvedFromArgs: true,
-      };
-    } catch {
-      return null;
-    }
+    console.log(`[resolveTarget] Username ${usernameWithoutAt} not found in cache.`);
+    // 3c: API fallback for users not yet in cache
+    return null;
   }
 
   // Priority 4: numeric userId — one API call, graceful fallback if user left
   if (/^\d+$/.test(args[0])) {
     const userId = parseInt(args[0], 10);
+    console.log(`[resolveTarget] Attempting resolution for numeric ID: ${userId}`);
     try {
-      const member = await ctx.api.getChatMember(chatId, userId);
+      const member = await ctx.api.getChatMember(Number(chatId), userId);
+      console.log(`[resolveTarget] Resolved via getChatMember: ${member.user.id} (${member.user.username || 'no username'})`);
       return {
         userId: member.user.id,
         username: member.user.username,
         name: member.user.first_name,
         resolvedFromArgs: true,
       };
-    } catch {
+    } catch (e) {
+      console.log(`[resolveTarget] getChatMember failed for ${userId}, returning minimal info. Error:`, e);
       // User not in chat but ID is valid — return minimal info
       return {
         userId,
@@ -116,5 +123,6 @@ export async function resolveTarget(
     }
   }
 
+  console.log(`[resolveTarget] Could not resolve target for args[0]: ${args[0]}`);
   return null;
 }

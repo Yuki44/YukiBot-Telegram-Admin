@@ -20,7 +20,9 @@ export async function addTopicHandler(ctx: CommandContext<BotContext>) {
 
     // Only works in topics-type chats
     if (ctx.chatConfig?.type !== "topics") {
-      await ctx.reply("This command only works in forum chats.");
+      await ctx.reply("This command only works in forum chats.", {
+        message_thread_id: ctx.message?.message_thread_id,
+      });
       return;
     }
 
@@ -36,14 +38,17 @@ export async function addTopicHandler(ctx: CommandContext<BotContext>) {
       await ctx.reply(
         "Usage: /addtopic <topicId> <allowedTypes> [name]\n" +
           "Example: /addtopic 12283 photo,video General Chat\n" +
-          "Valid types: photo, video, sticker, audio, voice, document, text"
+          "Valid types: photo, video, sticker, audio, voice, document, text",
+        { message_thread_id: ctx.message?.message_thread_id }
       );
       return;
     }
 
     const topicId = parseInt(args[0], 10);
     if (isNaN(topicId)) {
-      await ctx.reply("Invalid topic ID. Must be a number.");
+      await ctx.reply("Invalid topic ID. Must be a number.", {
+        message_thread_id: ctx.message?.message_thread_id,
+      });
       return;
     }
 
@@ -59,7 +64,8 @@ export async function addTopicHandler(ctx: CommandContext<BotContext>) {
 
     if (validTypes.length === 0) {
       await ctx.reply(
-        "Invalid message types. Valid types: photo, video, sticker, audio, voice, document, text"
+        "Invalid message types. Valid types: photo, video, sticker, audio, voice, document, text",
+        { message_thread_id: ctx.message?.message_thread_id }
       );
       return;
     }
@@ -77,7 +83,7 @@ export async function addTopicHandler(ctx: CommandContext<BotContext>) {
           allowedMsgTypes: validTypes,
         },
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: "after" }
     );
 
     logger.info({
@@ -91,7 +97,8 @@ export async function addTopicHandler(ctx: CommandContext<BotContext>) {
     });
 
     await ctx.reply(
-      `Topic '${topicName}' (${topicId}) registered with types: ${validTypes.join(", ")}`
+      `Topic '${topicName}' (${topicId}) registered with types: ${validTypes.join(", ")}`,
+      { message_thread_id: ctx.message?.message_thread_id }
     );
   } catch (error) {
     logger.error({
@@ -101,6 +108,8 @@ export async function addTopicHandler(ctx: CommandContext<BotContext>) {
       chatId: ctx.chat?.id,
       error: String(error),
     });
-    await ctx.reply("Failed to add topic, check logs.");
+    await ctx.reply("Failed to add topic, check logs.", {
+      message_thread_id: ctx.message?.message_thread_id,
+    });
   }
 }

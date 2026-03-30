@@ -16,23 +16,37 @@ async function executeAvisar(ctx: BotContext, deleteReplied: boolean): Promise<v
     const msg = args.length > 0 || ctx.message?.reply_to_message
       ? "⚠️ No se encontró al usuario."
       : "⚠️ Debes especificar un usuario o responder a su mensaje.";
-    await ctx.reply(msg, { parse_mode: "HTML" });
+    await ctx.reply(msg, {
+      parse_mode: "HTML",
+      message_thread_id: ctx.message?.message_thread_id,
+    });
+    try { await ctx.deleteMessage(); } catch { /* ignore */ }
     return;
   }
 
   // Silently ignore if trying to warn self
-  if (target.userId === senderId) return;
+  if (target.userId === senderId) {
+    try { await ctx.deleteMessage(); } catch { /* ignore */ }
+    return;
+  }
 
   // Silently ignore if target is an admin
   const isTargetAdmin = await adminRepository.isChatAdmin(target.userId, chatId);
-  if (isTargetAdmin) return;
+  if (isTargetAdmin) {
+    try { await ctx.deleteMessage(); } catch { /* ignore */ }
+    return;
+  }
 
   // If target was resolved from args[0], reason starts at args[1]; otherwise all args are the reason
   const reasonArgs = target.resolvedFromArgs ? args.slice(1) : args;
   const reason = reasonArgs.join(" ").trim();
 
   if (!reason) {
-    await ctx.reply("⚠️ Debes especificar una razón para el aviso.", { parse_mode: "HTML" });
+    await ctx.reply("⚠️ Debes especificar una razón para el aviso.", {
+      parse_mode: "HTML",
+      message_thread_id: ctx.message?.message_thread_id,
+    });
+    try { await ctx.deleteMessage(); } catch { /* ignore */ }
     return;
   }
 

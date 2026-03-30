@@ -88,10 +88,13 @@ export async function setupHandler(ctx: CommandContext<BotContext>) {
     if (chatType === "topics") {
       await ctx.reply(
         "Chat initialized. Now use /addtopic <topicId> <allowedTypes> to register topics.\n" +
-          "Example: /addtopic 12283 photo,video"
+          "Example: /addtopic 12283 photo,video",
+        { message_thread_id: ctx.message?.message_thread_id }
       );
     } else {
-      await ctx.reply("Chat initialized successfully.");
+      await ctx.reply("Chat initialized successfully.", {
+        message_thread_id: ctx.message?.message_thread_id,
+      });
     }
   } catch (error) {
     logger.error({
@@ -101,6 +104,8 @@ export async function setupHandler(ctx: CommandContext<BotContext>) {
       chatId: ctx.chat?.id,
       error: String(error),
     });
-    await ctx.reply("Setup failed, check logs.");
+    await ctx.reply("Setup failed, check logs.", {
+      message_thread_id: ctx.message?.message_thread_id,
+    });
   }
 }

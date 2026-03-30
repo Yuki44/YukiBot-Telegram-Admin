@@ -14,7 +14,7 @@ export const chatRepository = {
     return await Chat.findOneAndUpdate(
       { chatId: chat.chatId },
       { $set: chat },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: "after" }
     );
   },
 };

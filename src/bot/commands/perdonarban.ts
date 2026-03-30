@@ -10,7 +10,10 @@ export async function perdonarbanHandler(
 
   const match = ctx.match?.toString().trim();
   if (!match) {
-    await ctx.reply("⚠️ Especifica un usuario.");
+    await ctx.reply("⚠️ Especifica un usuario.", {
+      message_thread_id: ctx.message?.message_thread_id,
+    });
+    try { await ctx.deleteMessage(); } catch { /* ignore */ }
     return;
   }
 
@@ -30,17 +33,20 @@ export async function perdonarbanHandler(
   }
 
   if (!user) {
-    await ctx.reply("❌ Sin registros para este usuario.");
+    await ctx.reply("❌ Sin registros para este usuario.", {
+      message_thread_id: ctx.message?.message_thread_id,
+    });
+    try { await ctx.deleteMessage(); } catch { /* ignore */ }
     return;
   }
 
   const userId = user.userId;
   const username = user.username ?? String(userId);
 
-  console.log(`[PARDON] Pardoning ${userId} (${username}) in ${chatId}`);
+  // console.log(`[PARDON] Pardoning ${userId} (${username}) in ${chatId}`);
 
   await User.deleteOne({ userId, chatId });
-  console.log(`[PARDON] Deleted user document for ${userId} in ${chatId}`);
+  // console.log(`[PARDON] Deleted user document for ${userId} in ${chatId}`);
 
   let unbanFailed = false;
   try {
@@ -55,6 +61,8 @@ export async function perdonarbanHandler(
     ? `✅ Hecho. @${username} puede volver a unirse. (Desbanealo manualmente si es necesario.)`
     : `✅ Hecho. @${username} puede volver a unirse.`;
 
-  await ctx.reply(msg);
+  await ctx.reply(msg, {
+    message_thread_id: ctx.message?.message_thread_id,
+  });
   try { await ctx.deleteMessage(); } catch { /* ignore */ }
 }

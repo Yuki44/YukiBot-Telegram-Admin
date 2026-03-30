@@ -7,25 +7,18 @@ export async function adminOnlyCommands(
   ctx: BotContext,
   next: NextFunction
 ): Promise<void> {
-  if (ctx.message?.text?.startsWith("/")) {
+  const text = ctx.message?.text || ctx.message?.caption;
+  if (text?.startsWith("/")) {
     const userId = ctx.from?.id;
     const chatId = ctx.chat?.id;
 
-    let isTelegramAdmin = false;
-    if (userId && chatId) {
-      try {
-        const member = await ctx.getChatMember(userId);
-        isTelegramAdmin = ADMIN_STATUSES.has(member.status);
-      } catch {
-        // If we can't check, deny by default
-      }
-    }
+    const isTelegramAdmin = ctx.isAdmin;
 
     if (!isTelegramAdmin) {
       try {
         await ctx.deleteMessage();
       } catch {
-        // Silently ignore delete failures (e.g. missing permissions)
+        // Silently ignore delete failures
       }
       return;
     }
