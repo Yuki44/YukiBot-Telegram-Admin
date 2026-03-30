@@ -83,7 +83,7 @@ export async function addTopicHandler(ctx: CommandContext<BotContext>) {
           allowedMsgTypes: validTypes,
         },
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: "after" }
     );
 
     logger.info({

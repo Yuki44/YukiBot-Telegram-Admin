@@ -30,7 +30,7 @@ export const adminRepository = {
     const result = await Admin.findOneAndUpdate(
       { userId: data.userId, chatId: data.chatId },
       { $set: data },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: "after" }
     );
     return result!;
   },

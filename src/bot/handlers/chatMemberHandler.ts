@@ -55,9 +55,9 @@ export async function chatMemberHandler(
     if (status === "kicked") {
       try {
         await userRepository.upsert({ userId, chatId, username, name, isBanned: true, wasBanned: true });
-        console.log(`[BAN SYNC] ${userId} (${username ?? userId}) banned in ${chatId}`);
+        // console.log(`[BAN SYNC] ${userId} (${username ?? userId}) banned in ${chatId}`);
       } catch (err) {
-        console.log(`[ERROR] ban sync failed for ${userId}: ${err}`);
+        console.error(`[ERROR] ban sync failed for ${userId}: ${err}`);
       }
       return;
     }
@@ -81,12 +81,12 @@ export async function chatMemberHandler(
 
     // Auto-reban on rejoin
     if (ctx.chatConfig.features.autoBan && record.wasBanned) {
-      console.log(`[AUTO-REBAN] ${userId} (${username ?? userId}) attempted rejoin in ${chatId}`);
+      // console.log(`[AUTO-REBAN] ${userId} (${username ?? userId}) attempted rejoin in ${chatId}`);
       try {
         await ctx.api.banChatMember(chatId, userId);
         await ctx.api.sendMessage(chatId, `🚫 @${username ?? userId} baneado.`);
       } catch (err) {
-        console.log(`[ERROR] auto-reban failed for ${userId}: ${err}`);
+        console.error(`[ERROR] auto-reban failed for ${userId}: ${err}`);
       }
     }
   } catch (err) {

@@ -43,7 +43,7 @@ export async function toggleFeatureHandler(ctx: CommandContext<BotContext>) {
     await Chat.findOneAndUpdate(
       { chatId },
       { $set: { features: updatedFeatures } },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     logger.info({

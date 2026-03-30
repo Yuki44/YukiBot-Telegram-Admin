@@ -43,10 +43,10 @@ export async function perdonarbanHandler(
   const userId = user.userId;
   const username = user.username ?? String(userId);
 
-  console.log(`[PARDON] Pardoning ${userId} (${username}) in ${chatId}`);
+  // console.log(`[PARDON] Pardoning ${userId} (${username}) in ${chatId}`);
 
   await User.deleteOne({ userId, chatId });
-  console.log(`[PARDON] Deleted user document for ${userId} in ${chatId}`);
+  // console.log(`[PARDON] Deleted user document for ${userId} in ${chatId}`);
 
   let unbanFailed = false;
   try {

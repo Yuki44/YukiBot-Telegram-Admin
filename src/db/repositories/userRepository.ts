@@ -45,7 +45,7 @@ export const userRepository = {
     return await User.findOneAndUpdate(
       { userId, chatId },
       update,
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
     );
   },
 
@@ -72,7 +72,7 @@ export const userRepository = {
     const user = await User.findOneAndUpdate(
       { userId, chatId },
       update,
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
     );
 
     user.warnings += 1;
