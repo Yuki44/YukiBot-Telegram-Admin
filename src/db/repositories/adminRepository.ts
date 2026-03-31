@@ -10,7 +10,7 @@ export const adminRepository = {
     const admin = await Admin.findOne({ userId, chatId });
     const exists = admin !== null;
     if (exists) {
-      console.log(`[adminRepository.isChatAdmin] User ${userId} is admin in chat ${chatId} (DB Match)`);
+      // console.log(`[adminRepository.isChatAdmin] User ${userId} is admin in chat ${chatId} (DB Match)`);
     }
     return exists;
   },

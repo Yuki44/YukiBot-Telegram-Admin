@@ -26,6 +26,7 @@ export interface IChat extends Document {
     commands: boolean;
     autoBan: boolean;
   };
+  forwardsTo?: number;
 }
 
 export interface IAdmin extends Document {

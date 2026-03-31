@@ -18,6 +18,7 @@ import { avisarHandler, elAvisarHandler } from "./bot/commands/avisar";
 import { quitarAvisoHandler } from "./bot/commands/quitaraviso";
 import { avisosHandler } from "./bot/commands/avisos";
 import { chatMemberHandler } from "./bot/handlers/chatMemberHandler";
+import { mediaForwardHandler } from "./bot/handlers/mediaForwardHandler";
 import { perdonarbanHandler } from "./bot/commands/perdonarban";
 import { silHandler } from "./bot/commands/sil";
 import { elsilHandler } from "./bot/commands/elsil";
@@ -58,7 +59,8 @@ bot.command("com", comHandler);
 // Register chat_member handler
 bot.on("chat_member", chatMemberHandler);
 
-// Register message handler with topic filtering
+// Register message handler with topic filtering and media forwarding
+bot.on("message", mediaForwardHandler);
 bot.on("message", topicFiltering);
 
 // Start bot

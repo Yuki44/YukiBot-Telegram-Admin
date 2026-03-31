@@ -46,6 +46,11 @@ const chatSchema = new Schema<IChat>({
       default: false,
     },
   },
+  forwardsTo: {
+    type: Number,
+    required: false,
+    default: null,
+  },
 });
 
 export const Chat = model<IChat>("Chat", chatSchema);
