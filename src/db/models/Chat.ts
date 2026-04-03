@@ -51,6 +51,23 @@ const chatSchema = new Schema<IChat>({
     required: false,
     default: null,
   },
+  logsTo: {
+    type: Number,
+    required: false,
+    default: null,
+  },
+  logFlags: {
+    logWarns: { type: Boolean, default: false },
+    logSilences: { type: Boolean, default: false },
+    logBans: { type: Boolean, default: false },
+    logAutoRebans: { type: Boolean, default: false },
+    logKicks: { type: Boolean, default: false },
+    logQBans: { type: Boolean, default: false },
+    logUnsilences: { type: Boolean, default: false },
+    logUnwarns: { type: Boolean, default: false },
+    logEntries: { type: Boolean, default: false },
+    logExits: { type: Boolean, default: false },
+  },
 });
 
 export const Chat = model<IChat>("Chat", chatSchema);

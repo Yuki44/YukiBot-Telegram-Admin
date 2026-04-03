@@ -18,11 +18,10 @@ const COMMANDS_TEXT = `
 /qsil [usuario] — Quitar el silencio a un usuario.
 
 <b>— Bans —</b>
-/pban [usuario] — Perdonar el ban de un usuario y permitirle volver a unirse.
+/qban [usuario] — Quitar el ban de un usuario y permitirle volver a unirse.
 
 <b>— Configuración (solo owner) —</b>
 /setup — Inicializar la configuración del grupo.
-/syncadmins — Sincronizar la lista de administradores con Telegram.
 /addtopic — Añadir un tema al filtro de tópicos.
 /edittopic — Editar un tema existente.
 /removetopic — Eliminar un tema del filtro.

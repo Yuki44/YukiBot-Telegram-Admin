@@ -19,13 +19,14 @@ import { quitarAvisoHandler } from "./bot/commands/quitaraviso";
 import { avisosHandler } from "./bot/commands/avisos";
 import { chatMemberHandler } from "./bot/handlers/chatMemberHandler";
 import { mediaForwardHandler } from "./bot/handlers/mediaForwardHandler";
-import { perdonarbanHandler } from "./bot/commands/perdonarban";
+import { quitarbanHandler } from "./bot/commands/perdonarban";
 import { silHandler } from "./bot/commands/sil";
 import { elsilHandler } from "./bot/commands/elsil";
 import { silavHandler } from "./bot/commands/silav";
 import { elsilavHandler } from "./bot/commands/elsilav";
 import { qsilHandler } from "./bot/commands/qsil";
 import { comHandler } from "./bot/commands/com";
+import { Topic } from "./db/models/Topic";
 
 const token = process.env.BOT_TOKEN;
 if (!token) throw new Error("BOT_TOKEN is not set in .env");
@@ -48,7 +49,7 @@ bot.command("av", avisarHandler);
 bot.command("elav", elAvisarHandler);
 bot.command("qav", quitarAvisoHandler);
 bot.command("avs", avisosHandler);
-bot.command("pban", perdonarbanHandler);
+bot.command("qban", quitarbanHandler);
 bot.command("sil", silHandler);
 bot.command("elsil", elsilHandler);
 bot.command("silav", silavHandler);
@@ -58,6 +59,36 @@ bot.command("com", comHandler);
 
 // Register chat_member handler
 bot.on("chat_member", chatMemberHandler);
+
+// Auto-cache topic names when topics are created or renamed
+bot.on("message:forum_topic_created", async (ctx) => {
+  const chatId = ctx.chat.id;
+  const topicId = ctx.message.message_thread_id;
+  const topicName = ctx.message.forum_topic_created?.name;
+  if (chatId && topicId && topicName) {
+    try {
+      await Topic.findOneAndUpdate(
+        { chatId, topicId },
+        { $set: { name: topicName }, $setOnInsert: { allowedMsgTypes: [] } },
+        { upsert: true }
+      );
+    } catch { /* silent */ }
+  }
+});
+
+bot.on("message:forum_topic_edited", async (ctx) => {
+  const chatId = ctx.chat.id;
+  const topicId = ctx.message.message_thread_id;
+  const topicName = (ctx.message as any).forum_topic_edited?.name;
+  if (chatId && topicId && topicName) {
+    try {
+      await Topic.findOneAndUpdate(
+        { chatId, topicId },
+        { $set: { name: topicName } }
+      );
+    } catch { /* silent */ }
+  }
+});
 
 // Register message handler with topic filtering and media forwarding
 bot.on("message", mediaForwardHandler);

@@ -1,8 +1,9 @@
 import { CommandContext } from "grammy";
 import { BotContext } from "../../types";
 import { User } from "../../db/models/User";
+import { sendLog } from "../helpers/sendLog";
 
-export async function perdonarbanHandler(
+export async function quitarbanHandler(
   ctx: CommandContext<BotContext>
 ): Promise<void> {
   const chatId = ctx.chat?.id;
@@ -29,7 +30,7 @@ export async function perdonarbanHandler(
       user = await User.findOne({ username: usernameClean, chatId });
     }
   } catch (err) {
-    console.log(`[PARDON] DB lookup error: ${err}`);
+    console.error(`[QBAN] DB lookup error: ${err}`);
   }
 
   if (!user) {
@@ -42,20 +43,29 @@ export async function perdonarbanHandler(
 
   const userId = user.userId;
   const username = user.username ?? String(userId);
-
-  // console.log(`[PARDON] Pardoning ${userId} (${username}) in ${chatId}`);
+  const userName = user.name ?? String(userId);
 
   await User.deleteOne({ userId, chatId });
-  // console.log(`[PARDON] Deleted user document for ${userId} in ${chatId}`);
 
   let unbanFailed = false;
   try {
     await ctx.api.unbanChatMember(chatId, userId);
-    console.log(`[PARDON] Telegram unban successful for ${userId}`);
   } catch (err) {
-    console.log(`[PARDON] Telegram unban failed for ${userId}: ${err}`);
+    console.error(`[QBAN] Telegram unban failed for ${userId}: ${err}`);
     unbanFailed = true;
   }
+
+  const actor = ctx.from
+    ? { id: ctx.from.id, name: ctx.from.first_name + (ctx.from.last_name ? ` ${ctx.from.last_name}` : ""), username: ctx.from.username }
+    : undefined;
+  const chatName = (ctx.chat as any)?.title ?? "Unknown";
+  sendLog(ctx.api, ctx.chatConfig, {
+    action: "Q_BAN",
+    actor,
+    target: { id: userId, name: userName, username: user.username },
+    chatId,
+    chatName,
+  }).catch(() => {});
 
   const msg = unbanFailed
     ? `✅ Hecho. @${username} puede volver a unirse. (Desbanealo manualmente si es necesario.)`
