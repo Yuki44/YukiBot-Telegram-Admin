@@ -27,6 +27,19 @@ export interface IChat extends Document {
     autoBan: boolean;
   };
   forwardsTo?: number;
+  logsTo?: number;
+  logFlags: {
+    logWarns: boolean;
+    logSilences: boolean;
+    logBans: boolean;
+    logAutoRebans: boolean;
+    logKicks: boolean;
+    logQBans: boolean;
+    logUnsilences: boolean;
+    logUnwarns: boolean;
+    logEntries: boolean;
+    logExits: boolean;
+  };
 }
 
 export interface IAdmin extends Document {
@@ -56,6 +69,7 @@ export interface IUser extends Document {
   muteUntil?: Date;
   isBanned: boolean;
   wasBanned: boolean;
+  leftWithWarningsAt?: Date;
 }
 
 export interface IMessage extends Document {

@@ -1,6 +1,7 @@
 import { BotContext } from "../../types";
 import { resolveTarget } from "../helpers/resolveTarget";
 import { userRepository } from "../../db/repositories/userRepository";
+import { sendLog } from "../helpers/sendLog";
 
 function esc(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -56,6 +57,20 @@ async function executeQuitarAviso(ctx: BotContext, deleteReplied: boolean): Prom
       message_thread_id: ctx.message?.message_thread_id,
     }
   );
+
+  const actor = ctx.from
+    ? { id: ctx.from.id, name: ctx.from.first_name + (ctx.from.last_name ? ` ${ctx.from.last_name}` : ""), username: ctx.from.username }
+    : undefined;
+  const chatName = (ctx.chat as any)?.title ?? "Unknown";
+  sendLog(ctx.api, ctx.chatConfig, {
+    action: "Q_AVISO",
+    actor,
+    target: { id: target.userId, name: target.name, username: target.username },
+    chatId,
+    chatName,
+    warnings: user.warnings,
+    topicId: ctx.message?.message_thread_id,
+  }).catch(() => {});
 
   try { await ctx.deleteMessage(); } catch { /* ignore */ }
 }

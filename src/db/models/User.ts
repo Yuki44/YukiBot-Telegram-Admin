@@ -39,9 +39,15 @@ const userSchema = new Schema<IUser>({
     type: Boolean,
     default: false,
   },
+  leftWithWarningsAt: {
+    type: Date,
+  },
 });
 
 // Compound unique index on userId + chatId
 userSchema.index({ userId: 1, chatId: 1 }, { unique: true });
+
+// TTL index — auto-deletes documents 6 months after the user left with active warnings
+userSchema.index({ leftWithWarningsAt: 1 }, { expireAfterSeconds: 15_552_000, sparse: true });
 
 export const User = model<IUser>("User", userSchema);

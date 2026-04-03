@@ -3,6 +3,7 @@ import { resolveTarget } from "../helpers/resolveTarget";
 import { adminRepository } from "../../db/repositories/adminRepository";
 import { silenceUser } from "../helpers/silenceUser";
 import { sendAndAutoDelete } from "../helpers/sendAndAutoDelete";
+import { sendLog } from "../helpers/sendLog";
 
 export async function silHandler(ctx: BotContext): Promise<void> {
   if (!ctx.chatConfig) return;
@@ -43,6 +44,20 @@ export async function silHandler(ctx: BotContext): Promise<void> {
       try { await ctx.deleteMessage(); } catch { /* ignore */ }
       const mention = target.username ? `@${target.username}` : target.name;
       await sendAndAutoDelete(ctx, `🔇 ${mention} ha sido silenciado por 1 semana.`, 5000);
+
+      const actor = ctx.from
+        ? { id: ctx.from.id, name: ctx.from.first_name + (ctx.from.last_name ? ` ${ctx.from.last_name}` : ""), username: ctx.from.username }
+        : undefined;
+      const chatName = (ctx.chat as any)?.title ?? "Unknown";
+      sendLog(ctx.api, ctx.chatConfig, {
+        action: "SILENCIO",
+        actor,
+        target: { id: target.userId, name: target.name, username: target.username },
+        chatId,
+        chatName,
+        muteUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        topicId: ctx.message?.message_thread_id,
+      }).catch(() => {});
     } else {
       await ctx.reply("⚠️ No se pudo silenciar. ¿Tengo permisos?", {
         parse_mode: "HTML",
