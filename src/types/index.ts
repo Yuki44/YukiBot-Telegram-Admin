@@ -69,6 +69,7 @@ export interface IUser extends Document {
   muteUntil?: Date;
   isBanned: boolean;
   wasBanned: boolean;
+  leftWithWarningsAt?: Date;
 }
 
 export interface IMessage extends Document {

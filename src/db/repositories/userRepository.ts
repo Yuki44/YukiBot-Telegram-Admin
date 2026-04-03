@@ -91,6 +91,10 @@ export const userRepository = {
     await User.deleteOne({ userId, chatId });
   },
 
+  async clearLeftDate(userId: number, chatId: number): Promise<void> {
+    await User.updateOne({ userId, chatId }, { $unset: { leftWithWarningsAt: "" } });
+  },
+
   async markBanned(userId: number, chatId: number, username?: string, name?: string): Promise<IUser> {
     const setFields: Record<string, any> = { isBanned: true, wasBanned: true };
     if (username) setFields.username = username;
@@ -106,8 +110,7 @@ export const userRepository = {
     );
   },
 
-  async decrementWarning(userId: number, chatId: number): Promise<IUser | null> {
-    const user = await User.findOne({ userId, chatId });
+  async decrementWarning(userId: number, chatId: number): Promise<IUser | null> {    const user = await User.findOne({ userId, chatId });
     if (!user) return null;
 
     user.warnings = Math.max(0, user.warnings - 1);

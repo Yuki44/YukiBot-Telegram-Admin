@@ -96,12 +96,16 @@ export async function chatMemberHandler(
 
       if (existingUser?.wasBanned) return;
 
-      sendLog(ctx.api, ctx.chatConfig, {
-        action: "SALIDA_USUARIO",
-        target,
-        chatId,
-        chatName,
-      }).catch(() => {});
+      if ((existingUser?.warnings ?? 0) > 0) {
+        // Preserve the document but stamp the TTL field — auto-expires in 6 months
+        userRepository
+          .upsert({ userId, chatId, leftWithWarningsAt: new Date() })
+          .catch((err) => console.error(`[ERROR] leftWithWarningsAt stamp failed for ${userId}: ${err}`));
+        sendLog(ctx.api, ctx.chatConfig, { action: "SALIDA_USUARIO", target, chatId, chatName }).catch(() => {});
+        return;
+      }
+
+      sendLog(ctx.api, ctx.chatConfig, { action: "SALIDA_USUARIO", target, chatId, chatName }).catch(() => {});
 
       userRepository.remove(userId, chatId).catch((err) =>
         console.error(`[ERROR] user remove failed for ${userId}: ${err}`)
@@ -116,6 +120,13 @@ export async function chatMemberHandler(
     } catch (err) {
       console.error(`[ERROR] user findOrCreate failed for ${userId}: ${err}`);
       return;
+    }
+
+    // Clear TTL field if they left with warnings but came back within 6 months
+    if (record.leftWithWarningsAt && !record.wasBanned) {
+      userRepository
+        .clearLeftDate(userId, chatId)
+        .catch((err) => console.error(`[ERROR] clearLeftDate failed for ${userId}: ${err}`));
     }
 
     // Auto-reban on rejoin
