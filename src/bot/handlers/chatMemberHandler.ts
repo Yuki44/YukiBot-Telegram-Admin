@@ -3,6 +3,7 @@ import { BotContext } from "../../types";
 import { userRepository } from "../../db/repositories/userRepository";
 import { adminRepository } from "../../db/repositories/adminRepository";
 import { sendLog, LogUser } from "../helpers/sendLog";
+import { isKickInProgress, clearKick } from "../helpers/kickTracker";
 
 export async function chatMemberHandler(
   ctx: Filter<BotContext, "chat_member">
@@ -24,7 +25,7 @@ export async function chatMemberHandler(
 
     const target: LogUser = { id: userId, name: fullName, username };
 
-    // --- Admin demotion: was admin/creator, no longer is ---
+    // --- Admin demotion ---
     const wasAdmin = oldStatus === "administrator" || oldStatus === "creator";
     const isAdmin = status === "administrator" || status === "creator";
 
@@ -47,23 +48,22 @@ export async function chatMemberHandler(
         })
         .catch((err) => console.error(`[ERROR] admin upsert failed for ${userId}: ${err}`));
 
-      // Also cache in User table
       userRepository
         .findOrCreate(userId, chatId, username, name)
         .catch((err) => console.error(`[ERROR] user upsert failed for ${userId}: ${err}`));
       return;
     }
 
-    // --- Banned (Telegram calls it "kicked") ---
+    // --- Banned ---
     if (status === "kicked") {
+      if (isKickInProgress(chatId, userId)) return;
+
       try {
         await userRepository.upsert({ userId, chatId, username, name, isBanned: true, wasBanned: true });
       } catch (err) {
         console.error(`[ERROR] ban sync failed for ${userId}: ${err}`);
       }
 
-      // Log BAN only if triggered by an external actor (not YukiBot itself)
-      // Telegram API uses status "kicked" for bans
       const from = ctx.chatMember.from;
       if (from && from.id !== ctx.me.id) {
         const actor: LogUser = {
@@ -84,24 +84,18 @@ export async function chatMemberHandler(
 
     // --- Left ---
     if (status === "left") {
-      // kicked → left = admin unbanned via UI — preserve wasBanned flag, no SALIDA log
       if (oldStatus === "kicked") {
+        clearKick(chatId, userId);
         return;
       }
 
-      // member/restricted → left = genuine departure
-      // Check if user has wasBanned before deleting — never lose that flag (G3)
       let existingUser;
       try {
         existingUser = await userRepository.findByUserAndChat(userId, chatId);
       } catch { /* silent */ }
 
-      if (existingUser?.wasBanned) {
-        // Keep the record so auto-reban triggers if they rejoin
-        return;
-      }
+      if (existingUser?.wasBanned) return;
 
-      // Log SALIDA_USUARIO
       sendLog(ctx.api, ctx.chatConfig, {
         action: "SALIDA_USUARIO",
         target,
@@ -115,7 +109,7 @@ export async function chatMemberHandler(
       return;
     }
 
-    // --- Joined or status changed: member | restricted ---
+    // --- Joined ---
     let record;
     try {
       record = await userRepository.findOrCreate(userId, chatId, username, name);
@@ -125,8 +119,7 @@ export async function chatMemberHandler(
     }
 
     // Auto-reban on rejoin
-    if (ctx.chatConfig.features.autoBan && record.wasBanned) {
-      try {
+    if (ctx.chatConfig.features.autoBan && record.wasBanned) {      try {
         await ctx.api.banChatMember(chatId, userId);
         await ctx.api.sendMessage(chatId, `🚫 @${username ?? userId} baneado.`);
       } catch (err) {
@@ -142,7 +135,6 @@ export async function chatMemberHandler(
       return;
     }
 
-    // Log ENTRADA_USUARIO (only for genuine joins, not status changes within the group)
     const wasOut = oldStatus === "left" || oldStatus === "kicked";
     if (wasOut) {
       const from = ctx.chatMember.from;
@@ -150,7 +142,6 @@ export async function chatMemberHandler(
         ? { id: from.id, name: [from.first_name, from.last_name].filter(Boolean).join(" "), username: from.username }
         : undefined;
 
-      // Try to extract invite link creator
       let inviter: LogUser | undefined;
       const inviteLink = (ctx.chatMember as any).invite_link;
       if (inviteLink?.creator) {

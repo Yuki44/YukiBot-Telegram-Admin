@@ -26,6 +26,8 @@ import { silavHandler } from "./bot/commands/silav";
 import { elsilavHandler } from "./bot/commands/elsilav";
 import { qsilHandler } from "./bot/commands/qsil";
 import { comHandler } from "./bot/commands/com";
+import { kkHandler } from "./bot/commands/kk";
+import { bnHandler } from "./bot/commands/bn";
 import { Topic } from "./db/models/Topic";
 
 const token = process.env.BOT_TOKEN;
@@ -56,6 +58,8 @@ bot.command("silav", silavHandler);
 bot.command("elsilav", elsilavHandler);
 bot.command("qsil", qsilHandler);
 bot.command("com", comHandler);
+bot.command("kk", kkHandler);
+bot.command("bn", bnHandler);
 
 // Register chat_member handler
 bot.on("chat_member", chatMemberHandler);

@@ -17,7 +17,9 @@ const COMMANDS_TEXT = `
 /elsilav [razón] — (responde a un mensaje) Eliminar el mensaje, silenciar al autor y registrar un aviso.
 /qsil [usuario] — Quitar el silencio a un usuario.
 
-<b>— Bans —</b>
+<b>— Expulsiones y Bans —</b>
+/kk [usuario] — Echar a un usuario del grupo (puede volver a unirse).
+/bn [usuario] — Banear a un usuario permanentemente (no puede volver).
 /qban [usuario] — Quitar el ban de un usuario y permitirle volver a unirse.
 
 <b>— Configuración (solo owner) —</b>

@@ -91,6 +91,21 @@ export const userRepository = {
     await User.deleteOne({ userId, chatId });
   },
 
+  async markBanned(userId: number, chatId: number, username?: string, name?: string): Promise<IUser> {
+    const setFields: Record<string, any> = { isBanned: true, wasBanned: true };
+    if (username) setFields.username = username;
+    if (name) setFields.name = name;
+
+    return await User.findOneAndUpdate(
+      { userId, chatId },
+      {
+        $set: setFields,
+        $setOnInsert: { warnings: 0, warningReasons: [] },
+      },
+      { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
+    );
+  },
+
   async decrementWarning(userId: number, chatId: number): Promise<IUser | null> {
     const user = await User.findOne({ userId, chatId });
     if (!user) return null;

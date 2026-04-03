@@ -18,6 +18,8 @@ const YUKIBOT_COMMANDS = new Set([
   "elsilav",
   "qsil",
   "com",
+  "kk",
+  "bn",
 ]);
 
 export async function adminOnlyCommands(
