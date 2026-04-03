@@ -1,27 +1,45 @@
 import { NextFunction } from "grammy";
 import { BotContext } from "../../types";
 
-const ADMIN_STATUSES = new Set(["creator", "administrator"]);
+const YUKIBOT_COMMANDS = new Set([
+  "setup",
+  "addtopic",
+  "edittopic",
+  "removetopic",
+  "togglefeature",
+  "av",
+  "elav",
+  "qav",
+  "avs",
+  "pban",
+  "sil",
+  "elsil",
+  "silav",
+  "elsilav",
+  "qsil",
+  "com",
+]);
 
 export async function adminOnlyCommands(
   ctx: BotContext,
   next: NextFunction
 ): Promise<void> {
   const text = ctx.message?.text || ctx.message?.caption;
+
   if (text?.startsWith("/")) {
-    const userId = ctx.from?.id;
-    const chatId = ctx.chat?.id;
+    const match = text.match(/^\/([a-zA-Z_]+)/);
+    const command = match?.[1]?.toLowerCase();
 
-    const isTelegramAdmin = ctx.isAdmin;
-
-    if (!isTelegramAdmin) {
-      try {
-        await ctx.deleteMessage();
-      } catch {
-        // Silently ignore delete failures
+    if (command && YUKIBOT_COMMANDS.has(command)) {
+      if (!ctx.isAdmin) {
+        try {
+          await ctx.deleteMessage();
+        } catch {
+        }
+        return;
       }
-      return;
     }
   }
+
   await next();
 }
