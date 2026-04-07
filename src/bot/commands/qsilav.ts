@@ -26,10 +26,7 @@ export async function qsilavHandler(ctx: BotContext): Promise<void> {
         args.length > 0 || ctx.message?.reply_to_message
           ? "⚠️ No se encontró al usuario."
           : "⚠️ Especifica un usuario.";
-      await ctx.reply(msg, {
-        parse_mode: "HTML",
-        message_thread_id: ctx.message?.message_thread_id,
-      });
+      await sendAndAutoDelete(ctx, msg, 3000);
       try { await ctx.deleteMessage(); } catch { /* ignore */ }
       return;
     }
@@ -44,10 +41,12 @@ export async function qsilavHandler(ctx: BotContext): Promise<void> {
     const chatName = (ctx.chat as any)?.title ?? "Unknown";
     const mention = target.username ? `@${target.username}` : target.name;
 
+    const feedbackPromises: Promise<void>[] = [];
+
     // 1. Unsilence — reuses qsil feedback
     const silenceSuccess = await unsilenceUser(ctx, target.userId, chatId);
     if (silenceSuccess) {
-      await sendAndAutoDelete(ctx, `🕊️ ${mention} ha recuperado su voz.`, 3000);
+      feedbackPromises.push(sendAndAutoDelete(ctx, `🕊️ ${mention} ha recuperado su voz.`, 3000));
       sendLog(ctx.api, ctx.chatConfig, {
         action: "Q_SILENCIO",
         actor,
@@ -57,26 +56,20 @@ export async function qsilavHandler(ctx: BotContext): Promise<void> {
         topicId: ctx.message?.message_thread_id,
       }).catch(() => {});
     } else {
-      await ctx.reply("⚠️ No se pudo des-silenciar. ¿Tengo permisos?", {
-        parse_mode: "HTML",
-        message_thread_id: ctx.message?.message_thread_id,
-      });
+      feedbackPromises.push(sendAndAutoDelete(ctx, "⚠️ No se pudo des-silenciar. ¿Tengo permisos?", 3000));
     }
 
     // 2. Remove warning — reuses qav feedback
     const user = await userRepository.decrementWarning(target.userId, chatId);
     if (!user) {
-      await ctx.reply("❌ Este usuario no tiene avisos registrados.", {
-        parse_mode: "HTML",
-        message_thread_id: ctx.message?.message_thread_id,
-      });
+      feedbackPromises.push(sendAndAutoDelete(ctx, "❌ Este usuario no tiene avisos registrados.", 3000));
     } else {
       const dn = displayName(target.name, target.username);
-      await sendAndAutoDelete(
+      feedbackPromises.push(sendAndAutoDelete(
         ctx,
         `✅ Aviso eliminado para ${dn}.\n📋 Avisos actuales: ${user.warnings}/3`,
-        1000
-      );
+        3000
+      ));
       sendLog(ctx.api, ctx.chatConfig, {
         action: "Q_AVISO",
         actor,
@@ -88,9 +81,15 @@ export async function qsilavHandler(ctx: BotContext): Promise<void> {
       }).catch(() => {});
     }
 
+    await Promise.all(feedbackPromises);
     try { await ctx.deleteMessage(); } catch { /* ignore */ }
   } catch {
     // silent fail
   }
 }
+
+
+
+
+
 

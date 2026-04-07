@@ -28,7 +28,7 @@ export async function qsilHandler(ctx: BotContext): Promise<void> {
     if (success) {
       try { await ctx.deleteMessage(); } catch { /* ignore */ }
       const mention = target.username ? `@${target.username}` : target.name;
-      await sendAndAutoDelete(ctx, `🕊️ ${mention} ha recuperado su voz.`, 3000);
+      await sendAndAutoDelete(ctx, `🕊️ ${mention} ha recuperado su voz.`, 1000);
 
       const actor = ctx.from
         ? { id: ctx.from.id, name: ctx.from.first_name + (ctx.from.last_name ? ` ${ctx.from.last_name}` : ""), username: ctx.from.username }

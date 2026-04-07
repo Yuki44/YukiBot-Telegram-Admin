@@ -25,9 +25,11 @@ import { elsilHandler } from "./bot/commands/elsil";
 import { silavHandler } from "./bot/commands/silav";
 import { elsilavHandler } from "./bot/commands/elsilav";
 import { qsilHandler } from "./bot/commands/qsil";
+import { qsilavHandler } from "./bot/commands/qsilav";
 import { comHandler } from "./bot/commands/com";
 import { kkHandler } from "./bot/commands/kk";
 import { bnHandler } from "./bot/commands/bn";
+import { groupHelpSpamHandler } from "./bot/handlers/groupHelpSpamHandler";
 import { Topic } from "./db/models/Topic";
 
 const token = process.env.BOT_TOKEN;
@@ -57,6 +59,7 @@ bot.command("elsil", elsilHandler);
 bot.command("silav", silavHandler);
 bot.command("elsilav", elsilavHandler);
 bot.command("qsil", qsilHandler);
+bot.command("qsilav", qsilavHandler);
 bot.command("com", comHandler);
 bot.command("kk", kkHandler);
 bot.command("bn", bnHandler);
@@ -98,11 +101,15 @@ bot.on("message:forum_topic_edited", async (ctx) => {
 bot.on("message", mediaForwardHandler);
 bot.on("message", topicFiltering);
 
+// Group Help SPAM log listener — auto-applies warn in the affected group
+bot.on("message", groupHelpSpamHandler);
+bot.on("channel_post", groupHelpSpamHandler);
+
 // Start bot
 async function start() {
   await connectDB();
   await bot.start({
-    allowed_updates: ["message", "chat_member", "callback_query"],
+    allowed_updates: ["message", "chat_member", "callback_query", "channel_post"],
   });
   console.log("YukiBot is running...");
 }

@@ -17,6 +17,7 @@ const YUKIBOT_COMMANDS = new Set([
   "silav",
   "elsilav",
   "qsil",
+  "qsilav",
   "com",
   "kk",
   "bn",

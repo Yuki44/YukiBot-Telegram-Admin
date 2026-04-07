@@ -15,6 +15,7 @@ const COMMANDS_TEXT = `
 /elsil — (responde a un mensaje) Eliminar el mensaje y silenciar al autor por 1 semana.
 /elsilav [razón] — (responde a un mensaje) Eliminar el mensaje, silenciar al autor y registrar un aviso.
 /qsil [usuario] — Quitar el silencio a un usuario.
+/qsilav [usuario] — Quitar el silencio y el último aviso de un usuario.
 
 <b>— Expulsiones y Bans —</b>
 /kk [usuario] — Echar a un usuario del grupo (puede volver a unirse).
