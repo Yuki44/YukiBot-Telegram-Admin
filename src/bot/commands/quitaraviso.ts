@@ -2,6 +2,7 @@ import { BotContext } from "../../types";
 import { resolveTarget } from "../helpers/resolveTarget";
 import { userRepository } from "../../db/repositories/userRepository";
 import { sendLog } from "../helpers/sendLog";
+import { sendAndAutoDelete } from "../helpers/sendAndAutoDelete";
 
 function esc(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -50,12 +51,10 @@ async function executeQuitarAviso(ctx: BotContext, deleteReplied: boolean): Prom
   }
 
   const dn = displayName(target.name, target.username);
-  await ctx.reply(
+  await sendAndAutoDelete(
+    ctx,
     `✅ Aviso eliminado para ${dn}.\n📋 Avisos actuales: ${user.warnings}/3`,
-    {
-      parse_mode: "HTML",
-      message_thread_id: ctx.message?.message_thread_id,
-    }
+    1000
   );
 
   const actor = ctx.from

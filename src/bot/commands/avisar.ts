@@ -2,6 +2,7 @@ import { BotContext } from "../../types";
 import { resolveTarget } from "../helpers/resolveTarget";
 import { adminRepository } from "../../db/repositories/adminRepository";
 import { applyWarn } from "../helpers/applyWarn";
+import { deleteLastMessage } from "../helpers/lastMessageTracker";
 
 async function executeAvisar(ctx: BotContext, deleteReplied: boolean): Promise<void> {
   if (!ctx.chatConfig) return;
@@ -50,11 +51,16 @@ async function executeAvisar(ctx: BotContext, deleteReplied: boolean): Promise<v
     return;
   }
 
-  if (deleteReplied && ctx.message?.reply_to_message?.message_id) {
-    try {
-      await ctx.api.deleteMessage(chatId, ctx.message.reply_to_message.message_id);
-    } catch {
-      // Silently ignore if delete fails
+  if (deleteReplied) {
+    if (ctx.message?.reply_to_message?.message_id) {
+      try {
+        await ctx.api.deleteMessage(chatId, ctx.message.reply_to_message.message_id);
+      } catch {
+        // Silently ignore if delete fails
+      }
+    } else {
+      // No reply: delete the last tracked message from the target user
+      await deleteLastMessage(ctx.api, chatId, target.userId);
     }
   }
 

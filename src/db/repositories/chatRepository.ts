@@ -6,6 +6,10 @@ export const chatRepository = {
     return await Chat.findOne({ chatId });
   },
 
+  async findByLogsTo(logsChannelId: number): Promise<IChat[]> {
+    return await Chat.find({ logsTo: logsChannelId, isActive: true });
+  },
+
   async upsert(chat: Partial<IChat>): Promise<IChat> {
     if (!chat.chatId) {
       throw new Error("chatId is required for upsert");

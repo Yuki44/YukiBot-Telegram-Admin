@@ -1,5 +1,4 @@
 import { BotContext } from "../../types";
-import { sendAndAutoDelete } from "../helpers/sendAndAutoDelete";
 
 const COMMANDS_TEXT = `
 📋 <b>Lista de comandos de administración</b>
@@ -16,6 +15,7 @@ const COMMANDS_TEXT = `
 /elsil — (responde a un mensaje) Eliminar el mensaje y silenciar al autor por 1 semana.
 /elsilav [razón] — (responde a un mensaje) Eliminar el mensaje, silenciar al autor y registrar un aviso.
 /qsil [usuario] — Quitar el silencio a un usuario.
+/qsilav [usuario] — Quitar el silencio y el último aviso de un usuario.
 
 <b>— Expulsiones y Bans —</b>
 /kk [usuario] — Echar a un usuario del grupo (puede volver a unirse).
@@ -34,8 +34,13 @@ export async function comHandler(ctx: BotContext): Promise<void> {
   if (!ctx.chatConfig) return;
 
   try {
+    // Send the list — once Telegram confirms receipt, delete both messages immediately
+    const sent = await ctx.reply(COMMANDS_TEXT, {
+      parse_mode: "HTML",
+      message_thread_id: ctx.message?.message_thread_id,
+    });
+    try { await ctx.api.deleteMessage(ctx.chat!.id, sent.message_id); } catch { /* ignore */ }
     try { await ctx.deleteMessage(); } catch { /* ignore */ }
-    await sendAndAutoDelete(ctx, COMMANDS_TEXT, 1000);
   } catch {
     // silent fail
   }

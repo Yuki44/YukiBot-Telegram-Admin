@@ -25,6 +25,7 @@ export interface IChat extends Document {
     topicFiltering?: boolean;
     commands: boolean;
     autoBan: boolean;
+    autoWarnSpam: boolean;
   };
   forwardsTo?: number;
   logsTo?: number;

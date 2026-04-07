@@ -54,9 +54,25 @@ export async function chatMemberHandler(
       return;
     }
 
-    // --- Banned ---
+    // --- Banned / Kicked ---
     if (status === "kicked") {
       if (isKickInProgress(chatId, userId)) return;
+
+      const from = ctx.chatMember.from;
+      // until_date > 0 → temporary restriction (kick); 0 → permanent ban
+      const until_date: number = (new_chat_member as any).until_date ?? 0;
+
+      if (until_date > 0) {
+        if (from && from.id !== ctx.me.id) {
+          const actor: LogUser = {
+            id: from.id,
+            name: [from.first_name, from.last_name].filter(Boolean).join(" "),
+            username: from.username,
+          };
+          sendLog(ctx.api, ctx.chatConfig, { action: "KICK", actor, target, chatId, chatName }).catch(() => {});
+        }
+        return;
+      }
 
       try {
         await userRepository.upsert({ userId, chatId, username, name, isBanned: true, wasBanned: true });
@@ -64,20 +80,13 @@ export async function chatMemberHandler(
         console.error(`[ERROR] ban sync failed for ${userId}: ${err}`);
       }
 
-      const from = ctx.chatMember.from;
       if (from && from.id !== ctx.me.id) {
         const actor: LogUser = {
           id: from.id,
           name: [from.first_name, from.last_name].filter(Boolean).join(" "),
           username: from.username,
         };
-        sendLog(ctx.api, ctx.chatConfig, {
-          action: "BAN",
-          actor,
-          target,
-          chatId,
-          chatName,
-        }).catch(() => {});
+        sendLog(ctx.api, ctx.chatConfig, { action: "BAN", actor, target, chatId, chatName }).catch(() => {});
       }
       return;
     }
@@ -97,7 +106,6 @@ export async function chatMemberHandler(
       if (existingUser?.wasBanned) return;
 
       if ((existingUser?.warnings ?? 0) > 0) {
-        // Preserve the document but stamp the TTL field — auto-expires in 6 months
         userRepository
           .upsert({ userId, chatId, leftWithWarningsAt: new Date() })
           .catch((err) => console.error(`[ERROR] leftWithWarningsAt stamp failed for ${userId}: ${err}`));
@@ -106,7 +114,6 @@ export async function chatMemberHandler(
       }
 
       sendLog(ctx.api, ctx.chatConfig, { action: "SALIDA_USUARIO", target, chatId, chatName }).catch(() => {});
-
       userRepository.remove(userId, chatId).catch((err) =>
         console.error(`[ERROR] user remove failed for ${userId}: ${err}`)
       );
@@ -122,27 +129,20 @@ export async function chatMemberHandler(
       return;
     }
 
-    // Clear TTL field if they left with warnings but came back within 6 months
     if (record.leftWithWarningsAt && !record.wasBanned) {
       userRepository
         .clearLeftDate(userId, chatId)
         .catch((err) => console.error(`[ERROR] clearLeftDate failed for ${userId}: ${err}`));
     }
 
-    // Auto-reban on rejoin
-    if (ctx.chatConfig.features.autoBan && record.wasBanned) {      try {
+    if (ctx.chatConfig.features.autoBan && record.wasBanned) {
+      try {
         await ctx.api.banChatMember(chatId, userId);
         await ctx.api.sendMessage(chatId, `🚫 @${username ?? userId} baneado.`);
       } catch (err) {
         console.error(`[ERROR] auto-reban failed for ${userId}: ${err}`);
       }
-
-      sendLog(ctx.api, ctx.chatConfig, {
-        action: "AUTO_BAN",
-        target,
-        chatId,
-        chatName,
-      }).catch(() => {});
+      sendLog(ctx.api, ctx.chatConfig, { action: "AUTO_BAN", target, chatId, chatName }).catch(() => {});
       return;
     }
 
@@ -164,14 +164,7 @@ export async function chatMemberHandler(
         };
       }
 
-      sendLog(ctx.api, ctx.chatConfig, {
-        action: "ENTRADA_USUARIO",
-        actor,
-        target,
-        chatId,
-        chatName,
-        inviter,
-      }).catch(() => {});
+      sendLog(ctx.api, ctx.chatConfig, { action: "ENTRADA_USUARIO", actor, target, chatId, chatName, inviter }).catch(() => {});
     }
   } catch (err) {
     console.error(`[ERROR] chatMemberHandler outer: ${err}`);
