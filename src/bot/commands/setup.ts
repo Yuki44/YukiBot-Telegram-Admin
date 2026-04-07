@@ -37,12 +37,14 @@ export async function setupHandler(ctx: CommandContext<BotContext>) {
             topicFiltering: false,
             commands: false,
             autoBan: false,
+            autoWarnSpam: false,
           }
         : {
             languageDetection: false,
             spamDetection: false,
             commands: false,
             autoBan: false,
+            autoWarnSpam: false,
           };
 
     await chatRepository.upsert({

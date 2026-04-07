@@ -45,6 +45,10 @@ const chatSchema = new Schema<IChat>({
       type: Boolean,
       default: false,
     },
+    autoWarnSpam: {
+      type: Boolean,
+      default: false,
+    },
   },
   forwardsTo: {
     type: Number,

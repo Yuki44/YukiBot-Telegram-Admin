@@ -1,4 +1,4 @@
-import { BotContext } from "../../types";
+import { BotContext, IChat } from "../../types";
 import { userRepository } from "../../db/repositories/userRepository";
 import { sendLog } from "./sendLog";
 
@@ -16,26 +16,35 @@ export async function applyWarn(
   chatId: number,
   name: string,
   username: string | undefined,
-  reason: string
+  reason: string,
+  options?: {
+    chatConfig?: IChat | null;
+    chatName?: string;
+    topicId?: number;
+    actor?: { id: number; name: string; username?: string };
+  }
 ): Promise<void> {
   try {
     const user = await userRepository.incrementWarning(targetUserId, chatId, reason, username, name);
     const dn = displayName(name, username);
 
-    const actor = ctx.from
-      ? { id: ctx.from.id, name: ctx.from.first_name + (ctx.from.last_name ? ` ${ctx.from.last_name}` : ""), username: ctx.from.username }
-      : undefined;
-    const target = { id: targetUserId, name, username };
-    const chatName = ctx.chat?.type !== "private" ? (ctx.chat as any)?.title ?? "Unknown" : "Unknown";
-    const topicId = ctx.message?.message_thread_id;
+    const resolvedChatConfig = options?.chatConfig !== undefined ? options.chatConfig : ctx.chatConfig;
+    const resolvedChatName = options?.chatName ?? (ctx.chat?.type !== "private" ? (ctx.chat as any)?.title ?? "Unknown" : "Unknown");
+    const topicId = options?.topicId ?? ctx.message?.message_thread_id;
 
-    // Log AVISO (every warn)
-    sendLog(ctx.api, ctx.chatConfig, {
+    const actor = options?.actor !== undefined
+      ? options.actor
+      : ctx.from
+        ? { id: ctx.from.id, name: ctx.from.first_name + (ctx.from.last_name ? ` ${ctx.from.last_name}` : ""), username: ctx.from.username }
+        : undefined;
+    const target = { id: targetUserId, name, username };
+
+    sendLog(ctx.api, resolvedChatConfig, {
       action: "AVISO",
       actor,
       target,
       chatId,
-      chatName,
+      chatName: resolvedChatName,
       warnings: user.warnings,
       reason,
       topicId,
@@ -48,36 +57,28 @@ export async function applyWarn(
       } catch {
         banMsg += "\n<i>(Error al ejecutar el ban, hazlo manualmente.)</i>";
       }
-      await ctx.reply(banMsg, {
-        parse_mode: "HTML",
-        message_thread_id: ctx.message?.message_thread_id,
-      });
+      await ctx.api.sendMessage(chatId, banMsg, { parse_mode: "HTML", message_thread_id: topicId });
 
-      // Log BAN
-      sendLog(ctx.api, ctx.chatConfig, {
+      sendLog(ctx.api, resolvedChatConfig, {
         action: "BAN",
         actor,
         target,
         chatId,
-        chatName,
+        chatName: resolvedChatName,
         reason: "3 avisos",
         topicId,
       }).catch(() => {});
     } else if (user.warnings === 2) {
-      await ctx.reply(
+      await ctx.api.sendMessage(
+        chatId,
         `⚠️ <b>Aviso ${user.warnings}/3</b> para ${dn}\n📋 Razón: ${esc(reason)}\n❗ Un aviso más y será baneado.`,
-        {
-          parse_mode: "HTML",
-          message_thread_id: ctx.message?.message_thread_id,
-        }
+        { parse_mode: "HTML", message_thread_id: topicId }
       );
     } else {
-      await ctx.reply(
+      await ctx.api.sendMessage(
+        chatId,
         `⚠️ <b>Aviso ${user.warnings}/3</b> para ${dn}\n📋 Razón: ${esc(reason)}`,
-        {
-          parse_mode: "HTML",
-          message_thread_id: ctx.message?.message_thread_id,
-        }
+        { parse_mode: "HTML", message_thread_id: topicId }
       );
     }
   } catch {
