@@ -18,7 +18,7 @@ export async function connectDB(): Promise<void> {
 
     // Hard 15 seconds in case DNS is stuck and exceeds mongoose's own timeouts
     const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("MongoDB connection timed out after 15 s")), 15_000),
+      setTimeout(() => reject(new Error("MongoDB connection timed out after 15 s")), 15_000)
     );
     await Promise.race([
       mongoose.connect(mongoUri, {

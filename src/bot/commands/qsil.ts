@@ -18,9 +18,7 @@ export async function qsilHandler(ctx: BotContext): Promise<void> {
     const target = await resolveTarget(ctx, args);
     if (!target) {
       const msg =
-        args.length > 0 || ctx.message?.reply_to_message
-          ? t("errors.userNotFound")
-          : t("errors.specifyUser");
+        args.length > 0 || ctx.message?.reply_to_message ? t("errors.userNotFound") : t("errors.specifyUser");
       await ctx.reply(msg, {
         parse_mode: "HTML",
         message_thread_id: ctx.message?.message_thread_id,

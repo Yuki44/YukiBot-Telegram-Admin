@@ -19,9 +19,7 @@ export async function bnHandler(ctx: BotContext): Promise<void> {
     const target = await resolveTarget(ctx, args);
     if (!target) {
       const msg =
-        args.length > 0 || ctx.message?.reply_to_message
-          ? t("errors.userNotFound")
-          : t("errors.specifyUser");
+        args.length > 0 || ctx.message?.reply_to_message ? t("errors.userNotFound") : t("errors.specifyUser");
       await sendAndAutoDelete(ctx, msg, 0);
       try {
         await ctx.deleteMessage();
@@ -64,11 +62,7 @@ export async function bnHandler(ctx: BotContext): Promise<void> {
     }
 
     if (success) {
-      await sendAndAutoDelete(
-        ctx,
-        t("ban.banned", { user: mention(target.name, target.username) }),
-        0
-      );
+      await sendAndAutoDelete(ctx, t("ban.banned", { user: mention(target.name, target.username) }), 0);
 
       sendLog(ctx.api, ctx.chatConfig, {
         action: "BAN",

@@ -19,9 +19,7 @@ export async function qsilavHandler(ctx: BotContext): Promise<void> {
     const target = await resolveTarget(ctx, args);
     if (!target) {
       const msg =
-        args.length > 0 || ctx.message?.reply_to_message
-          ? t("errors.userNotFound")
-          : t("errors.specifyUser");
+        args.length > 0 || ctx.message?.reply_to_message ? t("errors.userNotFound") : t("errors.specifyUser");
       await sendAndAutoDelete(ctx, msg, AUTO_DELETE_SHORT_MS);
       try {
         await ctx.deleteMessage();
@@ -54,17 +52,13 @@ export async function qsilavHandler(ctx: BotContext): Promise<void> {
         topicId: ctx.message?.message_thread_id,
       }).catch(() => {});
     } else {
-      feedbackPromises.push(
-        sendAndAutoDelete(ctx, t("errors.unsilenceFailed"), AUTO_DELETE_SHORT_MS)
-      );
+      feedbackPromises.push(sendAndAutoDelete(ctx, t("errors.unsilenceFailed"), AUTO_DELETE_SHORT_MS));
     }
 
     // 2. Remove warning
     const user = await userRepository.decrementWarning(target.userId, chatId);
     if (!user) {
-      feedbackPromises.push(
-        sendAndAutoDelete(ctx, t("errors.noWarningsRecorded"), AUTO_DELETE_SHORT_MS)
-      );
+      feedbackPromises.push(sendAndAutoDelete(ctx, t("errors.noWarningsRecorded"), AUTO_DELETE_SHORT_MS));
     } else {
       const dn = displayName(target.name, target.username);
       feedbackPromises.push(
@@ -95,9 +89,3 @@ export async function qsilavHandler(ctx: BotContext): Promise<void> {
     // silent fail (G10)
   }
 }
-
-
-
-
-
-
