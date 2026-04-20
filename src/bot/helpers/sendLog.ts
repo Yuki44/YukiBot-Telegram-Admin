@@ -39,6 +39,8 @@ export interface LogPayload {
   topicId?: number;
   /** Explicit topic name — skips DB lookup when provided */
   topicName?: string;
+  /** Text of the message the admin replied to (only when command was used as a reply) */
+  repliedMessage?: string;
 }
 
 // ── Flag mapping ─────────────────────────────────────────────────────
@@ -307,6 +309,14 @@ export async function sendLog(
 
     const text = lines.join("\n");
     await api.sendMessage(chatConfig.logsTo, text, { parse_mode: "HTML" });
+
+    if (payload.repliedMessage) {
+      await api.sendMessage(
+        chatConfig.logsTo,
+        `💬 <i>Mensaje original:</i>\n${esc(payload.repliedMessage)}`,
+        { parse_mode: "HTML" }
+      );
+    }
   } catch (err) {
     logger.error({ action: "sendLog", logAction: payload.action, error: String(err) });
   }

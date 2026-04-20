@@ -80,7 +80,11 @@ async function executeAvisar(ctx: BotContext, deleteReplied: boolean): Promise<v
     }
   }
 
-  await applyWarn(ctx, target.userId, chatId, target.name, target.username, reason);
+  await applyWarn(ctx, target.userId, chatId, target.name, target.username, reason, {
+    repliedMessage: ctx.message?.reply_to_message
+      ? (ctx.message.reply_to_message.text ?? ctx.message.reply_to_message.caption)
+      : undefined,
+  });
 
   try {
     await ctx.deleteMessage();

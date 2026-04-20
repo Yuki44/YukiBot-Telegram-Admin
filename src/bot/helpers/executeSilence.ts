@@ -140,6 +140,9 @@ export async function executeSilence(ctx: BotContext, options: SilenceOptions): 
 
       const actor = buildActor(ctx);
       const chatName = getChatTitle(ctx);
+      const repliedMessage = ctx.message?.reply_to_message
+        ? (ctx.message.reply_to_message.text ?? ctx.message.reply_to_message.caption)
+        : undefined;
       sendLog(ctx.api, ctx.chatConfig, {
         action: "SILENCIO",
         actor,
@@ -148,10 +151,12 @@ export async function executeSilence(ctx: BotContext, options: SilenceOptions): 
         chatName,
         muteUntil: new Date(Date.now() + SILENCE_DURATION_MS),
         topicId: ctx.message?.message_thread_id,
+        // Only attach replied message here when there's no AVISO following (which would be last)
+        repliedMessage: !options.applyWarning ? repliedMessage : undefined,
       }).catch(() => {});
 
       if (options.applyWarning && reason) {
-        await applyWarn(ctx, target.userId, chatId, target.name, target.username, reason);
+        await applyWarn(ctx, target.userId, chatId, target.name, target.username, reason, { repliedMessage });
       }
     } else {
       await ctx.reply(t("errors.silenceFailed"), {

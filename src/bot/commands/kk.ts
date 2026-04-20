@@ -66,6 +66,9 @@ export async function kkHandler(ctx: BotContext): Promise<void> {
         chatId,
         chatName: getChatTitle(ctx),
         topicId: ctx.message?.message_thread_id,
+        repliedMessage: ctx.message?.reply_to_message
+          ? (ctx.message.reply_to_message.text ?? ctx.message.reply_to_message.caption)
+          : undefined,
       }).catch(() => {});
     } else {
       await sendAndAutoDelete(ctx, t("errors.kickFailed"), 0);

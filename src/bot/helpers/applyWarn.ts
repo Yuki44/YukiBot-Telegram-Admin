@@ -18,6 +18,7 @@ export async function applyWarn(
     chatName?: string;
     topicId?: number;
     actor?: { id: number; name: string; username?: string };
+    repliedMessage?: string;
   }
 ): Promise<void> {
   try {
@@ -40,6 +41,7 @@ export async function applyWarn(
       warnings: user.warnings,
       reason,
       topicId,
+      repliedMessage: options?.repliedMessage,
     }).catch(() => {});
 
     if (user.warnings >= MAX_WARNINGS) {
