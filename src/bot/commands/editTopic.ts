@@ -1,17 +1,7 @@
 import { CommandContext } from "grammy";
-import { BotContext, MessageType } from "../../types";
+import { BotContext, MessageType, VALID_CONTENT_TYPES } from "../../types";
 import { topicRepository } from "../../db/repositories/topicRepository";
 import { logger } from "../../utils/logger";
-
-const VALID_MESSAGE_TYPES = [
-  MessageType.Photo,
-  MessageType.Video,
-  MessageType.Sticker,
-  MessageType.Audio,
-  MessageType.Voice,
-  MessageType.Document,
-  MessageType.Text,
-];
 
 export async function editTopicHandler(ctx: CommandContext<BotContext>) {
   try {
@@ -48,7 +38,7 @@ export async function editTopicHandler(ctx: CommandContext<BotContext>) {
       .toLowerCase()
       .split(",")
       .map((type) => type.trim())
-      .filter((type) => VALID_MESSAGE_TYPES.includes(type as MessageType));
+      .filter((type) => VALID_CONTENT_TYPES.includes(type as MessageType));
 
     if (allowedMsgTypes.length === 0) {
       await ctx.reply(
@@ -61,9 +51,7 @@ export async function editTopicHandler(ctx: CommandContext<BotContext>) {
 
     const topic = await topicRepository.findByChatAndTopic(chatId, topicId);
     if (!topic) {
-      await ctx.reply(
-        `Topic ${topicId} not found. Use /addtopic to create it first.`
-      );
+      await ctx.reply(`Topic ${topicId} not found. Use /addtopic to create it first.`);
       return;
     }
 
@@ -84,9 +72,7 @@ export async function editTopicHandler(ctx: CommandContext<BotContext>) {
     });
 
     const nameInfo = newName !== null ? ` ('${newName}')` : ` ('${topic.name}')`;
-    await ctx.reply(
-      `Topic ${topicId}${nameInfo} updated. Now allows: ${allowedMsgTypes.join(", ")}`
-    );
+    await ctx.reply(`Topic ${topicId}${nameInfo} updated. Now allows: ${allowedMsgTypes.join(", ")}`);
   } catch (error) {
     logger.error({
       action: "editTopic",

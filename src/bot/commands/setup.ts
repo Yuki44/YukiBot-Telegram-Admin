@@ -10,25 +10,19 @@ export async function setupHandler(ctx: CommandContext<BotContext>) {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
 
-    // Check if sender is creator of the chat
     const senderId = ctx.from?.id;
     if (!senderId) return;
 
     const author = await ctx.getChatMember(senderId);
     if (author.status !== "creator") {
-      // Ignore silently if not creator
       return;
     }
 
-    // Fetch chat info
     const chat = await ctx.api.getChat(chatId);
-
-    // Determine type
     const chatType = "is_forum" in chat && chat.is_forum ? "topics" : "normal";
 
-    const chatTitle = ("title" in chat && chat.title) ? chat.title : "Unknown";
+    const chatTitle = "title" in chat && chat.title ? chat.title : "Unknown";
 
-    // Upsert Chat document
     const features =
       chatType === "topics"
         ? {
@@ -56,13 +50,10 @@ export async function setupHandler(ctx: CommandContext<BotContext>) {
       features,
     });
 
-    // Fetch and upsert admins
     const admins = await ctx.api.getChatAdministrators(chatId);
 
     for (const admin of admins) {
-      const fullName = [admin.user.first_name, admin.user.last_name]
-        .filter(Boolean)
-        .join(" ");
+      const fullName = [admin.user.first_name, admin.user.last_name].filter(Boolean).join(" ");
 
       await adminRepository.upsert({
         userId: admin.user.id,
@@ -86,7 +77,6 @@ export async function setupHandler(ctx: CommandContext<BotContext>) {
       adminCount: admins.length,
     });
 
-    // Send appropriate confirmation message
     if (chatType === "topics") {
       await ctx.reply(
         "Chat initialized. Now use /addtopic <topicId> <allowedTypes> to register topics.\n" +

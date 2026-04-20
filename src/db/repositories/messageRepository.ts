@@ -7,11 +7,7 @@ export const messageRepository = {
     return await newMessage.save();
   },
 
-  async findRecentByUser(
-    userId: number,
-    chatId: number,
-    withinHours: number
-  ): Promise<IMessage[]> {
+  async findRecentByUser(userId: number, chatId: number, withinHours: number): Promise<IMessage[]> {
     const cutoffDate = new Date();
     cutoffDate.setHours(cutoffDate.getHours() - withinHours);
 

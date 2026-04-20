@@ -1,10 +1,8 @@
 import { BotContext } from "../../types";
+import { logger } from "../../utils/logger";
+import { SILENCE_DURATION_S } from "../../config/constants";
 
-export async function silenceUser(
-  ctx: BotContext,
-  targetUserId: number,
-  chatId: number
-): Promise<boolean> {
+export async function silenceUser(ctx: BotContext, targetUserId: number, chatId: number): Promise<boolean> {
   try {
     await ctx.api.restrictChatMember(
       chatId,
@@ -25,7 +23,7 @@ export async function silenceUser(
         can_pin_messages: false,
       },
       {
-        until_date: Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60),
+        until_date: Math.floor(Date.now() / 1000) + SILENCE_DURATION_S,
       }
     );
 
@@ -33,18 +31,18 @@ export async function silenceUser(
     const member = await ctx.api.getChatMember(chatId, targetUserId);
     if (member.status === "kicked") {
       // User is banned (more restrictive), treat as success
-      console.log(`[SILENCE] user ${targetUserId} is banned in chat ${chatId}, treating as silenced`);
+      logger.info({ action: "silence", userId: targetUserId, chatId, note: "already_banned" });
       return true;
     }
     if (member.status !== "restricted" || member.can_send_messages !== false) {
-      console.error(`[SILENCE] verification failed for user ${targetUserId} in chat ${chatId}: status=${member.status}`);
+      logger.error({ action: "silence_verify", userId: targetUserId, chatId, status: member.status });
       return false;
     }
 
-    console.log(`[SILENCE] user ${targetUserId} silenced and verified in chat ${chatId}`);
+    logger.info({ action: "silence", userId: targetUserId, chatId });
     return true;
   } catch (err) {
-    console.error(`[ERROR] failed to silence user ${targetUserId} in chat ${chatId}:`, err);
+    logger.error({ action: "silence", userId: targetUserId, chatId, error: String(err) });
     return false;
   }
 }

@@ -1,10 +1,7 @@
 import { BotContext } from "../../types";
+import { logger } from "../../utils/logger";
 
-export async function unsilenceUser(
-  ctx: BotContext,
-  targetUserId: number,
-  chatId: number
-): Promise<boolean> {
+export async function unsilenceUser(ctx: BotContext, targetUserId: number, chatId: number): Promise<boolean> {
   try {
     // Grant all permissions as true — Telegram will cap them at the group's global defaults.
     // This removes the per-user exception entry entirely, unlike mirroring the defaults explicitly.
@@ -24,10 +21,10 @@ export async function unsilenceUser(
       can_pin_messages: true,
     });
 
-    console.log(`[UNSILENCE] user ${targetUserId} unsilenced in chat ${chatId}`);
+    logger.info({ action: "unsilence", userId: targetUserId, chatId });
     return true;
   } catch (err) {
-    console.error(`[ERROR] failed to unsilence user ${targetUserId} in chat ${chatId}:`, err);
+    logger.error({ action: "unsilence", userId: targetUserId, chatId, error: String(err) });
     return false;
   }
 }

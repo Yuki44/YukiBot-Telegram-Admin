@@ -21,4 +21,8 @@ export const chatRepository = {
       { upsert: true, returnDocument: "after" }
     );
   },
+
+  async updateFeatures(chatId: number, features: IChat["features"]): Promise<IChat | null> {
+    return await Chat.findOneAndUpdate({ chatId }, { $set: { features } }, { returnDocument: "after" });
+  },
 };

@@ -6,7 +6,14 @@
   "scripts": {
     "start": "node dist/index.js",
     "dev": "nodemon src/index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "repository": {
     "type": "git",
@@ -26,10 +33,16 @@
     "mongoose": "^9.3.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/mongoose": "^5.11.96",
     "@types/node": "^25.5.0",
+    "eslint": "^10.2.0",
+    "eslint-config-prettier": "^10.1.8",
     "nodemon": "^3.1.14",
+    "prettier": "^3.8.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.58.2",
+    "vitest": "^4.1.4"
   }
 }

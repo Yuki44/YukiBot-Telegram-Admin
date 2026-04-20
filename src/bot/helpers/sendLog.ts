@@ -1,6 +1,8 @@
 import { Api } from "grammy";
 import { IChat } from "../../types";
 import { topicRepository } from "../../db/repositories/topicRepository";
+import { esc } from "./html";
+import { logger } from "../../utils/logger";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -69,10 +71,6 @@ const EMOJI_MAP: Record<LogAction, string> = {
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-function esc(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
 function userLink(u: LogUser): string {
   return `<a href="tg://user?id=${u.id}">${esc(u.name)}</a> [<code>${u.id}</code>]`;
 }
@@ -88,8 +86,18 @@ function topicLink(chatId: number, topicId: number, topicName: string): string {
 }
 
 const MESES_ES = [
-  "enero", "febrero", "marzo", "abril", "mayo", "junio",
-  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
 ];
 
 function formatDate(d: Date): string {
@@ -120,7 +128,9 @@ async function resolveTopicName(
   try {
     const topic = await topicRepository.findByChatAndTopic(chatId, topicId);
     if (topic?.name) return topic.name;
-  } catch { /* silent */ }
+  } catch {
+    /* silent */
+  }
   return null;
 }
 
@@ -142,14 +152,12 @@ export async function sendLog(
     const grupo = `${esc(payload.chatName)} [<code>${payload.chatId}</code>]`;
     const fecha = formatDate(now);
 
-    // Resolve topic line if topicId provided
     let topicLine = "";
     if (payload.topicId) {
       if (chatConfig.type === "topics") {
         const tName = await resolveTopicName(payload.chatId, payload.topicId, payload.topicName);
-        // If name found use it as link text; otherwise show [topicId] as clickable
         const displayText = tName ?? `[${payload.topicId}]`;
-        topicLine = `• Tema: ${topicLink(payload.chatId, payload.topicId, displayText)}`;
+        topicLine = `€ Tema: ${topicLink(payload.chatId, payload.topicId, displayText)}`;
       } else {
         topicLine = `• Volver a grupo: ${topicLink(payload.chatId, payload.topicId, "⬅️")}`;
       }
@@ -266,10 +274,7 @@ export async function sendLog(
       }
 
       case "ENTRADA_USUARIO": {
-        lines = [
-          `${emoji} #ENTRADA_USUARIO`,
-          `• De: ${userLink(payload.target)}`,
-        ];
+        lines = [`${emoji} #ENTRADA_USUARIO`, `• De: ${userLink(payload.target)}`];
         if (payload.actor && payload.actor.id !== payload.target.id) {
           lines.push(`• Aprobado por: ${userLink(payload.actor)}`);
         }
@@ -303,6 +308,6 @@ export async function sendLog(
     const text = lines.join("\n");
     await api.sendMessage(chatConfig.logsTo, text, { parse_mode: "HTML" });
   } catch (err) {
-    console.error(`[LOG] failed to send ${payload.action} log:`, err);
+    logger.error({ action: "sendLog", logAction: payload.action, error: String(err) });
   }
 }

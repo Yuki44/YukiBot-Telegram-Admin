@@ -23,10 +23,7 @@ const YUKIBOT_COMMANDS = new Set([
   "bn",
 ]);
 
-export async function adminOnlyCommands(
-  ctx: BotContext,
-  next: NextFunction
-): Promise<void> {
+export async function adminOnlyCommands(ctx: BotContext, next: NextFunction): Promise<void> {
   const text = ctx.message?.text || ctx.message?.caption;
 
   if (text?.startsWith("/")) {
@@ -37,8 +34,7 @@ export async function adminOnlyCommands(
       if (!ctx.isAdmin) {
         try {
           await ctx.deleteMessage();
-        } catch {
-        }
+        } catch {}
         return;
       }
     }

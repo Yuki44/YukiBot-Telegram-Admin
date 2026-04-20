@@ -4,49 +4,47 @@ import { unsilenceUser } from "../helpers/unsilenceUser";
 import { userRepository } from "../../db/repositories/userRepository";
 import { sendAndAutoDelete } from "../helpers/sendAndAutoDelete";
 import { sendLog } from "../helpers/sendLog";
-
-function esc(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function displayName(name: string, username?: string): string {
-  return username ? `${esc(name)} (@${esc(username)})` : esc(name);
-}
+import { displayName, mention } from "../helpers/html";
+import { parseArgs, buildActor, getChatTitle } from "../helpers/contextHelpers";
+import { AUTO_DELETE_SHORT_MS, MAX_WARNINGS } from "../../config/constants";
+import { t } from "../../locales/i18n";
 
 export async function qsilavHandler(ctx: BotContext): Promise<void> {
   if (!ctx.chatConfig) return;
 
   try {
     const chatId = ctx.chat!.id;
-    const args = ctx.match ? String(ctx.match).trim().split(/\s+/).filter(Boolean) : [];
+    const args = parseArgs(ctx);
 
     const target = await resolveTarget(ctx, args);
     if (!target) {
       const msg =
         args.length > 0 || ctx.message?.reply_to_message
-          ? "⚠️ No se encontró al usuario."
-          : "⚠️ Especifica un usuario.";
-      await sendAndAutoDelete(ctx, msg, 3000);
-      try { await ctx.deleteMessage(); } catch { /* ignore */ }
+          ? t("errors.userNotFound")
+          : t("errors.specifyUser");
+      await sendAndAutoDelete(ctx, msg, AUTO_DELETE_SHORT_MS);
+      try {
+        await ctx.deleteMessage();
+      } catch {
+        /* ignore */
+      }
       return;
     }
 
-    const actor = ctx.from
-      ? {
-          id: ctx.from.id,
-          name: ctx.from.first_name + (ctx.from.last_name ? ` ${ctx.from.last_name}` : ""),
-          username: ctx.from.username,
-        }
-      : undefined;
-    const chatName = (ctx.chat as any)?.title ?? "Unknown";
-    const mention = target.username ? `@${target.username}` : target.name;
-
+    const actor = buildActor(ctx);
+    const chatName = getChatTitle(ctx);
     const feedbackPromises: Promise<void>[] = [];
 
-    // 1. Unsilence — reuses qsil feedback
+    // 1. Unsilence
     const silenceSuccess = await unsilenceUser(ctx, target.userId, chatId);
     if (silenceSuccess) {
-      feedbackPromises.push(sendAndAutoDelete(ctx, `🕊️ ${mention} ha recuperado su voz.`, 3000));
+      feedbackPromises.push(
+        sendAndAutoDelete(
+          ctx,
+          t("silence.unsilenced", { user: mention(target.name, target.username) }),
+          AUTO_DELETE_SHORT_MS
+        )
+      );
       sendLog(ctx.api, ctx.chatConfig, {
         action: "Q_SILENCIO",
         actor,
@@ -56,20 +54,26 @@ export async function qsilavHandler(ctx: BotContext): Promise<void> {
         topicId: ctx.message?.message_thread_id,
       }).catch(() => {});
     } else {
-      feedbackPromises.push(sendAndAutoDelete(ctx, "⚠️ No se pudo des-silenciar. ¿Tengo permisos?", 3000));
+      feedbackPromises.push(
+        sendAndAutoDelete(ctx, t("errors.unsilenceFailed"), AUTO_DELETE_SHORT_MS)
+      );
     }
 
-    // 2. Remove warning — reuses qav feedback
+    // 2. Remove warning
     const user = await userRepository.decrementWarning(target.userId, chatId);
     if (!user) {
-      feedbackPromises.push(sendAndAutoDelete(ctx, "❌ Este usuario no tiene avisos registrados.", 3000));
+      feedbackPromises.push(
+        sendAndAutoDelete(ctx, t("errors.noWarningsRecorded"), AUTO_DELETE_SHORT_MS)
+      );
     } else {
       const dn = displayName(target.name, target.username);
-      feedbackPromises.push(sendAndAutoDelete(
-        ctx,
-        `✅ Aviso eliminado para ${dn}.\n📋 Avisos actuales: ${user.warnings}/3`,
-        3000
-      ));
+      feedbackPromises.push(
+        sendAndAutoDelete(
+          ctx,
+          t("warnings.warningRemoved", { user: dn, current: user.warnings, max: MAX_WARNINGS }),
+          AUTO_DELETE_SHORT_MS
+        )
+      );
       sendLog(ctx.api, ctx.chatConfig, {
         action: "Q_AVISO",
         actor,
@@ -82,9 +86,13 @@ export async function qsilavHandler(ctx: BotContext): Promise<void> {
     }
 
     await Promise.all(feedbackPromises);
-    try { await ctx.deleteMessage(); } catch { /* ignore */ }
+    try {
+      await ctx.deleteMessage();
+    } catch {
+      /* ignore */
+    }
   } catch {
-    // silent fail
+    // silent fail (G10)
   }
 }
 

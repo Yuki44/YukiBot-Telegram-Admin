@@ -1,10 +1,7 @@
 import { BotContext } from "../../types";
+import { logger } from "../../utils/logger";
 
-export async function sendAndAutoDelete(
-  ctx: BotContext,
-  text: string,
-  delayMs: number
-): Promise<void> {
+export async function sendAndAutoDelete(ctx: BotContext, text: string, delayMs: number): Promise<void> {
   let sent: Awaited<ReturnType<typeof ctx.reply>> | undefined;
   try {
     sent = await ctx.reply(text, {
@@ -12,17 +9,19 @@ export async function sendAndAutoDelete(
       message_thread_id: ctx.message?.message_thread_id,
     });
   } catch (err) {
-    console.error("[AUTO-DELETE] failed to send message:", err);
+    logger.error({ action: "sendAndAutoDelete_send", chatId: ctx.chat?.id, error: String(err) });
     return;
   }
 
-  // Message confirmed in chat — schedule deletion (visible in Recent Actions)
-  console.log(`[AUTO-DELETE] message ${sent.message_id} sent, deleting in ${delayMs}ms`);
   try {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
     await ctx.api.deleteMessage(ctx.chat!.id, sent.message_id);
-    console.log(`[AUTO-DELETE] deleted message ${sent.message_id}`);
   } catch (err) {
-    console.error(`[AUTO-DELETE] failed to delete message ${sent.message_id}:`, err);
+    logger.error({
+      action: "sendAndAutoDelete_delete",
+      chatId: ctx.chat?.id,
+      messageId: sent.message_id,
+      error: String(err),
+    });
   }
 }

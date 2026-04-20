@@ -1,0 +1,68 @@
+{
+  "errors": {
+    "userNotFound": "⚠️ No se encontró al usuario.",
+    "specifyUser": "⚠️ Especifica un usuario.",
+    "specifyUserOrReply": "⚠️ Debes especificar un usuario o responder a su mensaje.",
+    "replyOrSpecifyUser": "⚠️ Responde al mensaje del usuario o especifica un usuario.",
+    "couldNotIdentifyUser": "⚠️ No se pudo identificar al usuario.",
+    "specifyReason": "⚠️ Especifica una razón.",
+    "specifyReasonForWarn": "⚠️ Debes especificar una razón para el aviso.",
+    "cannotSilenceAdmin": "❌ No puedes silenciar a un administrador.",
+    "cannotKickAdmin": "❌ No puedes echar a un administrador.",
+    "cannotBanAdmin": "❌ No puedes banear a un administrador.",
+    "noWarningsRecorded": "❌ Este usuario no tiene avisos registrados.",
+    "noRecordsForUser": "❌ Sin registros para este usuario.",
+    "silenceFailed": "⚠️ No se pudo silenciar. ¿Tengo permisos?",
+    "unsilenceFailed": "⚠️ No se pudo des-silenciar. ¿Tengo permisos?",
+    "kickFailed": "⚠️ No se pudo echar. ¿Tengo permisos?",
+    "banFailed": "⚠️ No se pudo banear. ¿Tengo permisos?",
+    "banExecFailed": "<i>(Error al ejecutar el ban, hazlo manualmente.)</i>"
+  },
+  "warnings": {
+    "warnNotice": "⚠️ <b>Aviso {current}/{max}</b> para {user}\n📋 Razón: {reason}",
+    "warnLastChance": "⚠️ <b>Aviso {current}/{max}</b> para {user}\n📋 Razón: {reason}\n❗ Un aviso más y será baneado.",
+    "autoBan": "🚫 <b>{user} ha sido baneado</b> tras recibir {max} avisos.\n📋 Última razón: {reason}",
+    "warningRemoved": "✅ Aviso eliminado para {user}.\n📋 Avisos actuales: {current}/{max}",
+    "warningStatus": "📋 <b>Avisos de {user}</b>: {current}/{max}",
+    "warningReasons": "📝 <b>Razones:</b>"
+  },
+  "silence": {
+    "silenced": "🔇 {user} ha sido silenciado por 1 semana.",
+    "unsilenced": "🕊️ {user} ha recuperado su voz."
+  },
+  "kick": {
+    "kicked": "👢 {user} ha sido echado. Puede volver a unirse."
+  },
+  "ban": {
+    "banned": "🚷 {user} ha sido baneado permanentemente.",
+    "autoBanned": "🚫 @{user} baneado.",
+    "pardoned": "✅ Hecho. @{user} puede volver a unirse.",
+    "pardonedManual": "✅ Hecho. @{user} puede volver a unirse. (Desbanealo manualmente si es necesario.)"
+  },
+  "commands": {
+    "title": "📋 <b>Lista de comandos de administración</b>",
+    "sectionWarnings": "<b>— Avisos —</b>",
+    "sectionSilence": "<b>— Silencio —</b>",
+    "sectionKicksBans": "<b>— Expulsiones y Bans —</b>",
+    "sectionConfig": "<b>— Configuración (solo owner) —</b>",
+    "av": "/av [usuario] [razón] — Dar un aviso a un usuario. Al tercer aviso se banea automáticamente.",
+    "elav": "/elav [usuario] [razón] — Dar un aviso y eliminar el mensaje al que respondes.",
+    "qav": "/qav [usuario] — Quitar el último aviso de un usuario.",
+    "avs": "/avs [usuario] — Ver los avisos actuales de un usuario.",
+    "sil": "/sil [usuario] — Silenciar a un usuario por 1 semana.",
+    "silav": "/silav [usuario] [razón] — Silenciar y registrar un aviso con razón.",
+    "elsil": "/elsil — (responde a un mensaje) Eliminar el mensaje y silenciar al autor por 1 semana.",
+    "elsilav": "/elsilav [razón] — (responde a un mensaje) Eliminar el mensaje, silenciar al autor y registrar un aviso.",
+    "qsil": "/qsil [usuario] — Quitar el silencio a un usuario.",
+    "qsilav": "/qsilav [usuario] — Quitar el silencio y el último aviso de un usuario.",
+    "kk": "/kk [usuario] — Echar a un usuario del grupo (puede volver a unirse).",
+    "bn": "/bn [usuario] — Banear a un usuario permanentemente (no puede volver).",
+    "qban": "/qban [usuario] — Quitar el ban de un usuario y permitirle volver a unirse.",
+    "setup": "/setup — Inicializar la configuración del grupo.",
+    "addtopic": "/addtopic — Añadir un tema al filtro de tópicos.",
+    "edittopic": "/edittopic — Editar un tema existente.",
+    "removetopic": "/removetopic — Eliminar un tema del filtro.",
+    "togglefeature": "/togglefeature [función] — Activar o desactivar una función del bot."
+  }
+}
+

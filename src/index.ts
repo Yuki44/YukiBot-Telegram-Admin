@@ -3,7 +3,7 @@ dotenv.config();
 
 import { Bot } from "grammy";
 import { BotContext } from "./types";
-import { connectDB } from "./db/connection";
+import { connectDB, disconnectDB } from "./db/connection";
 import { loadChat } from "./bot/middleware/loadChat";
 import { isAdmin } from "./bot/middleware/isAdmin";
 import { adminOnlyCommands } from "./bot/middleware/adminOnlyCommands";
@@ -30,20 +30,28 @@ import { comHandler } from "./bot/commands/com";
 import { kkHandler } from "./bot/commands/kk";
 import { bnHandler } from "./bot/commands/bn";
 import { groupHelpSpamHandler } from "./bot/handlers/groupHelpSpamHandler";
-import { Topic } from "./db/models/Topic";
+import { topicRepository } from "./db/repositories/topicRepository";
+import { logger } from "./utils/logger";
 
 const token = process.env.BOT_TOKEN;
 if (!token) throw new Error("BOT_TOKEN is not set in .env");
 
 const bot = new Bot<BotContext>(token);
 
-// Register global middleware
+// Global error handler — prevents unhandled Grammy errors from crashing the process
+bot.catch((err) => {
+  logger.error({
+    action: "bot.catch",
+    error: String(err.error),
+    ctx: err.ctx?.chat?.id ? `chat ${err.ctx.chat.id}` : "unknown",
+  });
+});
+
 bot.use(loadChat);
 bot.use(trackUser);
 bot.use(isAdmin);
 bot.use(adminOnlyCommands);
 
-// Register commands
 bot.command("setup", setupHandler);
 bot.command("addtopic", addTopicHandler);
 bot.command("edittopic", editTopicHandler);
@@ -64,57 +72,64 @@ bot.command("com", comHandler);
 bot.command("kk", kkHandler);
 bot.command("bn", bnHandler);
 
-// Register chat_member handler
 bot.on("chat_member", chatMemberHandler);
 
-// Auto-cache topic names when topics are created or renamed
 bot.on("message:forum_topic_created", async (ctx) => {
   const chatId = ctx.chat.id;
   const topicId = ctx.message.message_thread_id;
   const topicName = ctx.message.forum_topic_created?.name;
   if (chatId && topicId && topicName) {
     try {
-      await Topic.findOneAndUpdate(
-        { chatId, topicId },
-        { $set: { name: topicName }, $setOnInsert: { allowedMsgTypes: [] } },
-        { upsert: true }
-      );
-    } catch { /* silent */ }
+      await topicRepository.upsertName(chatId, topicId, topicName);
+    } catch {
+      /* silent (G10) */
+    }
   }
 });
 
 bot.on("message:forum_topic_edited", async (ctx) => {
   const chatId = ctx.chat.id;
   const topicId = ctx.message.message_thread_id;
-  const topicName = (ctx.message as any).forum_topic_edited?.name;
-  if (chatId && topicId && topicName) {
+  const topicName = (ctx.message as Record<string, unknown>)?.forum_topic_edited as
+    | { name?: string }
+    | undefined;
+  if (chatId && topicId && topicName?.name) {
     try {
-      await Topic.findOneAndUpdate(
-        { chatId, topicId },
-        { $set: { name: topicName } }
-      );
-    } catch { /* silent */ }
+      await topicRepository.upsertName(chatId, topicId, topicName.name);
+    } catch {
+      /* silent (G10) */
+    }
   }
 });
 
-// Register message handler with topic filtering and media forwarding
 bot.on("message", mediaForwardHandler);
 bot.on("message", topicFiltering);
-
-// Group Help SPAM log listener — auto-applies warn in the affected group
 bot.on("message", groupHelpSpamHandler);
 bot.on("channel_post", groupHelpSpamHandler);
 
-// Start bot
+// Graceful shutdown
+function shutdown(signal: string) {
+  logger.info({ action: "shutdown", signal });
+  bot.stop();
+  disconnectDB()
+    .catch((err) => logger.error({ action: "shutdown_db", error: String(err) }))
+    .finally(() => process.exit(0));
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+
 async function start() {
+  logger.info({ action: "startup", status: "connecting to DB..." });
   await connectDB();
+  logger.info({ action: "startup", status: "starting bot polling..." });
   await bot.start({
     allowed_updates: ["message", "chat_member", "callback_query", "channel_post"],
+    onStart: () => logger.info({ action: "startup", status: "YukiBot is running" }),
   });
-  console.log("YukiBot is running...");
 }
 
 start().catch((error) => {
-  console.error("Failed to start bot:", error);
+  logger.error({ action: "startup", error: String(error) });
   process.exit(1);
 });

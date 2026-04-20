@@ -1,6 +1,7 @@
 import { Middleware } from "grammy";
 import { BotContext } from "../../types";
 import { adminRepository } from "../../db/repositories/adminRepository";
+import { logger } from "../../utils/logger";
 
 export const isAdmin: Middleware<BotContext> = async (ctx, next) => {
   try {
@@ -21,12 +22,12 @@ export const isAdmin: Middleware<BotContext> = async (ctx, next) => {
             ctx.isAdmin = true;
           }
         } catch (error) {
-          console.error(`[isAdmin] Fallback getChatMember failed for user ${userId} in chat ${chatId}:`, error);
+          logger.error({ action: "isAdmin_fallback", userId, chatId, error: String(error) });
         }
       }
     }
   } catch (error) {
-    console.error("Error checking admin status:", error);
+    logger.error({ action: "isAdmin", error: String(error) });
     ctx.isAdmin = false;
   }
   await next();

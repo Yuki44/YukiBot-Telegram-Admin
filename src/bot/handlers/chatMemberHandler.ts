@@ -4,10 +4,9 @@ import { userRepository } from "../../db/repositories/userRepository";
 import { adminRepository } from "../../db/repositories/adminRepository";
 import { sendLog, LogUser } from "../helpers/sendLog";
 import { isKickInProgress, clearKick } from "../helpers/kickTracker";
+import { logger } from "../../utils/logger";
 
-export async function chatMemberHandler(
-  ctx: Filter<BotContext, "chat_member">
-): Promise<void> {
+export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">): Promise<void> {
   try {
     const { old_chat_member, new_chat_member } = ctx.chatMember;
     const { status, user } = new_chat_member;
@@ -27,16 +26,18 @@ export async function chatMemberHandler(
 
     // --- Admin demotion ---
     const wasAdmin = oldStatus === "administrator" || oldStatus === "creator";
-    const isAdmin = status === "administrator" || status === "creator";
+    const isAdminNow = status === "administrator" || status === "creator";
 
-    if (wasAdmin && !isAdmin) {
-      adminRepository.remove(userId, chatId).catch((err) =>
-        console.error(`[ERROR] admin remove failed for ${userId}: ${err}`)
-      );
+    if (wasAdmin && !isAdminNow) {
+      adminRepository
+        .remove(userId, chatId)
+        .catch((err) =>
+          logger.error({ action: "chatMember_adminRemove", userId, chatId, error: String(err) })
+        );
     }
 
     // --- Admin promotion ---
-    if (isAdmin) {
+    if (isAdminNow) {
       adminRepository
         .upsert({
           userId,
@@ -46,11 +47,15 @@ export async function chatMemberHandler(
           chatName,
           role: status === "creator" ? "owner" : "admin",
         })
-        .catch((err) => console.error(`[ERROR] admin upsert failed for ${userId}: ${err}`));
+        .catch((err) =>
+          logger.error({ action: "chatMember_adminUpsert", userId, chatId, error: String(err) })
+        );
 
       userRepository
         .findOrCreate(userId, chatId, username, name)
-        .catch((err) => console.error(`[ERROR] user upsert failed for ${userId}: ${err}`));
+        .catch((err) =>
+          logger.error({ action: "chatMember_userUpsert", userId, chatId, error: String(err) })
+        );
       return;
     }
 
@@ -59,17 +64,18 @@ export async function chatMemberHandler(
       if (isKickInProgress(chatId, userId)) return;
 
       const from = ctx.chatMember.from;
-      // until_date > 0 → temporary restriction (kick); 0 → permanent ban
-      const until_date: number = (new_chat_member as any).until_date ?? 0;
+      const untilDate: number = (new_chat_member as { until_date?: number }).until_date ?? 0;
 
-      if (until_date > 0) {
+      if (untilDate > 0) {
         if (from && from.id !== ctx.me.id) {
           const actor: LogUser = {
             id: from.id,
             name: [from.first_name, from.last_name].filter(Boolean).join(" "),
             username: from.username,
           };
-          sendLog(ctx.api, ctx.chatConfig, { action: "KICK", actor, target, chatId, chatName }).catch(() => {});
+          sendLog(ctx.api, ctx.chatConfig, { action: "KICK", actor, target, chatId, chatName }).catch(
+            () => {}
+          );
         }
         return;
       }
@@ -77,7 +83,7 @@ export async function chatMemberHandler(
       try {
         await userRepository.upsert({ userId, chatId, username, name, isBanned: true, wasBanned: true });
       } catch (err) {
-        console.error(`[ERROR] ban sync failed for ${userId}: ${err}`);
+        logger.error({ action: "chatMember_banSync", userId, chatId, error: String(err) });
       }
 
       if (from && from.id !== ctx.me.id) {
@@ -101,22 +107,32 @@ export async function chatMemberHandler(
       let existingUser;
       try {
         existingUser = await userRepository.findByUserAndChat(userId, chatId);
-      } catch { /* silent */ }
+      } catch {
+        /* silent */
+      }
 
       if (existingUser?.wasBanned) return;
 
       if ((existingUser?.warnings ?? 0) > 0) {
         userRepository
           .upsert({ userId, chatId, leftWithWarningsAt: new Date() })
-          .catch((err) => console.error(`[ERROR] leftWithWarningsAt stamp failed for ${userId}: ${err}`));
-        sendLog(ctx.api, ctx.chatConfig, { action: "SALIDA_USUARIO", target, chatId, chatName }).catch(() => {});
+          .catch((err) =>
+            logger.error({ action: "chatMember_leftStamp", userId, chatId, error: String(err) })
+          );
+        sendLog(ctx.api, ctx.chatConfig, { action: "SALIDA_USUARIO", target, chatId, chatName }).catch(
+          () => {}
+        );
         return;
       }
 
-      sendLog(ctx.api, ctx.chatConfig, { action: "SALIDA_USUARIO", target, chatId, chatName }).catch(() => {});
-      userRepository.remove(userId, chatId).catch((err) =>
-        console.error(`[ERROR] user remove failed for ${userId}: ${err}`)
+      sendLog(ctx.api, ctx.chatConfig, { action: "SALIDA_USUARIO", target, chatId, chatName }).catch(
+        () => {}
       );
+      userRepository
+        .remove(userId, chatId)
+        .catch((err) =>
+          logger.error({ action: "chatMember_userRemove", userId, chatId, error: String(err) })
+        );
       return;
     }
 
@@ -125,14 +141,14 @@ export async function chatMemberHandler(
     try {
       record = await userRepository.findOrCreate(userId, chatId, username, name);
     } catch (err) {
-      console.error(`[ERROR] user findOrCreate failed for ${userId}: ${err}`);
+      logger.error({ action: "chatMember_findOrCreate", userId, chatId, error: String(err) });
       return;
     }
 
     if (record.leftWithWarningsAt && !record.wasBanned) {
       userRepository
         .clearLeftDate(userId, chatId)
-        .catch((err) => console.error(`[ERROR] clearLeftDate failed for ${userId}: ${err}`));
+        .catch((err) => logger.error({ action: "chatMember_clearLeft", userId, chatId, error: String(err) }));
     }
 
     if (ctx.chatConfig.features.autoBan && record.wasBanned) {
@@ -140,7 +156,7 @@ export async function chatMemberHandler(
         await ctx.api.banChatMember(chatId, userId);
         await ctx.api.sendMessage(chatId, `🚫 @${username ?? userId} baneado.`);
       } catch (err) {
-        console.error(`[ERROR] auto-reban failed for ${userId}: ${err}`);
+        logger.error({ action: "chatMember_autoReban", userId, chatId, error: String(err) });
       }
       sendLog(ctx.api, ctx.chatConfig, { action: "AUTO_BAN", target, chatId, chatName }).catch(() => {});
       return;
@@ -149,12 +165,19 @@ export async function chatMemberHandler(
     const wasOut = oldStatus === "left" || oldStatus === "kicked";
     if (wasOut) {
       const from = ctx.chatMember.from;
-      const actor: LogUser | undefined = (from && from.id !== userId)
-        ? { id: from.id, name: [from.first_name, from.last_name].filter(Boolean).join(" "), username: from.username }
-        : undefined;
+      const actor: LogUser | undefined =
+        from && from.id !== userId
+          ? {
+              id: from.id,
+              name: [from.first_name, from.last_name].filter(Boolean).join(" "),
+              username: from.username,
+            }
+          : undefined;
 
       let inviter: LogUser | undefined;
-      const inviteLink = (ctx.chatMember as any).invite_link;
+      const inviteLink = (ctx.chatMember as unknown as Record<string, unknown>).invite_link as
+        | { creator?: { id: number; first_name: string; last_name?: string; username?: string } }
+        | undefined;
       if (inviteLink?.creator) {
         const c = inviteLink.creator;
         inviter = {
@@ -164,9 +187,16 @@ export async function chatMemberHandler(
         };
       }
 
-      sendLog(ctx.api, ctx.chatConfig, { action: "ENTRADA_USUARIO", actor, target, chatId, chatName, inviter }).catch(() => {});
+      sendLog(ctx.api, ctx.chatConfig, {
+        action: "ENTRADA_USUARIO",
+        actor,
+        target,
+        chatId,
+        chatName,
+        inviter,
+      }).catch(() => {});
     }
   } catch (err) {
-    console.error(`[ERROR] chatMemberHandler outer: ${err}`);
+    logger.error({ action: "chatMemberHandler", error: String(err) });
   }
 }
