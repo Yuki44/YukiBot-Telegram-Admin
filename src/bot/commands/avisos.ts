@@ -1,31 +1,32 @@
 import { BotContext } from "../../types";
 import { resolveTarget } from "../helpers/resolveTarget";
 import { userRepository } from "../../db/repositories/userRepository";
-
-function esc(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function displayName(name: string, username?: string): string {
-  return username ? `${esc(name)} (@${esc(username)})` : esc(name);
-}
+import { esc, displayName } from "../helpers/html";
+import { parseArgs } from "../helpers/contextHelpers";
+import { t } from "../../locales/i18n";
+import { MAX_WARNINGS } from "../../config/constants";
 
 export async function avisosHandler(ctx: BotContext): Promise<void> {
   if (!ctx.chatConfig) return;
 
   try {
-    const args = ctx.match ? String(ctx.match).trim().split(/\s+/).filter(Boolean) : [];
+    const args = parseArgs(ctx);
     const target = await resolveTarget(ctx, args);
 
     if (!target) {
-      const msg = args.length > 0 || ctx.message?.reply_to_message
-        ? "⚠️ No se encontró al usuario."
-        : "⚠️ Debes especificar un usuario o responder a su mensaje.";
+      const msg =
+        args.length > 0 || ctx.message?.reply_to_message
+          ? t("errors.userNotFound")
+          : t("errors.specifyUserOrReply");
       await ctx.reply(msg, {
         parse_mode: "HTML",
         message_thread_id: ctx.message?.message_thread_id,
       });
-      try { await ctx.deleteMessage(); } catch { /* ignore */ }
+      try {
+        await ctx.deleteMessage();
+      } catch {
+        /* ignore */
+      }
       return;
     }
 
@@ -33,10 +34,10 @@ export async function avisosHandler(ctx: BotContext): Promise<void> {
     const user = await userRepository.findOrCreate(target.userId, chatId, target.username, target.name);
     const dn = displayName(target.name, target.username);
 
-    let msg = `📋 <b>Avisos de ${dn}</b>: ${user.warnings}/3`;
+    let msg = t("warnings.warningStatus", { user: dn, current: user.warnings, max: MAX_WARNINGS });
 
     if (user.warningReasons && user.warningReasons.length > 0) {
-      msg += "\n📝 <b>Razones:</b>";
+      msg += `\n${t("warnings.warningReasons")}`;
       user.warningReasons.forEach((reason, i) => {
         msg += `\n${i + 1}. ${esc(reason)}`;
       });
@@ -46,8 +47,12 @@ export async function avisosHandler(ctx: BotContext): Promise<void> {
       parse_mode: "HTML",
       message_thread_id: ctx.message?.message_thread_id,
     });
-    try { await ctx.deleteMessage(); } catch { /* ignore */ }
+    try {
+      await ctx.deleteMessage();
+    } catch {
+      /* ignore */
+    }
   } catch {
-    // Silently ignore errors
+    // silent fail (G10)
   }
 }

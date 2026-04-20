@@ -1,24 +1,13 @@
 import { CommandContext } from "grammy";
-import { BotContext, MessageType } from "../../types";
-import { Topic } from "../../db/models/Topic";
+import { BotContext, MessageType, VALID_CONTENT_TYPES } from "../../types";
+import { topicRepository } from "../../db/repositories/topicRepository";
 import { logger } from "../../utils/logger";
-
-const VALID_MESSAGE_TYPES = [
-  MessageType.Photo,
-  MessageType.Video,
-  MessageType.Sticker,
-  MessageType.Audio,
-  MessageType.Voice,
-  MessageType.Document,
-  MessageType.Text,
-];
 
 export async function addTopicHandler(ctx: CommandContext<BotContext>) {
   try {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
 
-    // Only works in topics-type chats
     if (ctx.chatConfig?.type !== "topics") {
       await ctx.reply("This command only works in forum chats.", {
         message_thread_id: ctx.message?.message_thread_id,
@@ -26,12 +15,10 @@ export async function addTopicHandler(ctx: CommandContext<BotContext>) {
       return;
     }
 
-    // Check sender is admin
     if (!ctx.isAdmin) {
       return;
     }
 
-    // Parse command arguments
     const args = ctx.match?.toString().trim().split(/\s+/) || [];
 
     if (args.length < 2) {
@@ -57,10 +44,7 @@ export async function addTopicHandler(ctx: CommandContext<BotContext>) {
       .split(",")
       .map((type) => type.trim());
 
-    // Validate message types
-    const validTypes = allowedMsgTypes.filter((type) =>
-      VALID_MESSAGE_TYPES.includes(type as MessageType)
-    );
+    const validTypes = allowedMsgTypes.filter((type) => VALID_CONTENT_TYPES.includes(type as MessageType));
 
     if (validTypes.length === 0) {
       await ctx.reply(
@@ -72,19 +56,12 @@ export async function addTopicHandler(ctx: CommandContext<BotContext>) {
 
     const topicName = args.length >= 3 ? args.slice(2).join(" ") : `Topic ${topicId}`;
 
-    // Upsert Topic document
-    await Topic.findOneAndUpdate(
-      { chatId, topicId },
-      {
-        $set: {
-          chatId,
-          topicId,
-          name: topicName,
-          allowedMsgTypes: validTypes,
-        },
-      },
-      { upsert: true, returnDocument: "after" }
-    );
+    await topicRepository.upsert({
+      chatId,
+      topicId,
+      name: topicName,
+      allowedMsgTypes: validTypes,
+    });
 
     logger.info({
       action: "addTopic",
@@ -96,10 +73,9 @@ export async function addTopicHandler(ctx: CommandContext<BotContext>) {
       allowedMsgTypes: validTypes,
     });
 
-    await ctx.reply(
-      `Topic '${topicName}' (${topicId}) registered with types: ${validTypes.join(", ")}`,
-      { message_thread_id: ctx.message?.message_thread_id }
-    );
+    await ctx.reply(`Topic '${topicName}' (${topicId}) registered with types: ${validTypes.join(", ")}`, {
+      message_thread_id: ctx.message?.message_thread_id,
+    });
   } catch (error) {
     logger.error({
       action: "addTopic",

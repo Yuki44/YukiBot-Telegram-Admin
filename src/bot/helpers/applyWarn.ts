@@ -1,14 +1,10 @@
 import { BotContext, IChat } from "../../types";
 import { userRepository } from "../../db/repositories/userRepository";
 import { sendLog } from "./sendLog";
-
-function esc(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function displayName(name: string, username?: string): string {
-  return username ? `${esc(name)} (@${esc(username)})` : esc(name);
-}
+import { esc, displayName } from "./html";
+import { buildActor, getChatTitle } from "./contextHelpers";
+import { MAX_WARNINGS } from "../../config/constants";
+import { t } from "../../locales/i18n";
 
 export async function applyWarn(
   ctx: BotContext,
@@ -29,14 +25,10 @@ export async function applyWarn(
     const dn = displayName(name, username);
 
     const resolvedChatConfig = options?.chatConfig !== undefined ? options.chatConfig : ctx.chatConfig;
-    const resolvedChatName = options?.chatName ?? (ctx.chat?.type !== "private" ? (ctx.chat as any)?.title ?? "Unknown" : "Unknown");
+    const resolvedChatName = options?.chatName ?? getChatTitle(ctx);
     const topicId = options?.topicId ?? ctx.message?.message_thread_id;
 
-    const actor = options?.actor !== undefined
-      ? options.actor
-      : ctx.from
-        ? { id: ctx.from.id, name: ctx.from.first_name + (ctx.from.last_name ? ` ${ctx.from.last_name}` : ""), username: ctx.from.username }
-        : undefined;
+    const actor = options?.actor !== undefined ? options.actor : buildActor(ctx);
     const target = { id: targetUserId, name, username };
 
     sendLog(ctx.api, resolvedChatConfig, {
@@ -50,12 +42,12 @@ export async function applyWarn(
       topicId,
     }).catch(() => {});
 
-    if (user.warnings >= 3) {
-      let banMsg = `🚫 <b>${dn} ha sido baneado</b> tras recibir 3 avisos.\n📋 Última razón: ${esc(reason)}`;
+    if (user.warnings >= MAX_WARNINGS) {
+      let banMsg = t("warnings.autoBan", { user: dn, max: MAX_WARNINGS, reason: esc(reason) });
       try {
         await ctx.api.banChatMember(chatId, targetUserId);
       } catch {
-        banMsg += "\n<i>(Error al ejecutar el ban, hazlo manualmente.)</i>";
+        banMsg += `\n${t("errors.banExecFailed")}`;
       }
       await ctx.api.sendMessage(chatId, banMsg, { parse_mode: "HTML", message_thread_id: topicId });
 
@@ -68,16 +60,26 @@ export async function applyWarn(
         reason: "3 avisos",
         topicId,
       }).catch(() => {});
-    } else if (user.warnings === 2) {
+    } else if (user.warnings === MAX_WARNINGS - 1) {
       await ctx.api.sendMessage(
         chatId,
-        `⚠️ <b>Aviso ${user.warnings}/3</b> para ${dn}\n📋 Razón: ${esc(reason)}\n❗ Un aviso más y será baneado.`,
+        t("warnings.warnLastChance", {
+          current: user.warnings,
+          max: MAX_WARNINGS,
+          user: dn,
+          reason: esc(reason),
+        }),
         { parse_mode: "HTML", message_thread_id: topicId }
       );
     } else {
       await ctx.api.sendMessage(
         chatId,
-        `⚠️ <b>Aviso ${user.warnings}/3</b> para ${dn}\n📋 Razón: ${esc(reason)}`,
+        t("warnings.warnNotice", {
+          current: user.warnings,
+          max: MAX_WARNINGS,
+          user: dn,
+          reason: esc(reason),
+        }),
         { parse_mode: "HTML", message_thread_id: topicId }
       );
     }

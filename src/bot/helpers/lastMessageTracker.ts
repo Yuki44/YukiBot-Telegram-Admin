@@ -15,11 +15,7 @@ export function trackLastMessage(userId: number, chatId: number, messageId: numb
  * Deletes the last tracked message for a user in a chat.
  * Returns true if deletion was attempted (message was found in the tracker).
  */
-export async function deleteLastMessage(
-  api: Api,
-  chatId: number,
-  userId: number
-): Promise<boolean> {
+export async function deleteLastMessage(api: Api, chatId: number, userId: number): Promise<boolean> {
   const key = `${userId}:${chatId}`;
   const messageId = lastMessageMap.get(key);
   if (!messageId) return false;
@@ -33,4 +29,3 @@ export async function deleteLastMessage(
 
   return true;
 }
-

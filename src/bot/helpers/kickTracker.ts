@@ -1,3 +1,5 @@
+import { KICK_TRACKER_TTL_MS } from "../../config/constants";
+
 const kickInProgress = new Set<string>();
 
 function key(chatId: number, userId: number): string {
@@ -6,7 +8,7 @@ function key(chatId: number, userId: number): string {
 
 export function markKickInProgress(chatId: number, userId: number): void {
   kickInProgress.add(key(chatId, userId));
-  setTimeout(() => kickInProgress.delete(key(chatId, userId)), 30_000);
+  setTimeout(() => kickInProgress.delete(key(chatId, userId)), KICK_TRACKER_TTL_MS);
 }
 
 export function isKickInProgress(chatId: number, userId: number): boolean {
@@ -16,4 +18,3 @@ export function isKickInProgress(chatId: number, userId: number): boolean {
 export function clearKick(chatId: number, userId: number): void {
   kickInProgress.delete(key(chatId, userId));
 }
-

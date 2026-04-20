@@ -10,6 +10,29 @@ export const topicRepository = {
     return await Topic.find({ chatId });
   },
 
+  async upsert(data: {
+    chatId: number;
+    topicId: number;
+    name: string;
+    allowedMsgTypes: string[];
+  }): Promise<ITopic> {
+    const result = await Topic.findOneAndUpdate(
+      { chatId: data.chatId, topicId: data.topicId },
+      { $set: data },
+      { upsert: true, returnDocument: "after" }
+    );
+    return result!;
+  },
+
+  /** Update only the topic name (used by forum_topic_created/edited auto-cache). */
+  async upsertName(chatId: number, topicId: number, name: string): Promise<void> {
+    await Topic.findOneAndUpdate(
+      { chatId, topicId },
+      { $set: { name }, $setOnInsert: { allowedMsgTypes: [] } },
+      { upsert: true }
+    );
+  },
+
   async deleteOne(chatId: number, topicId: number): Promise<void> {
     await Topic.deleteOne({ chatId, topicId });
   },

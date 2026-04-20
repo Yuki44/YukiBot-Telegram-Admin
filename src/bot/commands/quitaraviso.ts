@@ -3,30 +3,31 @@ import { resolveTarget } from "../helpers/resolveTarget";
 import { userRepository } from "../../db/repositories/userRepository";
 import { sendLog } from "../helpers/sendLog";
 import { sendAndAutoDelete } from "../helpers/sendAndAutoDelete";
-
-function esc(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function displayName(name: string, username?: string): string {
-  return username ? `${esc(name)} (@${esc(username)})` : esc(name);
-}
+import { displayName } from "../helpers/html";
+import { parseArgs, buildActor, getChatTitle } from "../helpers/contextHelpers";
+import { AUTO_DELETE_SHORT_MS, MAX_WARNINGS } from "../../config/constants";
+import { t } from "../../locales/i18n";
 
 async function executeQuitarAviso(ctx: BotContext, deleteReplied: boolean): Promise<void> {
   if (!ctx.chatConfig) return;
 
-  const args = ctx.match ? String(ctx.match).trim().split(/\s+/).filter(Boolean) : [];
+  const args = parseArgs(ctx);
   const target = await resolveTarget(ctx, args);
 
   if (!target) {
-    const msg = args.length > 0 || ctx.message?.reply_to_message
-      ? "⚠️ No se encontró al usuario."
-      : "⚠️ Debes especificar un usuario o responder a su mensaje.";
+    const msg =
+      args.length > 0 || ctx.message?.reply_to_message
+        ? t("errors.userNotFound")
+        : t("errors.specifyUserOrReply");
     await ctx.reply(msg, {
       parse_mode: "HTML",
       message_thread_id: ctx.message?.message_thread_id,
     });
-    try { await ctx.deleteMessage(); } catch { /* ignore */ }
+    try {
+      await ctx.deleteMessage();
+    } catch {
+      /* ignore */
+    }
     return;
   }
 
@@ -34,11 +35,15 @@ async function executeQuitarAviso(ctx: BotContext, deleteReplied: boolean): Prom
   const user = await userRepository.decrementWarning(target.userId, chatId);
 
   if (!user) {
-    await ctx.reply("❌ Este usuario no tiene avisos registrados.", {
+    await ctx.reply(t("errors.noWarningsRecorded"), {
       parse_mode: "HTML",
       message_thread_id: ctx.message?.message_thread_id,
     });
-    try { await ctx.deleteMessage(); } catch { /* ignore */ }
+    try {
+      await ctx.deleteMessage();
+    } catch {
+      /* ignore */
+    }
     return;
   }
 
@@ -53,25 +58,25 @@ async function executeQuitarAviso(ctx: BotContext, deleteReplied: boolean): Prom
   const dn = displayName(target.name, target.username);
   await sendAndAutoDelete(
     ctx,
-    `✅ Aviso eliminado para ${dn}.\n📋 Avisos actuales: ${user.warnings}/3`,
-    1000
+    t("warnings.warningRemoved", { user: dn, current: user.warnings, max: MAX_WARNINGS }),
+    AUTO_DELETE_SHORT_MS
   );
 
-  const actor = ctx.from
-    ? { id: ctx.from.id, name: ctx.from.first_name + (ctx.from.last_name ? ` ${ctx.from.last_name}` : ""), username: ctx.from.username }
-    : undefined;
-  const chatName = (ctx.chat as any)?.title ?? "Unknown";
   sendLog(ctx.api, ctx.chatConfig, {
     action: "Q_AVISO",
-    actor,
+    actor: buildActor(ctx),
     target: { id: target.userId, name: target.name, username: target.username },
     chatId,
-    chatName,
+    chatName: getChatTitle(ctx),
     warnings: user.warnings,
     topicId: ctx.message?.message_thread_id,
   }).catch(() => {});
 
-  try { await ctx.deleteMessage(); } catch { /* ignore */ }
+  try {
+    await ctx.deleteMessage();
+  } catch {
+    /* ignore */
+  }
 }
 
 export async function quitarAvisoHandler(ctx: BotContext): Promise<void> {

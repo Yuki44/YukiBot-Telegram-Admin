@@ -26,17 +26,15 @@ export const TOPIC_RULES: Record<number, MessageType[]> = (() => {
       const messageTypes = (types as string[]).map((type) => {
         const normalized = type.toLowerCase();
         return MessageType[
-          normalized.charAt(0).toUpperCase() +
-            normalized.slice(1) as keyof typeof MessageType
+          (normalized.charAt(0).toUpperCase() + normalized.slice(1)) as keyof typeof MessageType
         ];
       });
       rules[Number(topicId)] = messageTypes;
     }
 
     return rules;
-  } catch (error) {
-    console.error("Failed to parse TOPIC_RULES:", error);
+  } catch {
+    // Cannot use logger here because this runs at module load time before logger may be initialized
     return {};
   }
 })();
-

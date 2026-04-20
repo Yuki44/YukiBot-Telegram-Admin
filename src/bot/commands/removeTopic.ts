@@ -20,9 +20,7 @@ export async function removeTopicHandler(ctx: CommandContext<BotContext>) {
     const args = ctx.match?.toString().trim().split(/\s+/) || [];
 
     if (args.length < 1 || !args[0]) {
-      await ctx.reply(
-        "Usage: /removetopic <topicId>\nExample: /removetopic 12283"
-      );
+      await ctx.reply("Usage: /removetopic <topicId>\nExample: /removetopic 12283");
       return;
     }
 
@@ -48,9 +46,7 @@ export async function removeTopicHandler(ctx: CommandContext<BotContext>) {
       topicId,
     });
 
-    await ctx.reply(
-      `Topic ${topicId} removed. No content rules will be enforced there.`
-    );
+    await ctx.reply(`Topic ${topicId} removed. No content rules will be enforced there.`);
   } catch (error) {
     logger.error({
       action: "removeTopic",

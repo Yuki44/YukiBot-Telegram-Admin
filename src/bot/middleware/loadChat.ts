@@ -1,6 +1,7 @@
 import { Middleware } from "grammy";
 import { BotContext } from "../../types";
 import { chatRepository } from "../../db/repositories/chatRepository";
+import { logger } from "../../utils/logger";
 
 export const loadChat: Middleware<BotContext> = async (ctx, next) => {
   try {
@@ -17,7 +18,7 @@ export const loadChat: Middleware<BotContext> = async (ctx, next) => {
       }
     }
   } catch (error) {
-    console.error("Error loading chat config:", error);
+    logger.error({ action: "loadChat", error: String(error) });
     ctx.chatConfig = null;
   }
   await next();

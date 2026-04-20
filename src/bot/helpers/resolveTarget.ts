@@ -2,6 +2,7 @@ import { MessageEntity } from "grammy/types";
 import { BotContext } from "../../types";
 import { userRepository } from "../../db/repositories/userRepository";
 import { adminRepository } from "../../db/repositories/adminRepository";
+import { logger } from "../../utils/logger";
 
 type TextMentionEntity = Extract<MessageEntity, { type: "text_mention" }>;
 
@@ -12,30 +13,31 @@ export interface ResolvedTarget {
   resolvedFromArgs: boolean;
 }
 
-export async function resolveTarget(
-  ctx: BotContext,
-  args: string[]
-): Promise<ResolvedTarget | null> {
+export async function resolveTarget(ctx: BotContext, args: string[]): Promise<ResolvedTarget | null> {
   const message = ctx.message;
   const chatId = ctx.chat!.id;
 
-  console.log(`[resolveTarget] Resolving target in chat ${chatId}. Args:`, args);
+  logger.info({ action: "resolveTarget", chatId, args: args.join(",") });
 
   // Check if args[0] is a potential target BEFORE checking for reply_to_message.
   // This avoids accidental self-targets or misidentifications when a reply exists but isn't the intended target.
-  const hasTargetInArgs = args[0] && (
-    args[0].startsWith("@") ||        // Mention or username
-    /^\d+$/.test(args[0]) ||          // Numeric user ID
-    message?.entities?.some(e => e.type === "text_mention" && (e.offset === 0 || (message.text || message.caption || "").substring(0, e.offset).trim() === ""))
-  );
+  const hasTargetInArgs =
+    args[0] &&
+    (args[0].startsWith("@") || // Mention or username
+      /^\d+$/.test(args[0]) || // Numeric user ID
+      message?.entities?.some(
+        (e) =>
+          e.type === "text_mention" &&
+          (e.offset === 0 || (message.text || message.caption || "").substring(0, e.offset).trim() === "")
+      ));
 
   // Priority 1: If an explicit target is in the arguments, it OVERRIDES the reply
   if (hasTargetInArgs) {
-    console.log(`[resolveTarget] Explicit target found in args[0]: ${args[0]}. Skipping reply check.`);
+    logger.info({ action: "resolveTarget", chatId, method: "args", arg: args[0] });
   } else if (message?.reply_to_message?.from) {
     // Priority 2: reply — only if NO target in args
     const u = message.reply_to_message.from;
-    console.log(`[resolveTarget] Resolved from reply: ${u.id} (${u.username || 'no username'})`);
+    logger.info({ action: "resolveTarget", chatId, method: "reply", userId: u.id });
     return {
       userId: u.id,
       username: u.username,
@@ -47,11 +49,9 @@ export async function resolveTarget(
   if (!args[0]) return null;
 
   // Priority 2: text_mention entity (Telegram autocomplete) — full user object, zero API calls
-  const mention = message?.entities?.find(
-    (e): e is TextMentionEntity => e.type === "text_mention"
-  );
+  const mention = message?.entities?.find((e): e is TextMentionEntity => e.type === "text_mention");
   if (mention) {
-    console.log(`[resolveTarget] Resolved from text_mention: ${mention.user.id} (${mention.user.username || 'no username'})`);
+    logger.info({ action: "resolveTarget", chatId, method: "text_mention", userId: mention.user.id });
     return {
       userId: mention.user.id,
       username: mention.user.username,
@@ -63,12 +63,11 @@ export async function resolveTarget(
   // Priority 3: @username string
   if (args[0].startsWith("@")) {
     const usernameWithoutAt = args[0].slice(1);
-    console.log(`[resolveTarget] Attempting resolution for username: ${usernameWithoutAt}`);
 
     // 3a: DB cache (populated by trackUser middleware) — zero API calls
     const cached = await userRepository.findByUsername(usernameWithoutAt, Number(chatId));
     if (cached) {
-      console.log(`[resolveTarget] Resolved from User DB cache: ${cached.userId}`);
+      logger.info({ action: "resolveTarget", chatId, method: "userDB", userId: cached.userId });
       return {
         userId: cached.userId,
         username: cached.username,
@@ -80,11 +79,13 @@ export async function resolveTarget(
     // 3b: Admin collection fallback (admins may not be in User collection for older chats)
     const cachedAdmin = await adminRepository.findByUsername(usernameWithoutAt, Number(chatId));
     if (cachedAdmin) {
-      console.log(`[resolveTarget] Resolved from Admin DB cache: ${cachedAdmin.userId}`);
+      logger.info({ action: "resolveTarget", chatId, method: "adminDB", userId: cachedAdmin.userId });
       // Populate User collection for future lookups
       userRepository
         .findOrCreate(cachedAdmin.userId, chatId, cachedAdmin.username || undefined, cachedAdmin.name)
-        .catch(() => {/* ignore */});
+        .catch(() => {
+          /* ignore */
+        });
       return {
         userId: cachedAdmin.userId,
         username: cachedAdmin.username || undefined,
@@ -93,7 +94,7 @@ export async function resolveTarget(
       };
     }
 
-    console.log(`[resolveTarget] Username ${usernameWithoutAt} not found in cache.`);
+    logger.warn({ action: "resolveTarget", chatId, method: "username_miss", username: usernameWithoutAt });
     // 3c: API fallback for users not yet in cache
     return null;
   }
@@ -101,18 +102,16 @@ export async function resolveTarget(
   // Priority 4: numeric userId — one API call, graceful fallback if user left
   if (/^\d+$/.test(args[0])) {
     const userId = parseInt(args[0], 10);
-    console.log(`[resolveTarget] Attempting resolution for numeric ID: ${userId}`);
     try {
       const member = await ctx.api.getChatMember(Number(chatId), userId);
-      console.log(`[resolveTarget] Resolved via getChatMember: ${member.user.id} (${member.user.username || 'no username'})`);
+      logger.info({ action: "resolveTarget", chatId, method: "getChatMember", userId: member.user.id });
       return {
         userId: member.user.id,
         username: member.user.username,
         name: member.user.first_name,
         resolvedFromArgs: true,
       };
-    } catch (e) {
-      console.log(`[resolveTarget] getChatMember failed for ${userId}, returning minimal info. Error:`, e);
+    } catch {
       // User not in chat but ID is valid — return minimal info
       return {
         userId,
@@ -123,6 +122,6 @@ export async function resolveTarget(
     }
   }
 
-  console.log(`[resolveTarget] Could not resolve target for args[0]: ${args[0]}`);
+  logger.warn({ action: "resolveTarget", chatId, method: "unresolved", arg: args[0] });
   return null;
 }

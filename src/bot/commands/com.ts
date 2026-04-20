@@ -34,14 +34,21 @@ export async function comHandler(ctx: BotContext): Promise<void> {
   if (!ctx.chatConfig) return;
 
   try {
-    // Send the list — once Telegram confirms receipt, delete both messages immediately
     const sent = await ctx.reply(COMMANDS_TEXT, {
       parse_mode: "HTML",
       message_thread_id: ctx.message?.message_thread_id,
     });
-    try { await ctx.api.deleteMessage(ctx.chat!.id, sent.message_id); } catch { /* ignore */ }
-    try { await ctx.deleteMessage(); } catch { /* ignore */ }
+    try {
+      await ctx.api.deleteMessage(ctx.chat!.id, sent.message_id);
+    } catch {
+      /* ignore */
+    }
+    try {
+      await ctx.deleteMessage();
+    } catch {
+      /* ignore */
+    }
   } catch {
-    // silent fail
+    // silent fail (G10)
   }
 }

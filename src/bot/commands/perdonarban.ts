@@ -1,11 +1,11 @@
 import { CommandContext } from "grammy";
 import { BotContext } from "../../types";
-import { User } from "../../db/models/User";
+import { userRepository } from "../../db/repositories/userRepository";
 import { sendLog } from "../helpers/sendLog";
+import { buildActor, getChatTitle } from "../helpers/contextHelpers";
+import { logger } from "../../utils/logger";
 
-export async function quitarbanHandler(
-  ctx: CommandContext<BotContext>
-): Promise<void> {
+export async function quitarbanHandler(ctx: CommandContext<BotContext>): Promise<void> {
   const chatId = ctx.chat?.id;
   if (!chatId) return;
 
@@ -14,30 +14,37 @@ export async function quitarbanHandler(
     await ctx.reply("⚠️ Especifica un usuario.", {
       message_thread_id: ctx.message?.message_thread_id,
     });
-    try { await ctx.deleteMessage(); } catch { /* ignore */ }
+    try {
+      await ctx.deleteMessage();
+    } catch {
+      /* ignore */
+    }
     return;
   }
 
-  // Accept @username or numeric userId
   let user = null;
   const isNumeric = /^\d+$/.test(match);
   const usernameClean = match.startsWith("@") ? match.slice(1) : match;
 
   try {
     if (isNumeric) {
-      user = await User.findOne({ userId: Number(match), chatId });
+      user = await userRepository.findByUserAndChat(Number(match), chatId);
     } else {
-      user = await User.findOne({ username: usernameClean, chatId });
+      user = await userRepository.findByUsername(usernameClean, chatId);
     }
   } catch (err) {
-    console.error(`[QBAN] DB lookup error: ${err}`);
+    logger.error({ action: "qban_lookup", error: String(err) });
   }
 
   if (!user) {
     await ctx.reply("❌ Sin registros para este usuario.", {
       message_thread_id: ctx.message?.message_thread_id,
     });
-    try { await ctx.deleteMessage(); } catch { /* ignore */ }
+    try {
+      await ctx.deleteMessage();
+    } catch {
+      /* ignore */
+    }
     return;
   }
 
@@ -45,26 +52,26 @@ export async function quitarbanHandler(
   const username = user.username ?? String(userId);
   const userName = user.name ?? String(userId);
 
-  await User.deleteOne({ userId, chatId });
+  try {
+    await userRepository.remove(userId, chatId);
+  } catch (err) {
+    logger.error({ action: "qban_delete", error: String(err) });
+  }
 
   let unbanFailed = false;
   try {
     await ctx.api.unbanChatMember(chatId, userId);
   } catch (err) {
-    console.error(`[QBAN] Telegram unban failed for ${userId}: ${err}`);
+    logger.error({ action: "qban_unban", userId, error: String(err) });
     unbanFailed = true;
   }
 
-  const actor = ctx.from
-    ? { id: ctx.from.id, name: ctx.from.first_name + (ctx.from.last_name ? ` ${ctx.from.last_name}` : ""), username: ctx.from.username }
-    : undefined;
-  const chatName = (ctx.chat as any)?.title ?? "Unknown";
   sendLog(ctx.api, ctx.chatConfig, {
     action: "Q_BAN",
-    actor,
+    actor: buildActor(ctx),
     target: { id: userId, name: userName, username: user.username },
     chatId,
-    chatName,
+    chatName: getChatTitle(ctx),
   }).catch(() => {});
 
   const msg = unbanFailed
@@ -74,5 +81,9 @@ export async function quitarbanHandler(
   await ctx.reply(msg, {
     message_thread_id: ctx.message?.message_thread_id,
   });
-  try { await ctx.deleteMessage(); } catch { /* ignore */ }
+  try {
+    await ctx.deleteMessage();
+  } catch {
+    /* ignore */
+  }
 }

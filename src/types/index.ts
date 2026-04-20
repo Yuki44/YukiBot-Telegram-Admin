@@ -12,6 +12,17 @@ export enum MessageType {
   Other = "other",
 }
 
+/** Content types that can be used in topic filtering rules (excludes "other"). */
+export const VALID_CONTENT_TYPES: MessageType[] = [
+  MessageType.Photo,
+  MessageType.Video,
+  MessageType.Sticker,
+  MessageType.Audio,
+  MessageType.Voice,
+  MessageType.Document,
+  MessageType.Text,
+];
+
 // MongoDB interfaces
 export interface IChat extends Document {
   chatId: number;

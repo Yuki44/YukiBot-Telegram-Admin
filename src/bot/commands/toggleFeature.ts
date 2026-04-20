@@ -1,7 +1,7 @@
 import { CommandContext } from "grammy";
 import { BotContext } from "../../types";
-import { Admin } from "../../db/models/Admin";
-import { Chat } from "../../db/models/Chat";
+import { adminRepository } from "../../db/repositories/adminRepository";
+import { chatRepository } from "../../db/repositories/chatRepository";
 import { logger } from "../../utils/logger";
 
 const VALID_FEATURES = [
@@ -23,9 +23,8 @@ export async function toggleFeatureHandler(ctx: CommandContext<BotContext>) {
 
     if (!ctx.chatConfig) return;
 
-    // Only chat owner can toggle features
-    const admin = await Admin.findOne({ userId, chatId });
-    if (!admin || admin.role !== "owner") return;
+    const isOwner = await adminRepository.isOwner(userId, chatId);
+    if (!isOwner) return;
 
     const featureName = ctx.match?.toString().trim();
 
@@ -41,11 +40,7 @@ export async function toggleFeatureHandler(ctx: CommandContext<BotContext>) {
     const newValue = !currentValue;
 
     const updatedFeatures = { ...ctx.chatConfig.features, [key]: newValue };
-    await Chat.findOneAndUpdate(
-      { chatId },
-      { $set: { features: updatedFeatures } },
-      { returnDocument: "after" }
-    );
+    await chatRepository.updateFeatures(chatId, updatedFeatures);
 
     logger.info({
       action: "toggleFeature",
@@ -56,9 +51,7 @@ export async function toggleFeatureHandler(ctx: CommandContext<BotContext>) {
       enabled: newValue,
     });
 
-    await ctx.reply(
-      `Feature ${featureName} is now ${newValue ? "enabled" : "disabled"}.`
-    );
+    await ctx.reply(`Feature ${featureName} is now ${newValue ? "enabled" : "disabled"}.`);
   } catch (error) {
     logger.error({
       action: "toggleFeature",

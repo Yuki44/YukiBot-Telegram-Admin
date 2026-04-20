@@ -1,5 +1,6 @@
 import { Schema, model } from "mongoose";
 import { IUser } from "../../types";
+import { LEFT_WITH_WARNINGS_TTL_S } from "../../config/constants";
 
 const userSchema = new Schema<IUser>({
   userId: {
@@ -48,6 +49,6 @@ const userSchema = new Schema<IUser>({
 userSchema.index({ userId: 1, chatId: 1 }, { unique: true });
 
 // TTL index — auto-deletes documents 6 months after the user left with active warnings
-userSchema.index({ leftWithWarningsAt: 1 }, { expireAfterSeconds: 15_552_000, sparse: true });
+userSchema.index({ leftWithWarningsAt: 1 }, { expireAfterSeconds: LEFT_WITH_WARNINGS_TTL_S, sparse: true });
 
 export const User = model<IUser>("User", userSchema);
