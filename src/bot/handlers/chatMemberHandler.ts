@@ -73,9 +73,14 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
             name: [from.first_name, from.last_name].filter(Boolean).join(" "),
             username: from.username,
           };
-          sendLog(ctx.api, ctx.chatConfig, { action: "KICK", actor, target, chatId, chatName }).catch(
-            () => {}
-          );
+          sendLog(ctx.api, ctx.chatConfig, {
+            action: "KICK",
+            actor,
+            target,
+            chatId,
+            chatName,
+            chatType: ctx.chatConfig.type,
+          }).catch(() => {});
         }
         return;
       }
@@ -92,7 +97,14 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
           name: [from.first_name, from.last_name].filter(Boolean).join(" "),
           username: from.username,
         };
-        sendLog(ctx.api, ctx.chatConfig, { action: "BAN", actor, target, chatId, chatName }).catch(() => {});
+        sendLog(ctx.api, ctx.chatConfig, {
+          action: "BAN",
+          actor,
+          target,
+          chatId,
+          chatName,
+          chatType: ctx.chatConfig.type,
+        }).catch(() => {});
       }
       return;
     }
@@ -119,15 +131,23 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
           .catch((err) =>
             logger.error({ action: "chatMember_leftStamp", userId, chatId, error: String(err) })
           );
-        sendLog(ctx.api, ctx.chatConfig, { action: "SALIDA_USUARIO", target, chatId, chatName }).catch(
-          () => {}
-        );
+        sendLog(ctx.api, ctx.chatConfig, {
+          action: "SALIDA_USUARIO",
+          target,
+          chatId,
+          chatName,
+          chatType: ctx.chatConfig.type,
+        }).catch(() => {});
         return;
       }
 
-      sendLog(ctx.api, ctx.chatConfig, { action: "SALIDA_USUARIO", target, chatId, chatName }).catch(
-        () => {}
-      );
+      sendLog(ctx.api, ctx.chatConfig, {
+        action: "SALIDA_USUARIO",
+        target,
+        chatId,
+        chatName,
+        chatType: ctx.chatConfig.type,
+      }).catch(() => {});
       userRepository
         .remove(userId, chatId)
         .catch((err) =>
@@ -158,7 +178,13 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
       } catch (err) {
         logger.error({ action: "chatMember_autoReban", userId, chatId, error: String(err) });
       }
-      sendLog(ctx.api, ctx.chatConfig, { action: "AUTO_BAN", target, chatId, chatName }).catch(() => {});
+      sendLog(ctx.api, ctx.chatConfig, {
+        action: "AUTO_BAN",
+        target,
+        chatId,
+        chatName,
+        chatType: ctx.chatConfig.type,
+      }).catch(() => {});
       return;
     }
 
@@ -193,6 +219,7 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
         target,
         chatId,
         chatName,
+        chatType: ctx.chatConfig.type,
         inviter,
       }).catch(() => {});
     }

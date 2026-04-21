@@ -71,6 +71,8 @@ loadChat → trackUser → isAdmin → adminOnlyCommands → feature handlers
 | G9 | All DB calls wrapped in try/catch — bot never crashes from MongoDB   |
 | G10| Errors logged with tags, never sent to group chat (silent failures)  |
 | G11| No `console.log` left in committed code (use tagged `console.error` for errors only) |
+| G12| Comments must explain **why**, not restate what the code says — omit obvious comments entirely |
+| G13| Every change must pass `tsc --noEmit`, `npm run format:check`, and `npm run lint` before being considered done |
 
 ## Environment Variables
 

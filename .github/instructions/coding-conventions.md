@@ -91,10 +91,20 @@ try {
 
 ## Commenting Rules
 
-- No obvious comments (`// increment counter` on `i++`).
-- Use comments to explain **why**, not **what**.
+- No obvious comments — omit anything that just restates what the code already says.
+- Comments must explain **why**, not **what**. If it can be read from the code, don't write it.
 - JSDoc on exported functions only when the name + signature aren't self-explanatory.
 - TODO comments must include context: `// TODO(#issue): reason`.
+
+## CI Requirements
+
+Every code change must pass all CI steps before being considered complete:
+
+1. **Type check** — `npx tsc --noEmit` — zero errors required.
+2. **Format** — `npm run format:check` (Prettier). Run `npm run format` to auto-fix if needed.
+3. **Lint** — `npm run lint` (ESLint). No `console.log`, no unused vars, no explicit `any`.
+4. **Build** — `npm run build`.
+5. **Tests** — `npm test`.
 
 ## HTML Escaping
 

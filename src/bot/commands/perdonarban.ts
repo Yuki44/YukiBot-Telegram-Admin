@@ -72,6 +72,7 @@ export async function quitarbanHandler(ctx: CommandContext<BotContext>): Promise
     target: { id: userId, name: userName, username: user.username },
     chatId,
     chatName: getChatTitle(ctx),
+    chatType: ctx.chatConfig?.type ?? "normal",
   }).catch(() => {});
 
   const msg = unbanFailed

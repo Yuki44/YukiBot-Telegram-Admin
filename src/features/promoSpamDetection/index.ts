@@ -6,6 +6,7 @@ import { spamPatternRepository, normalizeText } from "../../db/repositories/spam
 import { applyWarn } from "../../bot/helpers/applyWarn";
 import { silenceUser } from "../../bot/helpers/silenceUser";
 import { sendLog } from "../../bot/helpers/sendLog";
+import { forwardToLog } from "../../bot/helpers/forwardToLog";
 import { getChatTitle } from "../../bot/helpers/contextHelpers";
 import { esc } from "../../bot/helpers/html";
 import { logger } from "../../utils/logger";
@@ -51,6 +52,7 @@ export async function sendSpamLog(
   logsTo: number,
   chatId: number,
   chatName: string,
+  chatType: "topics" | "normal",
   targetId: number,
   targetName: string,
   detectionReason: string,
@@ -84,8 +86,10 @@ export async function sendSpamLog(
     // Always add a navigable back-link — topic link if available, group link otherwise
     if (topicId) {
       lines.push(`• Tema: <a href="https://t.me/c/${cid}/${topicId}">⬅️ ir al tema</a>`);
+    } else if (chatType === "topics") {
+      lines.push(`• Grupo: <a href="https://t.me/c/${cid}/1">⬅️ ir al grupo</a>`);
     } else {
-      lines.push(`• Grupo: <a href="https://t.me/c/${cid}">⬅️ ir al grupo</a>`);
+      lines.push(`• Grupo: <a href="https://t.me/c/${cid}/999999999">⬅️ ir al grupo</a>`);
     }
 
     lines.push(`• Razón: <code>${esc(detectionReason)}</code>`);
@@ -190,6 +194,7 @@ export async function promoSpamDetection(ctx: BotContext): Promise<void> {
       logsTo,
       chatId,
       chatName,
+      chatConfig.type,
       sender.id,
       senderName,
       detectionReason,
@@ -197,54 +202,8 @@ export async function promoSpamDetection(ctx: BotContext): Promise<void> {
       undefined
     );
 
-    // ── Capture spam message content to logs (appears right below the SPAM log) ─
-    // Strategy: copyMessage → forwardMessage → re-send by file_id (works even with content protection)
-    let mediaCaptured = false;
-    try {
-      await ctx.api.copyMessage(logsTo, chatId, msg.message_id);
-      mediaCaptured = true;
-    } catch {
-      /* fall through */
-    }
-
-    if (!mediaCaptured) {
-      try {
-        await ctx.api.forwardMessage(logsTo, chatId, msg.message_id);
-        mediaCaptured = true;
-      } catch {
-        /* fall through */
-      }
-    }
-
-    if (!mediaCaptured) {
-      // Re-send by file_id — bypasses content protection since the bot holds the file reference
-      try {
-        const cap = msg.caption ?? undefined;
-        if (msg.photo) {
-          const photo = msg.photo[msg.photo.length - 1];
-          await ctx.api.sendPhoto(logsTo, photo.file_id, { caption: cap });
-        } else if (msg.video) {
-          await ctx.api.sendVideo(logsTo, msg.video.file_id, { caption: cap });
-        } else if (msg.document) {
-          await ctx.api.sendDocument(logsTo, msg.document.file_id, { caption: cap });
-        } else if (msg.animation) {
-          await ctx.api.sendAnimation(logsTo, msg.animation.file_id, { caption: cap });
-        } else if (msg.audio) {
-          await ctx.api.sendAudio(logsTo, msg.audio.file_id, { caption: cap });
-        } else if (msg.voice) {
-          await ctx.api.sendVoice(logsTo, msg.voice.file_id, { caption: cap });
-        } else if (msg.sticker) {
-          await ctx.api.sendSticker(logsTo, msg.sticker.file_id);
-        } else if (msg.video_note) {
-          await ctx.api.sendVideoNote(logsTo, msg.video_note.file_id);
-        } else if (msg.text) {
-          await ctx.api.sendMessage(logsTo, `💬 ${esc(msg.text)}`, { parse_mode: "HTML" });
-        }
-        mediaCaptured = true;
-      } catch (err) {
-        logger.error({ action: "promoSpamDetection_resend_media", chatId, error: String(err) });
-      }
-    }
+    // ── Capture spam message content to logs using the shared forwardToLog helper ─
+    await forwardToLog(ctx.api, logsTo, msg);
 
     await silenceUser(ctx, sender.id, chatId);
 
@@ -255,7 +214,9 @@ export async function promoSpamDetection(ctx: BotContext): Promise<void> {
       target: { id: sender.id, name: senderName, username: senderUsername },
       chatId,
       chatName,
+      chatType: chatConfig.type,
       topicId,
+      refMsgId: msg.message_id,
       muteUntil,
     }).catch(() => {});
 
