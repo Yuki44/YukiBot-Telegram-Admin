@@ -1,11 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// ── Mocks ──────────────────────────────────────────────────────────────────────
-
-vi.mock("../../src/db/repositories/topicRepository", () => ({
-  topicRepository: {
-    findByChatAndTopic: vi.fn().mockResolvedValue(null),
-  },
+vi.mock("../../src/bot/helpers/forwardToLog", () => ({
+  forwardToLog: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../../src/utils/logger", () => ({
@@ -13,7 +9,9 @@ vi.mock("../../src/utils/logger", () => ({
 }));
 
 import { sendLog, LogPayload } from "../../src/bot/helpers/sendLog";
+import { forwardToLog } from "../../src/bot/helpers/forwardToLog";
 import { IChat } from "../../src/types";
+import { Message } from "grammy/types";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -46,105 +44,68 @@ function makeChatConfig(overrides: Partial<IChat> = {}): IChat {
   } as unknown as IChat;
 }
 
+function makeMessage(text = "some text"): Message {
+  return {
+    message_id: 1,
+    chat: { id: -1001234, type: "supergroup" },
+    date: 0,
+    text,
+  } as unknown as Message;
+}
+
 const BASE_PAYLOAD: LogPayload = {
   action: "AVISO",
   actor: { id: 99, name: "Admin", username: "admin" },
   target: { id: 42, name: "Bad User", username: "baduser" },
   chatId: -1001234,
   chatName: "Test Group",
+  chatType: "normal",
   warnings: 1,
   reason: "spam",
 };
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
-describe("sendLog — repliedMessage", () => {
+describe("sendLog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("sends only one message when repliedMessage is absent", async () => {
+  it("sends one message when repliedMsg is absent", async () => {
     const api = makeApi();
     await sendLog(api as any, makeChatConfig(), { ...BASE_PAYLOAD });
 
     expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(forwardToLog).not.toHaveBeenCalled();
   });
 
-  it("sends a second message when repliedMessage is provided", async () => {
+  it("calls forwardToLog when repliedMsg is provided", async () => {
     const api = makeApi();
-    await sendLog(api as any, makeChatConfig(), {
-      ...BASE_PAYLOAD,
-      repliedMessage: "I AM A VERY BAD PERSON",
-    });
+    const msg = makeMessage("I AM A VERY BAD PERSON");
+    await sendLog(api as any, makeChatConfig(), { ...BASE_PAYLOAD, repliedMsg: msg });
 
-    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(forwardToLog).toHaveBeenCalledOnce();
+    expect(forwardToLog).toHaveBeenCalledWith(api, -100999, msg);
   });
 
-  it("second message contains 'Mensaje original' label", async () => {
-    const api = makeApi();
-    await sendLog(api as any, makeChatConfig(), {
-      ...BASE_PAYLOAD,
-      repliedMessage: "I AM A VERY BAD PERSON",
-    });
-
-    const secondCall = api.sendMessage.mock.calls[1];
-    expect(secondCall[1]).toContain("Mensaje original");
-  });
-
-  it("second message contains the replied text verbatim (HTML-escaped)", async () => {
-    const api = makeApi();
-    await sendLog(api as any, makeChatConfig(), {
-      ...BASE_PAYLOAD,
-      repliedMessage: "hello <world> & everyone",
-    });
-
-    const secondCall = api.sendMessage.mock.calls[1];
-    expect(secondCall[1]).toContain("hello &lt;world&gt; &amp; everyone");
-  });
-
-  it("second message is sent to the same logsTo chat", async () => {
+  it("sends the main log to logsTo", async () => {
     const api = makeApi();
     const config = makeChatConfig({ logsTo: -100777 } as any);
-    await sendLog(api as any, config, {
-      ...BASE_PAYLOAD,
-      repliedMessage: "some text",
-    });
+    await sendLog(api as any, config, { ...BASE_PAYLOAD });
 
-    const secondCall = api.sendMessage.mock.calls[1];
-    expect(secondCall[0]).toBe(-100777);
-  });
-
-  it("second message uses HTML parse mode", async () => {
-    const api = makeApi();
-    await sendLog(api as any, makeChatConfig(), {
-      ...BASE_PAYLOAD,
-      repliedMessage: "some text",
-    });
-
-    const secondCall = api.sendMessage.mock.calls[1];
-    expect(secondCall[2]).toEqual(expect.objectContaining({ parse_mode: "HTML" }));
-  });
-
-  it("does not send second message when repliedMessage is an empty string", async () => {
-    const api = makeApi();
-    await sendLog(api as any, makeChatConfig(), {
-      ...BASE_PAYLOAD,
-      repliedMessage: "",
-    });
-
-    // Empty string is falsy — only the main log should be sent
-    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage.mock.calls[0][0]).toBe(-100777);
   });
 
   it("does not send any message when logsTo is absent", async () => {
     const api = makeApi();
-    const config = makeChatConfig({ logsTo: undefined } as any);
-    await sendLog(api as any, config, {
+    await sendLog(api as any, makeChatConfig({ logsTo: undefined } as any), {
       ...BASE_PAYLOAD,
-      repliedMessage: "something",
+      repliedMsg: makeMessage(),
     });
 
     expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(forwardToLog).not.toHaveBeenCalled();
   });
 
   it("does not send any message when the relevant logFlag is disabled", async () => {
@@ -152,15 +113,13 @@ describe("sendLog — repliedMessage", () => {
     const config = makeChatConfig({
       logFlags: { ...makeChatConfig().logFlags, logWarns: false },
     } as any);
-    await sendLog(api as any, config, {
-      ...BASE_PAYLOAD,
-      repliedMessage: "something",
-    });
+    await sendLog(api as any, config, { ...BASE_PAYLOAD, repliedMsg: makeMessage() });
 
     expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(forwardToLog).not.toHaveBeenCalled();
   });
 
-  it("works for BAN action with repliedMessage", async () => {
+  it("main log contains #BAN tag for BAN action", async () => {
     const api = makeApi();
     await sendLog(api as any, makeChatConfig(), {
       action: "BAN",
@@ -168,17 +127,15 @@ describe("sendLog — repliedMessage", () => {
       target: { id: 42, name: "Bad User" },
       chatId: -1001234,
       chatName: "Test Group",
-      repliedMessage: "I will destroy this group",
+      chatType: "normal",
+      repliedMsg: makeMessage("I will destroy this group"),
     });
 
-    expect(api.sendMessage).toHaveBeenCalledTimes(2);
-    const firstCall = api.sendMessage.mock.calls[0];
-    expect(firstCall[1]).toContain("#BAN");
-    const secondCall = api.sendMessage.mock.calls[1];
-    expect(secondCall[1]).toContain("I will destroy this group");
+    expect(api.sendMessage.mock.calls[0][1]).toContain("#BAN");
+    expect(forwardToLog).toHaveBeenCalledOnce();
   });
 
-  it("works for KICK action with repliedMessage", async () => {
+  it("main log contains #KICK tag for KICK action", async () => {
     const api = makeApi();
     await sendLog(api as any, makeChatConfig(), {
       action: "KICK",
@@ -186,15 +143,15 @@ describe("sendLog — repliedMessage", () => {
       target: { id: 42, name: "Bad User" },
       chatId: -1001234,
       chatName: "Test Group",
-      repliedMessage: "kick me if you can",
+      chatType: "normal",
+      repliedMsg: makeMessage("kick me if you can"),
     });
 
-    expect(api.sendMessage).toHaveBeenCalledTimes(2);
     expect(api.sendMessage.mock.calls[0][1]).toContain("#KICK");
-    expect(api.sendMessage.mock.calls[1][1]).toContain("kick me if you can");
+    expect(forwardToLog).toHaveBeenCalledOnce();
   });
 
-  it("works for SILENCIO action with repliedMessage", async () => {
+  it("main log contains #SILENCIO tag for SILENCIO action", async () => {
     const api = makeApi();
     await sendLog(api as any, makeChatConfig(), {
       action: "SILENCIO",
@@ -202,12 +159,18 @@ describe("sendLog — repliedMessage", () => {
       target: { id: 42, name: "Bad User" },
       chatId: -1001234,
       chatName: "Test Group",
-      repliedMessage: "spam spam spam",
+      chatType: "normal",
+      repliedMsg: makeMessage("spam spam spam"),
     });
 
-    expect(api.sendMessage).toHaveBeenCalledTimes(2);
     expect(api.sendMessage.mock.calls[0][1]).toContain("#SILENCIO");
-    expect(api.sendMessage.mock.calls[1][1]).toContain("spam spam spam");
+    expect(forwardToLog).toHaveBeenCalledOnce();
+  });
+
+  it("uses HTML parse mode", async () => {
+    const api = makeApi();
+    await sendLog(api as any, makeChatConfig(), { ...BASE_PAYLOAD });
+
+    expect(api.sendMessage.mock.calls[0][2]).toEqual(expect.objectContaining({ parse_mode: "HTML" }));
   });
 });
-
