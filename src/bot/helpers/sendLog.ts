@@ -1,6 +1,5 @@
 import { Api } from "grammy";
 import { IChat } from "../../types";
-import { topicRepository } from "../../db/repositories/topicRepository";
 import { esc } from "./html";
 import { logger } from "../../utils/logger";
 
@@ -39,6 +38,8 @@ export interface LogPayload {
   topicId?: number;
   /** Explicit topic name — skips DB lookup when provided */
   topicName?: string;
+  /** Text of the message the admin replied to (only when command was used as a reply) */
+  repliedMessage?: string;
 }
 
 // ── Flag mapping ─────────────────────────────────────────────────────
@@ -117,23 +118,6 @@ function hashIds(target: LogUser, actor?: LogUser): string {
   return tags;
 }
 
-// ── Resolve topic name: explicit > DB > fallback ─────────────────────
-
-async function resolveTopicName(
-  chatId: number,
-  topicId: number,
-  explicitName?: string
-): Promise<string | null> {
-  if (explicitName) return explicitName;
-  try {
-    const topic = await topicRepository.findByChatAndTopic(chatId, topicId);
-    if (topic?.name) return topic.name;
-  } catch {
-    /* silent */
-  }
-  return null;
-}
-
 // ── Main ─────────────────────────────────────────────────────────────
 
 export async function sendLog(
@@ -154,13 +138,11 @@ export async function sendLog(
 
     let topicLine = "";
     if (payload.topicId) {
-      if (chatConfig.type === "topics") {
-        const tName = await resolveTopicName(payload.chatId, payload.topicId, payload.topicName);
-        const displayText = tName ?? `[${payload.topicId}]`;
-        topicLine = `€ Tema: ${topicLink(payload.chatId, payload.topicId, displayText)}`;
-      } else {
-        topicLine = `• Volver a grupo: ${topicLink(payload.chatId, payload.topicId, "⬅️")}`;
-      }
+      topicLine = `• Tema: ${topicLink(payload.chatId, payload.topicId, "⬅️ ir al tema")}`;
+    } else {
+      // General topic or normal group — link directly to the chat for quick navigation
+      const cid = chatIdForLink(payload.chatId);
+      topicLine = `• Grupo: <a href="https://t.me/c/${cid}">⬅️ ir al grupo</a>`;
     }
 
     let lines: string[] = [];
@@ -307,6 +289,14 @@ export async function sendLog(
 
     const text = lines.join("\n");
     await api.sendMessage(chatConfig.logsTo, text, { parse_mode: "HTML" });
+
+    if (payload.repliedMessage) {
+      await api.sendMessage(
+        chatConfig.logsTo,
+        `💬 <i>Mensaje original:</i>\n${esc(payload.repliedMessage)}`,
+        { parse_mode: "HTML" }
+      );
+    }
   } catch (err) {
     logger.error({ action: "sendLog", logAction: payload.action, error: String(err) });
   }

@@ -21,6 +21,15 @@ const YUKIBOT_COMMANDS = new Set([
   "com",
   "kk",
   "bn",
+  // Anti-spam commands (G7)
+  "spam",
+  "nospam",
+  "wladd",
+  "wldel",
+  "wls",
+  "wluadd",
+  "wludel",
+  "wlus",
 ]);
 
 export async function adminOnlyCommands(ctx: BotContext, next: NextFunction): Promise<void> {

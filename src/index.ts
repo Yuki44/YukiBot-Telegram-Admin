@@ -30,6 +30,12 @@ import { comHandler } from "./bot/commands/com";
 import { kkHandler } from "./bot/commands/kk";
 import { bnHandler } from "./bot/commands/bn";
 import { groupHelpSpamHandler } from "./bot/handlers/groupHelpSpamHandler";
+import { spamCallbackHandler } from "./bot/handlers/spamCallbackHandler";
+import { promoSpamDetection } from "./features/promoSpamDetection";
+import { spamHandler } from "./bot/commands/spam";
+import { nospamHandler } from "./bot/commands/nospam";
+import { wladdHandler, wldelHandler, wlsHandler } from "./bot/commands/wlLinks";
+import { wluaddHandler, wludelHandler, wlusHandler } from "./bot/commands/wlUsers";
 import { topicRepository } from "./db/repositories/topicRepository";
 import { logger } from "./utils/logger";
 
@@ -72,7 +78,20 @@ bot.command("com", comHandler);
 bot.command("kk", kkHandler);
 bot.command("bn", bnHandler);
 
+// Anti-spam commands
+bot.command("spam", spamHandler);
+bot.command("nospam", nospamHandler);
+bot.command("wladd", wladdHandler);
+bot.command("wldel", wldelHandler);
+bot.command("wls", wlsHandler);
+bot.command("wluadd", wluaddHandler);
+bot.command("wludel", wludelHandler);
+bot.command("wlus", wlusHandler);
+
 bot.on("chat_member", chatMemberHandler);
+
+// Callback query handler for spam ✅/❌ inline buttons
+bot.on("callback_query", spamCallbackHandler);
 
 bot.on("message:forum_topic_created", async (ctx) => {
   const chatId = ctx.chat.id;
@@ -104,6 +123,7 @@ bot.on("message:forum_topic_edited", async (ctx) => {
 
 bot.on("message", mediaForwardHandler);
 bot.on("message", topicFiltering);
+bot.on("message", promoSpamDetection);
 bot.on("message", groupHelpSpamHandler);
 bot.on("channel_post", groupHelpSpamHandler);
 

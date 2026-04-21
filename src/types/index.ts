@@ -37,7 +37,12 @@ export interface IChat extends Document {
     commands: boolean;
     autoBan: boolean;
     autoWarnSpam: boolean;
+    promoSpamDetection: boolean;
   };
+  /** Domains/URLs exempt from link spam detection (e.g. "example.com") */
+  linkWhitelist: string[];
+  /** UserIds exempt from promo-spam detection for this chat */
+  spamUserWhitelist: number[];
   forwardsTo?: number;
   logsTo?: number;
   logFlags: {

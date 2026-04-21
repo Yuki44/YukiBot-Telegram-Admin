@@ -18,8 +18,9 @@ export async function applyWarn(
     chatName?: string;
     topicId?: number;
     actor?: { id: number; name: string; username?: string };
+    repliedMessage?: string;
   }
-): Promise<void> {
+): Promise<{ warnMsgId?: number }> {
   try {
     const user = await userRepository.incrementWarning(targetUserId, chatId, reason, username, name);
     const dn = displayName(name, username);
@@ -40,7 +41,10 @@ export async function applyWarn(
       warnings: user.warnings,
       reason,
       topicId,
+      repliedMessage: options?.repliedMessage,
     }).catch(() => {});
+
+    let warnMsgId: number | undefined;
 
     if (user.warnings >= MAX_WARNINGS) {
       let banMsg = t("warnings.autoBan", { user: dn, max: MAX_WARNINGS, reason: esc(reason) });
@@ -49,7 +53,11 @@ export async function applyWarn(
       } catch {
         banMsg += `\n${t("errors.banExecFailed")}`;
       }
-      await ctx.api.sendMessage(chatId, banMsg, { parse_mode: "HTML", message_thread_id: topicId });
+      const sent = await ctx.api.sendMessage(chatId, banMsg, {
+        parse_mode: "HTML",
+        message_thread_id: topicId,
+      });
+      warnMsgId = sent.message_id;
 
       sendLog(ctx.api, resolvedChatConfig, {
         action: "BAN",
@@ -61,7 +69,7 @@ export async function applyWarn(
         topicId,
       }).catch(() => {});
     } else if (user.warnings === MAX_WARNINGS - 1) {
-      await ctx.api.sendMessage(
+      const sent = await ctx.api.sendMessage(
         chatId,
         t("warnings.warnLastChance", {
           current: user.warnings,
@@ -71,8 +79,9 @@ export async function applyWarn(
         }),
         { parse_mode: "HTML", message_thread_id: topicId }
       );
+      warnMsgId = sent.message_id;
     } else {
-      await ctx.api.sendMessage(
+      const sent = await ctx.api.sendMessage(
         chatId,
         t("warnings.warnNotice", {
           current: user.warnings,
@@ -82,8 +91,11 @@ export async function applyWarn(
         }),
         { parse_mode: "HTML", message_thread_id: topicId }
       );
+      warnMsgId = sent.message_id;
     }
+
+    return { warnMsgId };
   } catch {
-    // silent fail
+    return {};
   }
 }
