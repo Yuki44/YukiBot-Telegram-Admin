@@ -25,4 +25,36 @@ export const chatRepository = {
   async updateFeatures(chatId: number, features: IChat["features"]): Promise<IChat | null> {
     return await Chat.findOneAndUpdate({ chatId }, { $set: { features } }, { returnDocument: "after" });
   },
+
+  async addLinkWhitelist(chatId: number, domain: string): Promise<IChat | null> {
+    return await Chat.findOneAndUpdate(
+      { chatId },
+      { $addToSet: { linkWhitelist: domain } },
+      { returnDocument: "after" }
+    );
+  },
+
+  async removeLinkWhitelist(chatId: number, domain: string): Promise<IChat | null> {
+    return await Chat.findOneAndUpdate(
+      { chatId },
+      { $pull: { linkWhitelist: domain } },
+      { returnDocument: "after" }
+    );
+  },
+
+  async addSpamUserWhitelist(chatId: number, userId: number): Promise<IChat | null> {
+    return await Chat.findOneAndUpdate(
+      { chatId },
+      { $addToSet: { spamUserWhitelist: userId } },
+      { returnDocument: "after" }
+    );
+  },
+
+  async removeSpamUserWhitelist(chatId: number, userId: number): Promise<IChat | null> {
+    return await Chat.findOneAndUpdate(
+      { chatId },
+      { $pull: { spamUserWhitelist: userId } },
+      { returnDocument: "after" }
+    );
+  },
 };

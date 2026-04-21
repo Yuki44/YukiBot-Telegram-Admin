@@ -22,6 +22,16 @@ const COMMANDS_TEXT = `
 /bn [usuario] — Banear a un usuario permanentemente (no puede volver).
 /qban [usuario] — Quitar el ban de un usuario y permitirle volver a unirse.
 
+<b>— Anti-Spam —</b>
+/spam — (responde a un mensaje) Eliminar + silenciar + avisar + aprender el patrón.
+/nospam [id|userId] — Eliminar un patrón aprendido por ID de patrón o ID de usuario.
+/wladd [dominio] — Añadir dominio a la lista blanca de enlaces.
+/wldel [dominio] — Quitar dominio de la lista blanca de enlaces.
+/wls — Ver dominios en la lista blanca de enlaces.
+/wluadd [userId] — Añadir usuario a la lista blanca de spam (no se detecta su contenido).
+/wludel [userId] — Quitar usuario de la lista blanca de spam.
+/wlus — Ver usuarios en la lista blanca de spam.
+
 <b>— Configuración (solo owner) —</b>
 /setup — Inicializar la configuración del grupo.
 /addtopic — Añadir un tema al filtro de tópicos.

@@ -1,6 +1,5 @@
 import { Api } from "grammy";
 import { IChat } from "../../types";
-import { topicRepository } from "../../db/repositories/topicRepository";
 import { esc } from "./html";
 import { logger } from "../../utils/logger";
 
@@ -119,23 +118,6 @@ function hashIds(target: LogUser, actor?: LogUser): string {
   return tags;
 }
 
-// ── Resolve topic name: explicit > DB > fallback ─────────────────────
-
-async function resolveTopicName(
-  chatId: number,
-  topicId: number,
-  explicitName?: string
-): Promise<string | null> {
-  if (explicitName) return explicitName;
-  try {
-    const topic = await topicRepository.findByChatAndTopic(chatId, topicId);
-    if (topic?.name) return topic.name;
-  } catch {
-    /* silent */
-  }
-  return null;
-}
-
 // ── Main ─────────────────────────────────────────────────────────────
 
 export async function sendLog(
@@ -156,13 +138,11 @@ export async function sendLog(
 
     let topicLine = "";
     if (payload.topicId) {
-      if (chatConfig.type === "topics") {
-        const tName = await resolveTopicName(payload.chatId, payload.topicId, payload.topicName);
-        const displayText = tName ?? `[${payload.topicId}]`;
-        topicLine = `€ Tema: ${topicLink(payload.chatId, payload.topicId, displayText)}`;
-      } else {
-        topicLine = `• Volver a grupo: ${topicLink(payload.chatId, payload.topicId, "⬅️")}`;
-      }
+      topicLine = `• Tema: ${topicLink(payload.chatId, payload.topicId, "⬅️ ir al tema")}`;
+    } else {
+      // General topic or normal group — link directly to the chat for quick navigation
+      const cid = chatIdForLink(payload.chatId);
+      topicLine = `• Grupo: <a href="https://t.me/c/${cid}">⬅️ ir al grupo</a>`;
     }
 
     let lines: string[] = [];

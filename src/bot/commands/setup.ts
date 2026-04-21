@@ -32,6 +32,7 @@ export async function setupHandler(ctx: CommandContext<BotContext>) {
             commands: false,
             autoBan: false,
             autoWarnSpam: false,
+            promoSpamDetection: false,
           }
         : {
             languageDetection: false,
@@ -39,6 +40,7 @@ export async function setupHandler(ctx: CommandContext<BotContext>) {
             commands: false,
             autoBan: false,
             autoWarnSpam: false,
+            promoSpamDetection: false,
           };
 
     await chatRepository.upsert({

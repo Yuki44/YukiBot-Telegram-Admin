@@ -49,6 +49,18 @@ const chatSchema = new Schema<IChat>({
       type: Boolean,
       default: false,
     },
+    promoSpamDetection: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  linkWhitelist: {
+    type: [String],
+    default: [],
+  },
+  spamUserWhitelist: {
+    type: [Number],
+    default: [],
   },
   forwardsTo: {
     type: Number,

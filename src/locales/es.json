@@ -39,6 +39,21 @@
     "pardoned": "✅ Hecho. @{user} puede volver a unirse.",
     "pardonedManual": "✅ Hecho. @{user} puede volver a unirse. (Desbanealo manualmente si es necesario.)"
   },
+  "spam": {
+    "patternRemoved": "🗑️ Patrón <code>{id}</code> eliminado del aprendizaje.\nUsa /qav y /qsil para revertir la acción si fue un falso positivo.",
+    "patternNotFound": "ℹ️ No se encontró ningún patrón aprendido para <code>{arg}</code> en este chat.",
+    "domainAdded": "✅ Dominio <code>{domain}</code> añadido a la lista blanca de enlaces.",
+    "domainRemoved": "🗑️ Dominio <code>{domain}</code> eliminado de la lista blanca.",
+    "domainsEmpty": "ℹ️ No hay dominios en la lista blanca de enlaces.",
+    "domainsListHeader": "🔗 <b>Lista blanca de enlaces:</b>",
+    "userAdded": "✅ Usuario <code>{userId}</code> añadido a la lista blanca de spam. Sus mensajes no serán detectados automáticamente.",
+    "userRemoved": "🗑️ Usuario <code>{userId}</code> eliminado de la lista blanca de spam.",
+    "usersEmpty": "ℹ️ No hay usuarios en la lista blanca de spam.",
+    "usersListHeader": "👤 <b>Lista blanca de usuarios (spam):</b>",
+    "confirmed": "✅ Confirmado como spam.",
+    "reverted": "↩️ Revertido — silencio quitado, aviso eliminado, mensaje borrado.",
+    "revertedWithIssues": "↩️ Revertido (con problemas en: {issues})."
+  },
   "commands": {
     "title": "📋 <b>Lista de comandos de administración</b>",
     "sectionWarnings": "<b>— Avisos —</b>",
