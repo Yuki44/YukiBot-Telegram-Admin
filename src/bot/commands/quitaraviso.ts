@@ -68,6 +68,7 @@ async function executeQuitarAviso(ctx: BotContext, deleteReplied: boolean): Prom
     target: { id: target.userId, name: target.name, username: target.username },
     chatId,
     chatName: getChatTitle(ctx),
+    chatType: ctx.chatConfig.type,
     warnings: user.warnings,
     topicId: ctx.message?.message_thread_id,
   }).catch(() => {});

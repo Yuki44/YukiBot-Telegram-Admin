@@ -50,6 +50,7 @@ export async function qsilHandler(ctx: BotContext): Promise<void> {
         target: { id: target.userId, name: target.name, username: target.username },
         chatId,
         chatName: getChatTitle(ctx),
+        chatType: ctx.chatConfig.type,
         topicId: ctx.message?.message_thread_id,
       }).catch(() => {});
     } else {
