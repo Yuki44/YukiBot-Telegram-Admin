@@ -1,41 +1,30 @@
 import { Api } from "grammy";
 import { Message } from "grammy/types";
-import { esc } from "./html";
 import { logger } from "../../utils/logger";
 
+const HEADER = "💬 <b>Mensaje original:</b>";
+
 /**
- * Sends a "💬 Mensaje original:" header then forwards the message to the log
- * channel via copy → forward → file_id fallback cascade, bypassing content
- * protection. Shared by command-reply logs and spam detection logs.
+ * Sends the "Mensaje original" header above the message in the log channel,
+ * always as two separate messages so all types are consistent.
  */
 export async function forwardToLog(api: Api, logsTo: number, msg: Message): Promise<void> {
+  const chatId = msg.chat.id;
+  const msgId = msg.message_id;
+
   try {
-    await api.sendMessage(logsTo, "💬 <b>Mensaje original:</b>", { parse_mode: "HTML" });
+    await api.sendMessage(logsTo, HEADER, { parse_mode: "HTML" });
   } catch (err) {
     logger.error({ action: "forwardToLog_header", logsTo, error: String(err) });
     return;
   }
 
-  const chatId = msg.chat.id;
-  const msgId = msg.message_id;
-
-  try {
-    await api.copyMessage(logsTo, chatId, msgId);
-    return;
-  } catch {
-    /* fall through */
-  }
-
-  try {
-    await api.forwardMessage(logsTo, chatId, msgId);
-    return;
-  } catch {
-    /* fall through */
-  }
-
   try {
     const cap = msg.caption ?? undefined;
-    if (msg.photo) {
+
+    if (msg.text) {
+      await api.sendMessage(logsTo, msg.text);
+    } else if (msg.photo) {
       const photo = msg.photo[msg.photo.length - 1];
       await api.sendPhoto(logsTo, photo.file_id, { caption: cap });
     } else if (msg.video) {
@@ -52,10 +41,21 @@ export async function forwardToLog(api: Api, logsTo: number, msg: Message): Prom
       await api.sendSticker(logsTo, msg.sticker.file_id);
     } else if (msg.video_note) {
       await api.sendVideoNote(logsTo, msg.video_note.file_id);
-    } else if (msg.text) {
-      await api.sendMessage(logsTo, `💬 ${esc(msg.text)}`, { parse_mode: "HTML" });
+    } else {
+      try {
+        await api.copyMessage(logsTo, chatId, msgId);
+      } catch {
+        await api.forwardMessage(logsTo, chatId, msgId);
+      }
     }
   } catch (err) {
-    logger.error({ action: "forwardToLog_fileId", logsTo, chatId, msgId, error: String(err) });
+    logger.error({ action: "forwardToLog_content", logsTo, chatId, msgId, error: String(err) });
+    try {
+      await api.sendMessage(logsTo, "⚠️ <i>(no se pudo obtener el mensaje original)</i>", {
+        parse_mode: "HTML",
+      });
+    } catch {
+      /* best effort */
+    }
   }
 }
