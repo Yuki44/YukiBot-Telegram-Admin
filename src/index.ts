@@ -29,7 +29,6 @@ import { qsilavHandler } from "./bot/commands/qsilav";
 import { comHandler } from "./bot/commands/com";
 import { kkHandler } from "./bot/commands/kk";
 import { bnHandler } from "./bot/commands/bn";
-import { groupHelpSpamHandler } from "./bot/handlers/groupHelpSpamHandler";
 import { spamCallbackHandler } from "./bot/handlers/spamCallbackHandler";
 import { promoSpamDetection } from "./features/promoSpamDetection";
 import { spamHandler } from "./bot/commands/spam";
@@ -124,8 +123,6 @@ bot.on("message:forum_topic_edited", async (ctx) => {
 bot.on("message", mediaForwardHandler);
 bot.on("message", topicFiltering);
 bot.on("message", promoSpamDetection);
-bot.on("message", groupHelpSpamHandler);
-bot.on("channel_post", groupHelpSpamHandler);
 
 // Graceful shutdown
 function shutdown(signal: string) {

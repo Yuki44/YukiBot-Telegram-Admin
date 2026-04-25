@@ -32,6 +32,32 @@ function isTelegramHostname(hostname: string): boolean {
   return hostname === "t.me" || hostname === "telegram.me" || hostname === "telegram.dog";
 }
 
+/**
+ * Returns true when a t.me URL is a message link pointing back to the same chat.
+ * Covers both private supergroups (t.me/c/{rawId}/…) and public groups (t.me/{username}/…).
+ * "rawId" is the numeric chatId with the -100 prefix stripped.
+ */
+function isSelfChatLink(url: string, selfChatId?: number, selfChatUsername?: string): boolean {
+  let pathname: string;
+  try {
+    pathname = new URL(url).pathname;
+  } catch {
+    return false;
+  }
+
+  if (selfChatId !== undefined) {
+    const rawId = String(selfChatId).replace(/^-100/, "");
+    if (pathname.startsWith(`/c/${rawId}/`)) return true;
+  }
+
+  if (selfChatUsername) {
+    const lower = selfChatUsername.toLowerCase();
+    if (pathname.toLowerCase().startsWith(`/${lower}/`)) return true;
+  }
+
+  return false;
+}
+
 function isUrlShortener(hostname: string): boolean {
   return SHORTENER_HOSTNAMES.has(hostname);
 }
@@ -74,12 +100,16 @@ export interface LinkAnalysisResult {
  * @param messageText         Raw message text (needed to extract 'url' entity values)
  * @param isForwardedFromChannel  True when forward_origin.type is "channel" or "chat"
  * @param linkWhitelist       Domains stored in Chat.linkWhitelist (e.g. "example.com")
+ * @param selfChatId          The current chat's numeric ID — self-referential message links are allowed
+ * @param selfChatUsername    The current chat's public username (if any) — used for public-group message links
  */
 export function analyzeLinks(
   entities: Entity[],
   messageText: string,
   isForwardedFromChannel: boolean,
-  linkWhitelist: string[]
+  linkWhitelist: string[],
+  selfChatId?: number,
+  selfChatUsername?: string
 ): LinkAnalysisResult {
   // Forwarded channel/group messages are always spam
   if (isForwardedFromChannel) {
@@ -99,6 +129,7 @@ export function analyzeLinks(
     if (!hostname) continue;
 
     if (isTelegramHostname(hostname)) {
+      if (isSelfChatLink(normalizedUrl, selfChatId, selfChatUsername)) continue;
       return { flagged: true, reason: "enlace_de_telegram" };
     }
 

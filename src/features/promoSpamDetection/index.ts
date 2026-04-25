@@ -172,7 +172,16 @@ export async function promoSpamDetection(ctx: BotContext): Promise<void> {
     const normalizedHash = createHash("sha256").update(normalized).digest("hex");
 
     const [linkResult, patternResult] = await Promise.all([
-      Promise.resolve(analyzeLinks(entities, spamText, isForwardedFromChannel, linkWhitelist)),
+      Promise.resolve(
+        analyzeLinks(
+          entities,
+          spamText,
+          isForwardedFromChannel,
+          linkWhitelist,
+          chatId,
+          (ctx.chat as { username?: string } | undefined)?.username
+        )
+      ),
       Promise.resolve(matchesSpamPattern(spamText, learnedPatternIds, normalizedHash)),
     ]);
 
