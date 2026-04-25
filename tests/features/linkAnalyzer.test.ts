@@ -1,12 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { analyzeLinks } from "../../src/features/promoSpamDetection/linkAnalyzer";
 
-// ── Entity builders ────────────────────────────────────────────────────────
-// url entities: URL is in the message text, entity has offset+length
 function urlEntity(url: string) {
   return { type: "url", offset: 0, length: url.length };
 }
-// text_link entities: URL stored directly in entity.url
+
 function textLinkEntity(url: string) {
   return { type: "text_link", url };
 }
@@ -55,6 +53,54 @@ describe("analyzeLinks — Telegram links (text_link entity)", () => {
     const r = analyzeLinks([textLinkEntity("https://t.me/mychannel")], "click here", false, []);
     expect(r.flagged).toBe(true);
     expect(r.reason).toBe("enlace_de_telegram");
+  });
+});
+
+describe("analyzeLinks — self-chat message links (should NOT flag)", () => {
+  const CHAT_ID = -1002012345678;
+  const RAW_ID = "2012345678";
+
+  it("allows private-group message link (t.me/c/{rawId}/{msgId})", () => {
+    const url = `https://t.me/c/${RAW_ID}/42`;
+    const r = analyzeLinks([urlEntity(url)], url, false, [], CHAT_ID);
+    expect(r.flagged).toBe(false);
+  });
+
+  it("allows private-group topic message link (t.me/c/{rawId}/{topicId}/{msgId})", () => {
+    const url = `https://t.me/c/${RAW_ID}/100/42`;
+    const r = analyzeLinks([urlEntity(url)], url, false, [], CHAT_ID);
+    expect(r.flagged).toBe(false);
+  });
+
+  it("allows public-group message link (t.me/{username}/{msgId})", () => {
+    const url = "https://t.me/mygroup/99";
+    const r = analyzeLinks([urlEntity(url)], url, false, [], undefined, "mygroup");
+    expect(r.flagged).toBe(false);
+  });
+
+  it("allows text_link self-chat message link", () => {
+    const url = `https://t.me/c/${RAW_ID}/55`;
+    const r = analyzeLinks([textLinkEntity(url)], "ver mensaje", false, [], CHAT_ID);
+    expect(r.flagged).toBe(false);
+  });
+
+  it("still flags a t.me link pointing to a DIFFERENT private group", () => {
+    const url = "https://t.me/c/9999999999/42";
+    const r = analyzeLinks([urlEntity(url)], url, false, [], CHAT_ID);
+    expect(r.flagged).toBe(true);
+    expect(r.reason).toBe("enlace_de_telegram");
+  });
+
+  it("still flags a t.me/username link when it belongs to a DIFFERENT group", () => {
+    const url = "https://t.me/othergroup/42";
+    const r = analyzeLinks([urlEntity(url)], url, false, [], undefined, "mygroup");
+    expect(r.flagged).toBe(true);
+  });
+
+  it("still flags a t.me/username link when no selfChatUsername is provided", () => {
+    const url = "https://t.me/somegroup/42";
+    const r = analyzeLinks([urlEntity(url)], url, false, [], CHAT_ID);
+    expect(r.flagged).toBe(true);
   });
 });
 
@@ -108,7 +154,6 @@ describe("analyzeLinks — external URLs (all flagged unless whitelisted)", () =
   });
 
   it("does NOT flag messages with no URL entities", () => {
-    // Raw text URL without entity should not be picked up
     expect(analyzeLinks([], "check out https://spam.com", false, []).flagged).toBe(false);
   });
 
