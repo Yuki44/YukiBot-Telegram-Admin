@@ -145,3 +145,10 @@ vite.config.ts.timestamp-*
 # Claude Code
 .claude/memory/
 .claude/worktrees/
+
+# Web — design handoff reference (extracted ZIP, kept locally only)
+web/.design-reference/
+
+# Web — tsc build artifacts emitted by `tsc -b` for vite.config.ts
+web/vite.config.d.ts
+web/vite.config.js

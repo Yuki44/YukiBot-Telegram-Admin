@@ -10,6 +10,15 @@ export const chatRepository = {
     return await Chat.find({ logsTo: logsChannelId, isActive: true });
   },
 
+  async listAll(): Promise<IChat[]> {
+    return await Chat.find({}).sort({ name: 1 });
+  },
+
+  async listByChatIds(chatIds: number[]): Promise<IChat[]> {
+    if (chatIds.length === 0) return [];
+    return await Chat.find({ chatId: { $in: chatIds } }).sort({ name: 1 });
+  },
+
   async upsert(chat: Partial<IChat>): Promise<IChat> {
     if (!chat.chatId) {
       throw new Error("chatId is required for upsert");
@@ -24,6 +33,21 @@ export const chatRepository = {
 
   async updateFeatures(chatId: number, features: IChat["features"]): Promise<IChat | null> {
     return await Chat.findOneAndUpdate({ chatId }, { $set: { features } }, { returnDocument: "after" });
+  },
+
+  /** Partial feature update — only changes the keys provided, leaves the rest untouched. */
+  async patchFeatures(
+    chatId: number,
+    partial: Partial<IChat["features"]>
+  ): Promise<IChat | null> {
+    const $set: Record<string, boolean> = {};
+    for (const [k, v] of Object.entries(partial)) {
+      if (typeof v === "boolean") $set[`features.${k}`] = v;
+    }
+    if (Object.keys($set).length === 0) {
+      return await Chat.findOne({ chatId });
+    }
+    return await Chat.findOneAndUpdate({ chatId }, { $set }, { returnDocument: "after" });
   },
 
   async addLinkWhitelist(chatId: number, domain: string): Promise<IChat | null> {

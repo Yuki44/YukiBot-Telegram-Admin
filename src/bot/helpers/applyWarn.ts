@@ -5,6 +5,7 @@ import { esc, displayName } from "./html";
 import { buildActor, getChatTitle } from "./contextHelpers";
 import { MAX_WARNINGS } from "../../config/constants";
 import { t } from "../../locales/i18n";
+import { recordActivity } from "../../utils/activityLog";
 
 export async function applyWarn(
   ctx: BotContext,
@@ -44,6 +45,18 @@ export async function applyWarn(
       repliedMessage: options?.repliedMessage,
     }).catch(() => {});
 
+    recordActivity({
+      chatId,
+      type: "warn",
+      source: "bot",
+      actor,
+      target,
+      reason,
+      topicId,
+      warningsAfter: user.warnings,
+      messageText: options?.repliedMessage,
+    });
+
     let warnMsgId: number | undefined;
 
     if (user.warnings >= MAX_WARNINGS) {
@@ -68,6 +81,16 @@ export async function applyWarn(
         reason: "3 avisos",
         topicId,
       }).catch(() => {});
+
+      recordActivity({
+        chatId,
+        type: "autoban",
+        source: "bot",
+        actor,
+        target,
+        reason: "3/3 avisos",
+        topicId,
+      });
     } else if (user.warnings === MAX_WARNINGS - 1) {
       const sent = await ctx.api.sendMessage(
         chatId,
