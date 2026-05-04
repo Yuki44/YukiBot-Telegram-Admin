@@ -61,18 +61,17 @@ export function ChatsScreen() {
       });
   }, [navigate]);
 
-  function logout() {
-    clearSession();
-    navigate("/login", { replace: true });
-  }
-
   const greetingName = storedUser?.name?.split(" ")[0] ?? storedUser?.username ?? "admin";
 
   return (
     <div className="yk" style={{ minHeight: "100vh" }}>
       <AppBar
         title="Mis chats"
-        action={{ label: "Cerrar sesión", icon: I.logout({ size: 20 }), onClick: logout }}
+        action={{
+          label: "Ajustes",
+          icon: I.settings({ size: 20 }),
+          onClick: () => navigate("/account"),
+        }}
       />
 
       <div className="yk-scroll yk-pad-nav">

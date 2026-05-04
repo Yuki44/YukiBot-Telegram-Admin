@@ -25,6 +25,8 @@ const schema = new Schema<IActivityLog>({
       "combo_remove",
       "banned_word_add",
       "banned_word_remove",
+      "owner_delegate",
+      "owner_revoke",
     ],
     required: true,
   },

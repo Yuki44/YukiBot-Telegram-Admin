@@ -2,6 +2,7 @@ import type {
   ActionResult,
   ActivityLogPage,
   ActivityLogType,
+  AdminsResponse,
   AuthResponse,
   AuthUser,
   BannedWord,
@@ -67,6 +68,8 @@ async function request<T>(
 
 interface PublicConfig {
   botUsername: string;
+  /** Hostname registered with BotFather; widget renders only when it matches window.location.hostname. */
+  botLoginDomain: string;
 }
 
 export const api = {
@@ -74,6 +77,8 @@ export const api = {
   auth: {
     telegram: (data: TelegramAuthData): Promise<AuthResponse> =>
       request<AuthResponse>("POST", "/auth/telegram", data),
+    password: (username: string, password: string): Promise<AuthResponse> =>
+      request<AuthResponse>("POST", "/auth/password", { username, password }),
     me: (): Promise<{ user: AuthUser }> => request<{ user: AuthUser }>("GET", "/auth/me"),
   },
   chats: {
@@ -175,6 +180,14 @@ export const api = {
       request<BannedWord>("POST", `/chats/${chatId}/banned-words`, body),
     remove: (chatId: number | string, id: string): Promise<void> =>
       request<void>("DELETE", `/chats/${chatId}/banned-words/${id}`),
+  },
+  admins: {
+    list: (chatId: number | string): Promise<AdminsResponse> =>
+      request<AdminsResponse>("GET", `/chats/${chatId}/admins`),
+    delegate: (chatId: number | string, userId: number): Promise<{ delegatedOwnerId: number }> =>
+      request<{ delegatedOwnerId: number }>("POST", `/chats/${chatId}/admins/delegate`, { userId }),
+    revoke: (chatId: number | string): Promise<{ delegatedOwnerId: null }> =>
+      request<{ delegatedOwnerId: null }>("DELETE", `/chats/${chatId}/admins/delegate`),
   },
   logs: {
     list: (

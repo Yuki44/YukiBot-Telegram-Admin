@@ -53,7 +53,14 @@ export function createChatsRouter(): Router {
       const chatIds = adminRecords.map((a) => a.chatId);
       const roleByChat = new Map(adminRecords.map((a) => [a.chatId, a.role]));
       const chats = await chatRepository.listByChatIds(chatIds);
-      res.json(chats.map((c) => toSummary(c, roleByChat.get(c.chatId) ?? "admin")));
+      res.json(
+        chats.map((c) => {
+          // Delegated owner shows as "owner" inside YukiBot even if Telegram says "admin".
+          const baseRole = roleByChat.get(c.chatId) ?? "admin";
+          const role = c.delegatedOwnerId === user.userId ? "owner" : baseRole;
+          return toSummary(c, role);
+        })
+      );
     } catch (err) {
       logger.error({ action: "chats.list", error: String(err), userId: user.userId });
       res.status(500).json({ error: "internal_error" });
@@ -62,13 +69,26 @@ export function createChatsRouter(): Router {
 
   router.get("/:chatId", requireChatAdmin(), async (req: Request, res: Response) => {
     const chatId = Number(req.params.chatId);
+    const user = req.user!;
     try {
       const chat = await chatRepository.findByChatId(chatId);
       if (!chat) {
         res.status(404).json({ error: "chat_not_found" });
         return;
       }
-      res.json(chat);
+
+      let role: ChatSummaryDto["role"];
+      if (user.isSuperAdmin) {
+        role = "super";
+      } else if (chat.delegatedOwnerId === user.userId) {
+        role = "owner";
+      } else {
+        const adminRecord = await adminRepository.findByUserId(user.userId);
+        const here = adminRecord.find((a) => a.chatId === chatId);
+        role = here?.role ?? "admin";
+      }
+
+      res.json({ ...chat.toObject(), role });
     } catch (err) {
       logger.error({ action: "chats.detail", error: String(err), chatId });
       res.status(500).json({ error: "internal_error" });

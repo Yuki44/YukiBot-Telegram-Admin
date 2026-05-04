@@ -11,7 +11,8 @@ import { createUsersRouter } from "./routes/users";
 import { createWhitelistRouter } from "./routes/whitelist";
 import { createBannedWordsRouter } from "./routes/bannedWords";
 import { createActivityLogsRouter } from "./routes/activityLogs";
-import { BOT_USERNAME } from "../config";
+import { createAdminsRouter } from "./routes/admins";
+import { BOT_LOGIN_DOMAIN, BOT_USERNAME } from "../config";
 
 const WEB_DIST = path.join(__dirname, "..", "..", "web", "dist");
 
@@ -27,7 +28,7 @@ export function createApiServer(bot: Bot<BotContext>): Express {
 
   // Public config — read at runtime by the SPA so we don't need build-time env vars.
   app.get("/api/public/config", (_req: Request, res: Response) => {
-    res.json({ botUsername: BOT_USERNAME });
+    res.json({ botUsername: BOT_USERNAME, botLoginDomain: BOT_LOGIN_DOMAIN });
   });
 
   app.use("/api/auth", createAuthRouter());
@@ -37,6 +38,7 @@ export function createApiServer(bot: Bot<BotContext>): Express {
   app.use("/api/chats/:chatId/whitelist", createWhitelistRouter());
   app.use("/api/chats/:chatId/banned-words", createBannedWordsRouter());
   app.use("/api/chats/:chatId/logs", createActivityLogsRouter());
+  app.use("/api/chats/:chatId/admins", createAdminsRouter());
 
   app.use(express.static(WEB_DIST));
 

@@ -47,6 +47,22 @@ export interface ChatDetail extends ChatSummary {
   spamUserWhitelist: number[];
   forwardsTo?: number | null;
   logsTo?: number | null;
+  delegatedOwnerId?: number | null;
+}
+
+export interface AdminRecord {
+  userId: number;
+  name: string;
+  username: string;
+  /** What Telegram itself records for this admin in the chat. */
+  telegramRole: "owner" | "admin";
+  /** True only when this user is the YukiBot-side delegated owner. */
+  isDelegatedOwner: boolean;
+}
+
+export interface AdminsResponse {
+  admins: AdminRecord[];
+  delegatedOwnerId: number | null;
 }
 
 export type MsgType = "photo" | "video" | "sticker" | "audio" | "voice" | "document" | "text";
@@ -96,7 +112,9 @@ export type ActivityLogType =
   | "combo_add"
   | "combo_remove"
   | "banned_word_add"
-  | "banned_word_remove";
+  | "banned_word_remove"
+  | "owner_delegate"
+  | "owner_revoke";
 
 export type ActivityLogSource = "bot" | "panel" | "auto";
 

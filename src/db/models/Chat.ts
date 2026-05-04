@@ -62,6 +62,11 @@ const chatSchema = new Schema<IChat>({
     type: [Number],
     default: [],
   },
+  delegatedOwnerId: {
+    type: Number,
+    required: false,
+    default: null,
+  },
   forwardsTo: {
     type: Number,
     required: false,

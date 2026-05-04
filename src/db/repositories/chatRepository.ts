@@ -81,4 +81,12 @@ export const chatRepository = {
       { returnDocument: "after" }
     );
   },
+
+  async setDelegatedOwner(chatId: number, userId: number | null): Promise<IChat | null> {
+    return await Chat.findOneAndUpdate(
+      { chatId },
+      { $set: { delegatedOwnerId: userId } },
+      { returnDocument: "after" }
+    );
+  },
 };

@@ -43,6 +43,12 @@ export interface IChat extends Document {
   linkWhitelist: string[];
   /** UserIds exempt from promo-spam detection for this chat */
   spamUserWhitelist: number[];
+  /**
+   * UserId of an admin who has been delegated YukiBot owner powers by the Telegram
+   * chat creator (see ScreenAdmins). When set, that user is treated as owner inside
+   * YukiBot even though Telegram still sees them as plain admin.
+   */
+  delegatedOwnerId?: number | null;
   forwardsTo?: number;
   logsTo?: number;
   logFlags: {
@@ -66,6 +72,22 @@ export interface IAdmin extends Document {
   chatId: number;
   chatName: string;
   role: "owner" | "admin";
+}
+
+/**
+ * Username/password credential for the dashboard. Authenticates *as* a Telegram user
+ * (via the `userId` field) — the JWT issued from a successful login is identical in
+ * shape to the one issued by the Telegram-widget flow, so existing per-chat admin
+ * checks (Admin collection) keep working unchanged.
+ */
+export interface ICredential extends Document {
+  username: string;
+  passwordHash: string;
+  /** Telegram user ID this credential authenticates as — drives chat visibility. */
+  userId: number;
+  /** Display name in the dashboard (falls back to username if missing). */
+  name?: string;
+  createdAt: Date;
 }
 
 export interface ITopic extends Document {
@@ -121,7 +143,9 @@ export type ActivityLogType =
   | "combo_add"
   | "combo_remove"
   | "banned_word_add"
-  | "banned_word_remove";
+  | "banned_word_remove"
+  | "owner_delegate"
+  | "owner_revoke";
 
 /** Where the action originated. */
 export type ActivityLogSource = "bot" | "panel" | "auto";

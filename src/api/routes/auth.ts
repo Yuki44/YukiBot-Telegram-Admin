@@ -1,13 +1,47 @@
 import { Router, Request, Response } from "express";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 import { ADMIN_IDS, JWT_SECRET } from "../../config";
 import { adminRepository } from "../../db/repositories/adminRepository";
+import { credentialRepository } from "../../db/repositories/credentialRepository";
 import { logger } from "../../utils/logger";
 import { AuthUser } from "../middleware/authenticate";
 
 const TOKEN_TTL = "7d";
 const MAX_AUTH_AGE_S = 86400; // 24h, per Telegram spec
+
+// In-memory rate limiter for the password endpoint. Per-IP, sliding 15-min window,
+// 5 attempts. Resets on successful login. Single-process — if we ever scale out
+// horizontally on Railway this becomes per-instance, which is acceptable for the
+// admin-tool threat model.
+const PW_MAX_ATTEMPTS = 5;
+const PW_WINDOW_MS = 15 * 60 * 1000;
+const pwAttempts = new Map<string, { count: number; firstAt: number }>();
+
+function ipKey(req: Request): string {
+  const xff = req.headers["x-forwarded-for"];
+  if (typeof xff === "string" && xff.length > 0) return xff.split(",")[0]!.trim();
+  return req.ip ?? req.socket.remoteAddress ?? "unknown";
+}
+
+function checkRateLimit(ip: string): { ok: true } | { ok: false; retryAfter: number } {
+  const now = Date.now();
+  const entry = pwAttempts.get(ip);
+  if (!entry || now - entry.firstAt > PW_WINDOW_MS) {
+    pwAttempts.set(ip, { count: 1, firstAt: now });
+    return { ok: true };
+  }
+  entry.count++;
+  if (entry.count > PW_MAX_ATTEMPTS) {
+    return { ok: false, retryAfter: Math.ceil((entry.firstAt + PW_WINDOW_MS - now) / 1000) };
+  }
+  return { ok: true };
+}
+
+function clearRateLimit(ip: string): void {
+  pwAttempts.delete(ip);
+}
 
 interface TelegramAuthData {
   id: number;
@@ -94,6 +128,61 @@ export function createAuthRouter(): Router {
 
     logger.info({ action: "auth.telegram", status: "ok", userId: data.id, isSuperAdmin });
     res.json({ token, user: payload });
+  });
+
+  router.post("/password", async (req: Request, res: Response) => {
+    const ip = ipKey(req);
+    const limit = checkRateLimit(ip);
+    if (!limit.ok) {
+      res.setHeader("Retry-After", String(limit.retryAfter));
+      res.status(429).json({ error: "rate_limited" });
+      return;
+    }
+
+    const body = req.body as { username?: unknown; password?: unknown };
+    const username =
+      typeof body.username === "string" ? body.username.trim().toLowerCase() : "";
+    const password = typeof body.password === "string" ? body.password : "";
+    if (username.length === 0 || password.length === 0) {
+      res.status(400).json({ error: "invalid_payload" });
+      return;
+    }
+
+    try {
+      const cred = await credentialRepository.findByUsername(username);
+      // Always run a bcrypt compare so the timing of "user not found" vs.
+      // "wrong password" doesn't leak which case we hit.
+      const dummyHash = "$2b$10$abcdefghijklmnopqrstuuJ4jUWg1Q3xS2u3v4w5x6y7z8A9B0C1D";
+      const match = await bcrypt.compare(password, cred?.passwordHash ?? dummyHash);
+      if (!cred || !match) {
+        logger.warn({ action: "auth.password", reason: "bad_credentials", username, ip });
+        res.status(401).json({ error: "invalid_credentials" });
+        return;
+      }
+
+      clearRateLimit(ip);
+
+      const isSuperAdmin = ADMIN_IDS.includes(cred.userId);
+      const payload: AuthUser = {
+        userId: cred.userId,
+        username: cred.username,
+        name: cred.name,
+        isSuperAdmin,
+      };
+      const token = jwt.sign(payload, JWT_SECRET, { expiresIn: TOKEN_TTL });
+
+      logger.info({
+        action: "auth.password",
+        status: "ok",
+        username,
+        userId: cred.userId,
+        isSuperAdmin,
+      });
+      res.json({ token, user: payload });
+    } catch (err) {
+      logger.error({ action: "auth.password", error: String(err), username });
+      res.status(500).json({ error: "internal_error" });
+    }
   });
 
   // Cheap endpoint for the dashboard to verify a stored token + fetch identity.

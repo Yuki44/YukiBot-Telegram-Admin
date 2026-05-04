@@ -18,6 +18,12 @@ export const PORT = Number(process.env.PORT ?? 3000);
 // Required for the widget to render. Register the deploy domain in BotFather via /setdomain.
 export const BOT_USERNAME = process.env.BOT_USERNAME ?? "";
 
+// Hostname registered with BotFather via /setdomain (e.g. "yukibot.up.railway.app").
+// The dashboard only renders the Telegram Login Widget when window.location.hostname
+// matches this — that way local/ngrok hosts hide the widget instead of showing the
+// "Bot domain invalid" placeholder. Leave empty to disable the widget everywhere.
+export const BOT_LOGIN_DOMAIN = process.env.BOT_LOGIN_DOMAIN ?? "";
+
 // JWT signing secret for the web dashboard. 32+ chars recommended.
 // Required at startup if the API server is enabled.
 export const JWT_SECRET = process.env.JWT_SECRET ?? "";

@@ -34,6 +34,12 @@ const FILTERS: FilterDef[] = [
     ],
     tone: "brand",
   },
+  {
+    id: "team",
+    label: "Equipo",
+    types: ["owner_delegate", "owner_revoke"],
+    tone: "brand",
+  },
 ];
 
 interface TypeMeta {
@@ -79,6 +85,10 @@ function metaFor(type: ActivityLogType): TypeMeta {
       return { icon: () => I.word({ size: 14 }), bg: "var(--warn-bg)", fg: "var(--warn-fg)", label: "Palabra añadida" };
     case "banned_word_remove":
       return { icon: () => I.word({ size: 14 }), bg: "var(--ok-bg)", fg: "var(--ok-fg)", label: "Palabra quitada" };
+    case "owner_delegate":
+      return { icon: () => I.star({ size: 14 }), bg: "var(--brand-50)", fg: "var(--brand-700)", label: "Delegación de propietario" };
+    case "owner_revoke":
+      return { icon: () => I.star({ size: 14 }), bg: "var(--warn-bg)", fg: "var(--warn-fg)", label: "Delegación revocada" };
   }
 }
 

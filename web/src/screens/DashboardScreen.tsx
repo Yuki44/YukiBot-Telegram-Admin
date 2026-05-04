@@ -193,7 +193,7 @@ export function DashboardScreen() {
               iconClass="neutral"
               title="Equipo de admins"
               sub="Quién tiene acceso a este chat"
-              disabled
+              onClick={() => navigate(`/chats/${chat.chatId}/admins`)}
             />
           </div>
         </div>
