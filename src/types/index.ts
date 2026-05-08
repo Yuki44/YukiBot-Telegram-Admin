@@ -44,6 +44,11 @@ export interface IChat extends Document {
   /** UserIds exempt from promo-spam detection for this chat */
   spamUserWhitelist: number[];
   /**
+   * UserIds of admins that have opted to be hidden from the dashboard's admin list
+   * for this chat. Display-only — does not affect Telegram's own admin list.
+   */
+  hiddenAdminIds?: number[];
+  /**
    * UserId of an admin who has been delegated YukiBot owner powers by the Telegram
    * chat creator (see ScreenAdmins). When set, that user is treated as owner inside
    * YukiBot even though Telegram still sees them as plain admin.
@@ -109,6 +114,14 @@ export interface IUser extends Document {
   isBanned: boolean;
   wasBanned: boolean;
   leftWithWarningsAt?: Date;
+  /**
+   * Cached Telegram profile photo file_id (smallest size). `null` means we've checked
+   * and the user has no photo (or we can't see it). `undefined` means we haven't
+   * checked yet. file_ids are stable across calls, but URLs derived via getFile
+   * expire after ~1h, so we always re-resolve on serve.
+   */
+  photoFileId?: string | null;
+  photoCheckedAt?: Date;
 }
 
 /**

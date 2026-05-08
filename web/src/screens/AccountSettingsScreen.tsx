@@ -19,6 +19,7 @@ export function AccountSettingsScreen() {
   const navigate = useNavigate();
   const me = getStoredUser();
   const [notif, setNotif] = useState<boolean>(readNotifPref);
+  const [pwOpen, setPwOpen] = useState(false);
 
   useEffect(() => {
     writeNotifPref(notif);
@@ -70,6 +71,14 @@ export function AccountSettingsScreen() {
         <div className="yk-section">
           <div className="yk-section-label">CUENTA</div>
           <div className="yk-card">
+            <button type="button" className="yk-row" onClick={() => setPwOpen(true)}>
+              <div className="yk-row-icon">{I.lock({ size: 20 })}</div>
+              <div className="yk-row-body">
+                <div className="yk-row-title">Cambiar contraseña</div>
+                <div className="yk-row-sub">Próximamente · pídele al propietario un reseteo</div>
+              </div>
+              {I.chevR()}
+            </button>
             <div className="yk-row" style={{ cursor: "default" }}>
               <div className="yk-row-icon info">{I.telegram({ size: 20 })}</div>
               <div className="yk-row-body">
@@ -121,6 +130,28 @@ export function AccountSettingsScreen() {
           YukiBot v{__APP_VERSION__} · Hecho con cariño
         </div>
       </div>
+
+      {pwOpen && (
+        <div className="yk-sheet-overlay" onClick={() => setPwOpen(false)}>
+          <div className="yk-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="yk-sheet-handle" />
+            <div style={{ padding: "8px 20px 20px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+                <div className="yk-row-icon">{I.lock({ size: 20 })}</div>
+                <div style={{ fontSize: 17, fontWeight: 800 }}>Cambiar contraseña</div>
+              </div>
+              <div style={{ color: "var(--ink-500)", fontSize: 14, marginBottom: 16 }}>
+                El cambio de contraseña desde la app aún no está disponible. Mientras tanto,
+                pídele al propietario del grupo que la restablezca por ti — puede hacerlo desde
+                su panel de administración.
+              </div>
+              <button type="button" className="yk-btn" onClick={() => setPwOpen(false)}>
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

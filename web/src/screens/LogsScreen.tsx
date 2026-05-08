@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppBar } from "../components/AppBar";
 import { I } from "../components/Icon";
 import { ApiError, api } from "../lib/api";
@@ -207,8 +207,13 @@ function LogRow({ log, onOpenUser }: LogRowProps) {
 export function LogsScreen() {
   const { chatId } = useParams<{ chatId: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const chat = useChat(chatId);
-  const [filter, setFilter] = useState<string>("todo");
+  // Initial filter comes from ?filter= so dashboard stat cards can deep-link.
+  const initialFilter = searchParams.get("filter");
+  const [filter, setFilter] = useState<string>(
+    initialFilter && FILTERS.some((f) => f.id === initialFilter) ? initialFilter : "todo"
+  );
   const [q, setQ] = useState("");
   const [entries, setEntries] = useState<ActivityLogEntry[] | null>(null);
   const [nextBefore, setNextBefore] = useState<string | null>(null);
@@ -308,7 +313,17 @@ export function LogsScreen() {
           return (
             <button
               key={f.id}
-              onClick={() => setFilter(f.id)}
+              onClick={() => {
+                setFilter(f.id);
+                // Keep the URL in sync so refresh/share preserves the filter and
+                // navigating back from a child screen lands on the same view.
+                if (f.id === "todo") {
+                  searchParams.delete("filter");
+                } else {
+                  searchParams.set("filter", f.id);
+                }
+                setSearchParams(searchParams, { replace: true });
+              }}
               type="button"
               style={{
                 border: active ? "1.5px solid var(--brand-400)" : "1.5px solid var(--ink-100)",

@@ -26,6 +26,8 @@ export function LoginScreen() {
   const [tgBusy, setTgBusy] = useState(false);
   const [tgError, setTgError] = useState<string | null>(null);
   const [tgEnabled, setTgEnabled] = useState(false);
+  const [tgFallbackUrl, setTgFallbackUrl] = useState<string | null>(null);
+  const [showResetHelp, setShowResetHelp] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,23 +53,28 @@ export function LoginScreen() {
       .publicConfig()
       .then((cfg) => {
         if (cancelled) return;
-        // Only render the widget when the current host matches the BotFather domain —
-        // otherwise the widget shows a "Bot domain invalid" iframe placeholder.
-        const matches =
-          cfg.botUsername.length > 0 &&
-          cfg.botLoginDomain.length > 0 &&
-          window.location.hostname === cfg.botLoginDomain;
-        if (!matches) return;
-        setTgEnabled(true);
-        const script = document.createElement("script");
-        script.src = "https://telegram.org/js/telegram-widget.js?22";
-        script.async = true;
-        script.setAttribute("data-telegram-login", cfg.botUsername);
-        script.setAttribute("data-size", "large");
-        script.setAttribute("data-radius", "12");
-        script.setAttribute("data-onauth", "onTelegramAuth(user)");
-        script.setAttribute("data-request-access", "write");
-        widgetRef.current?.appendChild(script);
+        const hasConfig = cfg.botUsername.length > 0 && cfg.botLoginDomain.length > 0;
+        // The widget only renders correctly when the current host matches the BotFather
+        // domain — otherwise it shows a "Bot domain invalid" iframe placeholder.
+        const matches = hasConfig && window.location.hostname === cfg.botLoginDomain;
+        if (matches) {
+          setTgEnabled(true);
+          const script = document.createElement("script");
+          script.src = "https://telegram.org/js/telegram-widget.js?22";
+          script.async = true;
+          script.setAttribute("data-telegram-login", cfg.botUsername);
+          script.setAttribute("data-size", "large");
+          script.setAttribute("data-radius", "12");
+          script.setAttribute("data-onauth", "onTelegramAuth(user)");
+          script.setAttribute("data-request-access", "write");
+          widgetRef.current?.appendChild(script);
+          return;
+        }
+        if (hasConfig) {
+          // Off-domain (e.g. local dev): show a fallback button that points users to the
+          // production login URL where the official widget actually works.
+          setTgFallbackUrl(`https://${cfg.botLoginDomain}/login`);
+        }
       })
       .catch(() => {
         // Public config failure — silently keep Telegram hidden; password still works.
@@ -178,6 +185,35 @@ export function LoginScreen() {
                   {pwShow ? I.eyeOff({ size: 18 }) : I.eye({ size: 18 })}
                 </button>
               </div>
+              <div style={{ textAlign: "right", marginTop: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowResetHelp((v) => !v)}
+                  style={{
+                    background: "transparent",
+                    border: 0,
+                    padding: 0,
+                    cursor: "pointer",
+                    color: "var(--brand-700)",
+                    fontSize: 13,
+                    fontWeight: 600,
+                  }}
+                >
+                  ¿Olvidaste tu contraseña?
+                </button>
+              </div>
+              {showResetHelp && (
+                <div
+                  className="yk-banner"
+                  style={{ marginTop: 10, background: "var(--bg-sunken)", color: "var(--ink-700)" }}
+                >
+                  {I.help({ size: 18 })}
+                  <div>
+                    Pídele al propietario del grupo que la restablezca desde su panel. La opción
+                    de auto-reseteo llegará pronto.
+                  </div>
+                </div>
+              )}
             </div>
 
             {pwError && (
@@ -211,7 +247,7 @@ export function LoginScreen() {
             </button>
           </form>
 
-          {tgEnabled && (
+          {(tgEnabled || tgFallbackUrl) && (
             <>
               <div
                 aria-hidden
@@ -229,10 +265,42 @@ export function LoginScreen() {
                 <div style={{ flex: 1, height: 1, background: "var(--ink-100)" }} />
               </div>
 
-              <div
-                ref={widgetRef}
-                style={{ minHeight: 48, display: "flex", justifyContent: "center" }}
-              />
+              {tgEnabled && (
+                <div
+                  ref={widgetRef}
+                  style={{ minHeight: 48, display: "flex", justifyContent: "center" }}
+                />
+              )}
+
+              {!tgEnabled && tgFallbackUrl && (
+                <>
+                  <a
+                    href={tgFallbackUrl}
+                    className="yk-btn"
+                    style={{
+                      background: "#229ED9",
+                      color: "white",
+                      textDecoration: "none",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
+                    }}
+                  >
+                    {I.telegram({ size: 20 })} Continuar con Telegram
+                  </a>
+                  <div
+                    style={{
+                      color: "var(--ink-500)",
+                      fontSize: 12,
+                      textAlign: "center",
+                      marginTop: 8,
+                    }}
+                  >
+                    El login con Telegram solo funciona desde el dominio principal.
+                  </div>
+                </>
+              )}
 
               {tgBusy && (
                 <div

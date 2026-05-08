@@ -50,6 +50,13 @@ export interface ChatDetail extends ChatSummary {
   delegatedOwnerId?: number | null;
 }
 
+export interface ChatStats {
+  warnedCount: number;
+  silencedCount: number;
+  bannedCount: number;
+  actionsToday: number;
+}
+
 export interface AdminRecord {
   userId: number;
   name: string;
@@ -58,6 +65,10 @@ export interface AdminRecord {
   telegramRole: "owner" | "admin";
   /** True only when this user is the YukiBot-side delegated owner. */
   isDelegatedOwner: boolean;
+  /** Display-only opt-in flag — admin chose to hide themselves in the dashboard list. */
+  hiddenInAdminList: boolean;
+  /** Telegram profile photo file_id; null when checked-but-no-photo or unknown. */
+  photoFileId?: string | null;
 }
 
 export interface AdminsResponse {
@@ -168,6 +179,8 @@ export interface UserRecord {
   isBanned: boolean;
   wasBanned: boolean;
   isAdmin: boolean;
+  /** Telegram profile photo file_id; null when checked-but-no-photo. */
+  photoFileId?: string | null;
 }
 
 export interface ActionResult {

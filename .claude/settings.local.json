@@ -42,7 +42,10 @@
       "PowerShell(Get-ChildItem \"C:\\\\Users\\\\dariu\\\\Downloads\\\\\" -Directory | Where-Object { $_.Name -match \"yuki|design|Yuki\" } | Select-Object Name, LastWriteTime)",
       "Bash(npx vite *)",
       "Bash(npx vitest *)",
-      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\dariu\\\\Documents\\\\PROJECTS\\\\YukiBot-Telegram-Admin\\\\src\\\\api\" -Recurse -ErrorAction SilentlyContinue)"
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\dariu\\\\Documents\\\\PROJECTS\\\\YukiBot-Telegram-Admin\\\\src\\\\api\" -Recurse -ErrorAction SilentlyContinue)",
+      "Bash(npx eslint *)",
+      "Bash(gh pr *)",
+      "Bash(dir tmp *)"
     ]
   }
 }

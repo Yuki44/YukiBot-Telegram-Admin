@@ -3,6 +3,7 @@ import { authenticate } from "../middleware/authenticate";
 import { requireChatAdmin } from "../middleware/requireChatAdmin";
 import { adminRepository } from "../../db/repositories/adminRepository";
 import { chatRepository } from "../../db/repositories/chatRepository";
+import { userRepository } from "../../db/repositories/userRepository";
 import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
 
@@ -14,6 +15,10 @@ interface AdminDto {
   telegramRole: "owner" | "admin";
   /** True only when this user is the YukiBot-side delegated owner. */
   isDelegatedOwner: boolean;
+  /** Display-only opt-in: this admin chose to be hidden in the dashboard list. */
+  hiddenInAdminList: boolean;
+  /** Cached Telegram profile photo file_id, when known via the User collection. */
+  photoFileId: string | null;
 }
 
 interface AdminsResponse {
@@ -42,6 +47,19 @@ export function createAdminsRouter(): Router {
         return;
       }
       const delegatedOwnerId = chat.delegatedOwnerId ?? null;
+      const hiddenSet = new Set(chat.hiddenAdminIds ?? []);
+
+      // Pull photo file_ids from the User collection so admins get the same avatars
+      // as the rest of the dashboard. Admins who've never messaged here won't have
+      // a User row — they fall back to initials.
+      const photoLookups = await Promise.all(
+        records.map((r) => userRepository.findByUserAndChat(r.userId, chatId))
+      );
+      const photoByUserId = new Map<number, string | null>();
+      photoLookups.forEach((u, idx) => {
+        if (u) photoByUserId.set(records[idx].userId, u.photoFileId ?? null);
+      });
+
       const admins: AdminDto[] = records
         .map((r) => ({
           userId: r.userId,
@@ -49,6 +67,8 @@ export function createAdminsRouter(): Router {
           username: r.username,
           telegramRole: r.role,
           isDelegatedOwner: delegatedOwnerId !== null && r.userId === delegatedOwnerId,
+          hiddenInAdminList: hiddenSet.has(r.userId),
+          photoFileId: photoByUserId.get(r.userId) ?? null,
         }))
         // Telegram creator first, delegated owner second, then alphabetical.
         .sort((a, b) => {
@@ -149,6 +169,60 @@ export function createAdminsRouter(): Router {
         res.json({ delegatedOwnerId: null });
       } catch (err) {
         logger.error({ action: "admins.revoke", error: String(err), chatId });
+        res.status(500).json({ error: "internal_error" });
+      }
+    }
+  );
+
+  // Per-admin display-only visibility toggle. Currently scoped to "self-hide for the
+  // owner": the logged-in user can only flip their own row, and must be the Telegram
+  // chat creator (or a super-admin via the global bypass). Display-only — Telegram's
+  // own admin list is not affected.
+  router.post(
+    "/:userId/visibility",
+    requireChatAdmin(),
+    async (req: Request, res: Response) => {
+      const chatId = Number(req.params.chatId);
+      const userId = Number(req.params.userId);
+      if (!Number.isFinite(userId)) {
+        res.status(400).json({ error: "invalid_user_id" });
+        return;
+      }
+
+      const actor = req.user!;
+      const isSelf = actor.userId === userId;
+      const isTelegramOwner = await adminRepository.isOwner(actor.userId, chatId);
+      const allowed = actor.isSuperAdmin || (isSelf && isTelegramOwner);
+      if (!allowed) {
+        res.status(403).json({ error: "forbidden" });
+        return;
+      }
+
+      const hiddenRaw = (req.body as { hidden?: unknown })?.hidden;
+      if (typeof hiddenRaw !== "boolean") {
+        res.status(400).json({ error: "invalid_hidden_flag" });
+        return;
+      }
+
+      try {
+        const updated = await chatRepository.setAdminVisibility(chatId, userId, hiddenRaw);
+        if (!updated) {
+          res.status(404).json({ error: "chat_not_found" });
+          return;
+        }
+        logger.info({
+          action: "admins.visibility",
+          chatId,
+          userId,
+          hidden: hiddenRaw,
+          by: actor.userId,
+        });
+        res.json({
+          userId,
+          hiddenInAdminList: hiddenRaw,
+        });
+      } catch (err) {
+        logger.error({ action: "admins.visibility", error: String(err), chatId, userId });
         res.status(500).json({ error: "internal_error" });
       }
     }

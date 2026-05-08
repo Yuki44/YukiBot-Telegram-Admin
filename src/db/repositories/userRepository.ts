@@ -40,6 +40,16 @@ export const userRepository = {
     // Tier order — active first, then warned, then silenced, then banned:
     //   _statusTier = isBanned ? 3 : isMuted ? 2 : warnings>0 ? 1 : 0
     // Within each tier, sort alphabetically by name with Spanish, case-insensitive collation.
+    // Exception: inside the "warned" filter every row is tier 1, so sort by warnings ASC
+    // (1/3 → 2/3 → 3/3) before falling back to name. Inside "banned", everyone is tier 3,
+    // so we push nameless rows ("Sin nombre" in the UI) to the bottom via _hasName DESC.
+    const sortStage: PipelineStage.Sort["$sort"] =
+      filter === "warned"
+        ? { _warnings: 1, _sortName: 1 }
+        : filter === "banned"
+          ? { _hasName: -1, _sortName: 1 }
+          : { _statusTier: 1, _sortName: 1 };
+
     const pipeline: PipelineStage[] = [
       { $match: query },
       {
@@ -63,12 +73,27 @@ export const userRepository = {
               },
             ],
           },
+          _warnings: { $ifNull: ["$warnings", 0] },
           _sortName: { $ifNull: ["$name", { $ifNull: ["$username", ""] }] },
+          // Mirrors UsersScreen's `noName = !name && !username` after trim.
+          // Trim with $trim before checking length so whitespace-only doesn't count.
+          _hasName: {
+            $cond: [
+              {
+                $or: [
+                  { $gt: [{ $strLenCP: { $trim: { input: { $ifNull: ["$name", ""] } } } }, 0] },
+                  { $gt: [{ $strLenCP: { $trim: { input: { $ifNull: ["$username", ""] } } } }, 0] },
+                ],
+              },
+              1,
+              0,
+            ],
+          },
         },
       },
-      { $sort: { _statusTier: 1, _sortName: 1 } },
+      { $sort: sortStage },
       { $limit: limit },
-      { $project: { _statusTier: 0, _sortName: 0 } },
+      { $project: { _statusTier: 0, _warnings: 0, _sortName: 0, _hasName: 0 } },
     ];
 
     return await User.aggregate<IUser>(pipeline).collation({ locale: "es", strength: 1 });

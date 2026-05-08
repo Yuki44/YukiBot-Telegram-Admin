@@ -9,6 +9,7 @@ import type {
   BannedWordSeverity,
   ChatDetail,
   ChatFeatures,
+  ChatStats,
   ChatSummary,
   TelegramAuthData,
   Topic,
@@ -85,6 +86,8 @@ export const api = {
     list: (): Promise<ChatSummary[]> => request<ChatSummary[]>("GET", "/chats"),
     get: (chatId: number | string): Promise<ChatDetail> =>
       request<ChatDetail>("GET", `/chats/${chatId}`),
+    stats: (chatId: number | string): Promise<ChatStats> =>
+      request<ChatStats>("GET", `/chats/${chatId}/stats`),
     updateFeatures: (chatId: number | string, partial: Partial<ChatFeatures>): Promise<ChatFeatures> =>
       request<ChatFeatures>("PUT", `/chats/${chatId}/features`, partial),
   },
@@ -188,6 +191,16 @@ export const api = {
       request<{ delegatedOwnerId: number }>("POST", `/chats/${chatId}/admins/delegate`, { userId }),
     revoke: (chatId: number | string): Promise<{ delegatedOwnerId: null }> =>
       request<{ delegatedOwnerId: null }>("DELETE", `/chats/${chatId}/admins/delegate`),
+    setVisibility: (
+      chatId: number | string,
+      userId: number,
+      hidden: boolean
+    ): Promise<{ userId: number; hiddenInAdminList: boolean }> =>
+      request<{ userId: number; hiddenInAdminList: boolean }>(
+        "POST",
+        `/chats/${chatId}/admins/${userId}/visibility`,
+        { hidden }
+      ),
   },
   logs: {
     list: (

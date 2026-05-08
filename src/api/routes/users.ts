@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { Bot } from "grammy";
+import type { ChatMember } from "grammy/types";
 import { authenticate } from "../middleware/authenticate";
 import { requireChatAdmin } from "../middleware/requireChatAdmin";
 import { userRepository, UserListFilter } from "../../db/repositories/userRepository";
@@ -32,6 +33,8 @@ function userToDto(u: IUser, isAdmin = false) {
     isBanned: u.isBanned,
     wasBanned: u.wasBanned,
     isAdmin,
+    // null = checked, no photo. undefined = never checked (photo discovery hasn't run).
+    photoFileId: u.photoFileId ?? null,
   };
 }
 
@@ -192,6 +195,83 @@ export function createUsersRouter(bot: Bot<BotContext>): Router {
     }
   });
 
+  // Re-check the cached photoFileId at most once per week. Telegram doesn't expose a
+  // change feed for profile photos, but checking too often burns API quota; weekly
+  // strikes a balance for a moderation dashboard.
+  const PHOTO_RECHECK_MS = 7 * 24 * 60 * 60 * 1000;
+
+  /**
+   * Cache the smallest available profile-photo file_id for a user. Stores `null` if
+   * the user has no photo (or the bot can't see it) so we don't re-call the API on
+   * every avatar render.
+   */
+  async function discoverProfilePhoto(userId: number, chatId: number): Promise<void> {
+    try {
+      const photos = await bot.api.getUserProfilePhotos(userId, { limit: 1 });
+      // photos.photos is PhotoSize[][] — outer array is "photos" (we asked for 1),
+      // inner array is the same photo at multiple resolutions, smallest first.
+      const smallest = photos.photos[0]?.[0];
+      const fileId = smallest?.file_id ?? null;
+
+      await userRepository.upsert({
+        userId,
+        chatId,
+        photoFileId: fileId,
+        photoCheckedAt: new Date(),
+      });
+    } catch (err) {
+      logger.warn({ action: "users.discoverPhoto_failed", chatId, userId, error: String(err) });
+    }
+  }
+
+  function shouldRecheckPhoto(u: IUser): boolean {
+    if (!u.photoCheckedAt) return true;
+    return Date.now() - u.photoCheckedAt.getTime() > PHOTO_RECHECK_MS;
+  }
+
+  /**
+   * Reconcile a single user's mute/ban state from a Telegram ChatMember response.
+   * Returns the updated user and whether anything actually changed (caller decides
+   * whether to log/report).
+   */
+  async function reconcileFromMember(
+    chatId: number,
+    member: ChatMember,
+    previous: IUser | null
+  ): Promise<{ user: IUser; changed: boolean }> {
+    const isMutedFromTg =
+      member.status === "restricted" && (member as { can_send_messages?: boolean }).can_send_messages === false;
+    const isBannedFromTg = member.status === "kicked";
+    const muteUntilFromTg =
+      isMutedFromTg && typeof (member as { until_date?: number }).until_date === "number"
+        ? new Date((member as { until_date: number }).until_date * 1000)
+        : undefined;
+
+    const fresh: Partial<IUser> = {
+      userId: member.user.id,
+      chatId,
+      username: member.user.username,
+      name:
+        [member.user.first_name, member.user.last_name].filter(Boolean).join(" ") ||
+        member.user.username ||
+        undefined,
+      isMuted: isMutedFromTg,
+      muteUntil: muteUntilFromTg,
+      isBanned: isBannedFromTg,
+    };
+    // wasBanned must NEVER revert to false (G3) — only set it true if Telegram says banned.
+    if (isBannedFromTg) fresh.wasBanned = true;
+
+    const updated = await userRepository.upsert(fresh);
+
+    const changed =
+      !previous ||
+      Boolean(previous.isMuted) !== isMutedFromTg ||
+      Boolean(previous.isBanned) !== isBannedFromTg;
+
+    return { user: updated, changed };
+  }
+
   router.post("/:userId/refresh", requireChatAdmin(), async (req: Request, res: Response) => {
     const chatId = Number(req.params.chatId);
     const userId = Number(req.params.userId);
@@ -211,42 +291,22 @@ export function createUsersRouter(bot: Bot<BotContext>): Router {
         return;
       }
 
-      // Reconcile mute/ban state from Telegram's truth so the dashboard fixes any stale
-      // DB rows (e.g. users silenced via /sil BEFORE the executeSilence persistence patch).
-      const isMutedFromTg =
-        member.status === "restricted" && (member as { can_send_messages?: boolean }).can_send_messages === false;
-      const isBannedFromTg = member.status === "kicked";
-      const muteUntilFromTg =
-        isMutedFromTg && typeof (member as { until_date?: number }).until_date === "number"
-          ? new Date((member as { until_date: number }).until_date * 1000)
-          : undefined;
-
-      const fresh: Partial<IUser> = {
-        userId: member.user.id,
-        chatId,
-        username: member.user.username,
-        name:
-          [member.user.first_name, member.user.last_name].filter(Boolean).join(" ") ||
-          member.user.username ||
-          undefined,
-        isMuted: isMutedFromTg,
-        muteUntil: muteUntilFromTg,
-        isBanned: isBannedFromTg,
-      };
-      // wasBanned must NEVER revert to false (G3) — only set it true if Telegram says banned.
-      if (isBannedFromTg) fresh.wasBanned = true;
-
-      const updated = await userRepository.upsert(fresh);
+      const previous = await userRepository.findByUserAndChat(userId, chatId);
+      const { user: updated } = await reconcileFromMember(chatId, member, previous);
+      if (shouldRecheckPhoto(updated)) {
+        await discoverProfilePhoto(userId, chatId);
+      }
+      const final = (await userRepository.findByUserAndChat(userId, chatId)) ?? updated;
       const isAdmin = await adminRepository.isChatAdmin(userId, chatId);
       logger.info({
         action: "users.refresh",
         chatId,
         userId,
         by: req.user!.userId,
-        muted: isMutedFromTg,
-        banned: isBannedFromTg,
+        muted: final.isMuted,
+        banned: final.isBanned,
       });
-      res.json(userToDto(updated, isAdmin));
+      res.json(userToDto(final, isAdmin));
     } catch (err) {
       logger.error({ action: "users.refresh", error: String(err), chatId, userId });
       res.status(500).json({ error: "internal_error" });

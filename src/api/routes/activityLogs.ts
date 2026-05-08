@@ -23,6 +23,8 @@ const VALID_TYPES: ActivityLogType[] = [
   "combo_remove",
   "banned_word_add",
   "banned_word_remove",
+  "owner_delegate",
+  "owner_revoke",
 ];
 
 function toDto(log: IActivityLog) {

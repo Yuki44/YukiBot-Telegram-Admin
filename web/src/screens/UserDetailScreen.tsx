@@ -4,13 +4,44 @@ import { AppBar } from "../components/AppBar";
 import { I } from "../components/Icon";
 import { SlideToConfirm } from "../components/SlideToConfirm";
 import { StatusPills } from "../components/StatusPills";
+import { UserAvatar } from "../components/UserAvatar";
 import { ApiError, api } from "../lib/api";
 import { clearSession } from "../lib/auth";
 import { useChat } from "../lib/useChat";
-import { avClass, copyText, initials } from "../lib/utils";
-import type { ActionResult, UserRecord } from "../types/api";
+import { copyText, timeAgo } from "../lib/utils";
+import type { ActionResult, ActivityLogEntry, ActivityLogType, UserRecord } from "../types/api";
 
 type Sheet = null | "warn" | "silence" | "unsilence" | "ban" | "unban" | "pardon";
+
+interface LogTypeMeta {
+  icon: ReactNode;
+  bg: string;
+  fg: string;
+  label: string;
+}
+
+function logMeta(type: ActivityLogType): LogTypeMeta {
+  switch (type) {
+    case "warn":
+      return { icon: I.alert({ size: 14 }), bg: "var(--warn-bg)", fg: "var(--warn-fg)", label: "Aviso" };
+    case "unwarn":
+      return { icon: I.refresh({ size: 14 }), bg: "var(--ok-bg)", fg: "var(--ok-fg)", label: "Quitar aviso" };
+    case "silence":
+      return { icon: I.silence({ size: 14 }), bg: "var(--info-bg)", fg: "var(--info-fg)", label: "Silencio" };
+    case "unsilence":
+      return { icon: I.silence({ size: 14 }), bg: "var(--ok-bg)", fg: "var(--ok-fg)", label: "Quitar silencio" };
+    case "ban":
+    case "autoban":
+      return { icon: I.ban({ size: 14 }), bg: "var(--danger-bg)", fg: "var(--danger-fg)", label: type === "autoban" ? "Auto-ban" : "Ban" };
+    case "unban":
+    case "pardon":
+      return { icon: I.check({ size: 14 }), bg: "var(--ok-bg)", fg: "var(--ok-fg)", label: type === "pardon" ? "Perdón" : "Quitar ban" };
+    case "kick":
+      return { icon: I.logout({ size: 14 }), bg: "var(--danger-bg)", fg: "var(--danger-fg)", label: "Expulsión" };
+    default:
+      return { icon: I.log({ size: 14 }), bg: "var(--ink-100)", fg: "var(--ink-700)", label: "Acción" };
+  }
+}
 
 interface SheetCfg {
   title: string;
@@ -207,6 +238,8 @@ export function UserDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [history, setHistory] = useState<ActivityLogEntry[] | null>(null);
 
   function load() {
     if (!chatId || !userId) return;
@@ -228,6 +261,25 @@ export function UserDetailScreen() {
   }
 
   useEffect(load, [chatId, userId, navigate]);
+
+  useEffect(() => {
+    if (!chatId || !user) return;
+    // Fetch a recent slice of logs and filter client-side by targetId — q matches text
+    // fields and could pull in noise; client-side filter is the only reliable cut.
+    let cancelled = false;
+    api.logs
+      .list(chatId, { limit: 50 })
+      .then((page) => {
+        if (cancelled) return;
+        setHistory(page.entries.filter((e) => e.targetId === user.userId).slice(0, 3));
+      })
+      .catch(() => {
+        if (!cancelled) setHistory([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [chatId, user]);
 
   function applyResult(r: ActionResult) {
     setUser(r.user);
@@ -343,19 +395,20 @@ export function UserDetailScreen() {
         title={`Usuario${titleSuffix}`}
         onBack={() => navigate(`/chats/${chatId}/users`)}
         action={{
-          label: "Refrescar desde Telegram",
-          icon: I.refresh({ size: 20 }),
-          onClick: refreshFromTelegram,
+          label: "Más opciones",
+          icon: I.more({ size: 20 }),
+          onClick: () => setMoreOpen(true),
         }}
       />
 
       <div className="yk-scroll yk-pad-nav">
         <div style={{ padding: "8px 20px 16px", textAlign: "center" }}>
-          <div
-            className={`yk-avatar ${avClass(display)}`}
-            style={{ width: 80, height: 80, borderRadius: 24, fontSize: 28, margin: "0 auto 12px" }}
-          >
-            {noName ? "?" : initials(display)}
+          <div style={{ display: "inline-block", marginBottom: 12 }}>
+            <UserAvatar
+              name={noName ? "" : display}
+              photoFileId={user.photoFileId}
+              size={80}
+            />
           </div>
           <div
             style={{
@@ -418,9 +471,9 @@ export function UserDetailScreen() {
           )}
           {noName && !refreshing && (
             <div style={{ marginTop: 8, color: "var(--ink-500)", fontSize: 12 }}>
-              Sin datos en caché. Pulsa el botón <span aria-hidden>↻</span> de arriba para
-              intentar refrescar desde Telegram. Si Telegram tampoco devuelve nombre, la cuenta
-              probablemente está borrada.
+              Sin datos en caché. Abre el menú <span aria-hidden>⋯</span> arriba a la derecha y
+              pulsa <i>Refrescar desde Telegram</i>. Si Telegram tampoco devuelve nombre, la
+              cuenta probablemente está borrada.
             </div>
           )}
         </div>
@@ -553,7 +606,130 @@ export function UserDetailScreen() {
             </div>
           </div>
         )}
+
+        {history && history.length > 0 && (
+          <div className="yk-section">
+            <div
+              className="yk-section-label"
+              style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+            >
+              <span>HISTORIAL</span>
+              <button
+                type="button"
+                onClick={() => navigate(`/chats/${chatId}/logs`)}
+                style={{
+                  background: "transparent",
+                  border: 0,
+                  padding: 0,
+                  color: "var(--brand-700)",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  letterSpacing: "0.04em",
+                }}
+              >
+                VER TODO
+              </button>
+            </div>
+            <div className="yk-card">
+              {history.map((log) => {
+                const m = logMeta(log.type);
+                return (
+                  <div className="yk-row" key={log.id} style={{ cursor: "default", alignItems: "flex-start" }}>
+                    <div
+                      className="yk-row-icon"
+                      style={{ background: m.bg, color: m.fg, marginTop: 2, flexShrink: 0 }}
+                    >
+                      {m.icon}
+                    </div>
+                    <div className="yk-row-body">
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                        <div style={{ flex: 1, fontWeight: 700 }}>{m.label}</div>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "var(--ink-400)",
+                            fontFamily: "'JetBrains Mono', monospace",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {timeAgo(log.timestamp)}
+                        </div>
+                      </div>
+                      {log.reason && (
+                        <div
+                          className="yk-row-sub"
+                          style={{ whiteSpace: "normal", marginTop: 2 }}
+                        >
+                          {log.reason}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
+
+      {moreOpen && (
+        <div className="yk-sheet-overlay" onClick={() => setMoreOpen(false)}>
+          <div className="yk-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="yk-sheet-handle" />
+            <div style={{ padding: "8px 12px 16px" }}>
+              <div className="yk-card" style={{ marginBottom: 0 }}>
+                <button
+                  type="button"
+                  className="yk-row"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    refreshFromTelegram();
+                  }}
+                  disabled={refreshing}
+                >
+                  <div className="yk-row-icon">{I.refresh({ size: 20 })}</div>
+                  <div className="yk-row-body">
+                    <div className="yk-row-title">Refrescar desde Telegram</div>
+                    <div className="yk-row-sub">Sincroniza nombre, foto y estado.</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  className="yk-row"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    doCopyId();
+                  }}
+                >
+                  <div className="yk-row-icon">{I.copy({ size: 20 })}</div>
+                  <div className="yk-row-body">
+                    <div className="yk-row-title">Copiar ID de Telegram</div>
+                    <div className="yk-row-sub">{user.userId}</div>
+                  </div>
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMoreOpen(false)}
+                style={{
+                  marginTop: 12,
+                  width: "100%",
+                  padding: 12,
+                  background: "transparent",
+                  border: 0,
+                  color: "var(--ink-500)",
+                  fontWeight: 600,
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {sheet && (
         <ActionSheet

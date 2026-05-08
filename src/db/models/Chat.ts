@@ -62,6 +62,10 @@ const chatSchema = new Schema<IChat>({
     type: [Number],
     default: [],
   },
+  hiddenAdminIds: {
+    type: [Number],
+    default: [],
+  },
   delegatedOwnerId: {
     type: Number,
     required: false,

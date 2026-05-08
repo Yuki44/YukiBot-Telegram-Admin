@@ -4,7 +4,7 @@ import { AppBar } from "../components/AppBar";
 import { I } from "../components/Icon";
 import { ApiError, api } from "../lib/api";
 import { clearSession } from "../lib/auth";
-import type { ChatDetail } from "../types/api";
+import type { ChatDetail, ChatStats } from "../types/api";
 
 interface NavRowProps {
   icon: ReactNode;
@@ -46,6 +46,7 @@ export function DashboardScreen() {
   const { chatId } = useParams<{ chatId: string }>();
   const navigate = useNavigate();
   const [chat, setChat] = useState<ChatDetail | null>(null);
+  const [stats, setStats] = useState<ChatStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -66,6 +67,12 @@ export function DashboardScreen() {
         setError(err instanceof Error ? err.message : "error");
       });
   }, [chatId, navigate]);
+
+  // Stats render lazily — failure is non-fatal so the dashboard still works.
+  useEffect(() => {
+    if (!chatId) return;
+    api.chats.stats(chatId).then(setStats).catch(() => setStats(null));
+  }, [chatId]);
 
   if (error) {
     return (
@@ -136,6 +143,47 @@ export function DashboardScreen() {
               </div>
             </div>
           </div>
+        </div>
+
+        <div className="yk-stats">
+          <button
+            type="button"
+            className="yk-stat yk-stat-btn"
+            onClick={() => navigate(`/chats/${chat.chatId}/logs?filter=warn`)}
+          >
+            <div className="yk-stat-num" style={{ color: "var(--warn-fg)" }}>
+              {stats ? stats.warnedCount : "—"}
+            </div>
+            <div className="yk-stat-label">CON AVISOS</div>
+          </button>
+          <button
+            type="button"
+            className="yk-stat yk-stat-btn"
+            onClick={() => navigate(`/chats/${chat.chatId}/logs?filter=silence`)}
+          >
+            <div className="yk-stat-num" style={{ color: "var(--info-fg)" }}>
+              {stats ? stats.silencedCount : "—"}
+            </div>
+            <div className="yk-stat-label">SILENCIADOS</div>
+          </button>
+          <button
+            type="button"
+            className="yk-stat yk-stat-btn"
+            onClick={() => navigate(`/chats/${chat.chatId}/logs?filter=ban`)}
+          >
+            <div className="yk-stat-num" style={{ color: "var(--danger-fg)" }}>
+              {stats ? stats.bannedCount : "—"}
+            </div>
+            <div className="yk-stat-label">BANEADOS</div>
+          </button>
+          <button
+            type="button"
+            className="yk-stat yk-stat-btn"
+            onClick={() => navigate(`/chats/${chat.chatId}/logs?filter=todo`)}
+          >
+            <div className="yk-stat-num">{stats ? stats.actionsToday : "—"}</div>
+            <div className="yk-stat-label">ACCIONES HOY</div>
+          </button>
         </div>
 
         <div className="yk-section">

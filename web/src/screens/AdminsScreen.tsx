@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppBar } from "../components/AppBar";
 import { I } from "../components/Icon";
+import { UserAvatar } from "../components/UserAvatar";
 import { ApiError, api } from "../lib/api";
 import { clearSession, getStoredUser } from "../lib/auth";
 import { useChat } from "../lib/useChat";
-import { avClass, initials } from "../lib/utils";
 import type { AdminRecord, AdminsResponse } from "../types/api";
 
 function roleChip(a: AdminRecord) {
@@ -74,6 +74,21 @@ export function AdminsScreen() {
     setError(null);
     try {
       await api.admins.revoke(chatId);
+      const fresh = await api.admins.list(chatId);
+      setData(fresh);
+    } catch (err) {
+      handleErr(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleVisibility(userId: number, currentlyHidden: boolean) {
+    if (!chatId || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.admins.setVisibility(chatId, userId, !currentlyHidden);
       const fresh = await api.admins.list(chatId);
       setData(fresh);
     } catch (err) {
@@ -167,12 +182,11 @@ export function AdminsScreen() {
                     gap: 10,
                   }}
                 >
-                  <div
-                    className={`yk-avatar ${avClass(delegatedAdmin.name)}`}
-                    style={{ width: 36, height: 36, fontSize: 13 }}
-                  >
-                    {initials(delegatedAdmin.name)}
-                  </div>
+                  <UserAvatar
+                    name={delegatedAdmin.name}
+                    photoFileId={delegatedAdmin.photoFileId}
+                    size={36}
+                  />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: 14 }}>{delegatedAdmin.name}</div>
                     <div style={{ fontSize: 12, color: "var(--ink-500)" }}>
@@ -231,32 +245,61 @@ export function AdminsScreen() {
                 <div>YukiBot sincroniza la lista cuando entra al grupo.</div>
               </div>
             ) : (
-              data.admins.map((a) => (
-                <div key={a.userId} className="yk-row" style={{ cursor: "default" }}>
-                  <div className={`yk-avatar ${avClass(a.name)}`}>{initials(a.name)}</div>
-                  <div className="yk-row-body">
-                    <div
-                      className="yk-row-title"
-                      style={{ display: "flex", alignItems: "center", gap: 6 }}
-                    >
-                      {a.name}
-                      {a.telegramRole === "owner" && (
-                        <span
-                          title="Propietario del chat en Telegram"
-                          style={{ display: "inline-flex", color: "var(--ink-400)" }}
-                        >
-                          {I.eyeOff({ size: 14 })}
-                        </span>
-                      )}
+              data.admins.map((a) => {
+                const isMe = a.userId === me?.userId;
+                const canToggleSelf =
+                  isMe && (a.telegramRole === "owner" || me?.isSuperAdmin === true);
+                return (
+                  <div key={a.userId} className="yk-row" style={{ cursor: "default" }}>
+                    <UserAvatar name={a.name} photoFileId={a.photoFileId} />
+                    <div className="yk-row-body">
+                      <div
+                        className="yk-row-title"
+                        style={{ display: "flex", alignItems: "center", gap: 6 }}
+                      >
+                        {a.name}
+                        {a.hiddenInAdminList && (
+                          <span
+                            title="Oculto en la lista de admins"
+                            style={{ display: "inline-flex", color: "var(--ink-400)" }}
+                          >
+                            {I.eyeOff({ size: 14 })}
+                          </span>
+                        )}
+                      </div>
+                      <div className="yk-row-sub">
+                        @{a.username.replace(/^@/, "")}
+                        {isMe && " · tú"}
+                        {a.hiddenInAdminList && " · oculto en la lista del chat"}
+                      </div>
                     </div>
-                    <div className="yk-row-sub">
-                      @{a.username.replace(/^@/, "")}
-                      {a.userId === me?.userId && " · tú"}
+                    <div className="yk-row-trail" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      {canToggleSelf && (
+                        <button
+                          type="button"
+                          onClick={() => toggleVisibility(a.userId, a.hiddenInAdminList)}
+                          disabled={busy}
+                          aria-label={a.hiddenInAdminList ? "Mostrarme" : "Ocultarme"}
+                          title={a.hiddenInAdminList ? "Mostrarme en la lista" : "Ocultarme de la lista"}
+                          style={{
+                            background: "transparent",
+                            border: 0,
+                            cursor: busy ? "default" : "pointer",
+                            color: "var(--ink-500)",
+                            padding: 6,
+                            opacity: busy ? 0.5 : 1,
+                          }}
+                        >
+                          {a.hiddenInAdminList
+                            ? I.eye({ size: 18 })
+                            : I.eyeOff({ size: 18 })}
+                        </button>
+                      )}
+                      {roleChip(a)}
                     </div>
                   </div>
-                  <div className="yk-row-trail">{roleChip(a)}</div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
           <div className="yk-help" style={{ padding: "8px 8px 0" }}>
@@ -299,7 +342,7 @@ export function AdminsScreen() {
                     opacity: busy ? 0.5 : 1,
                   }}
                 >
-                  <div className={`yk-avatar ${avClass(a.name)}`}>{initials(a.name)}</div>
+                  <UserAvatar name={a.name} photoFileId={a.photoFileId} />
                   <div className="yk-row-body">
                     <div className="yk-row-title">{a.name}</div>
                     <div className="yk-row-sub">@{a.username.replace(/^@/, "")}</div>

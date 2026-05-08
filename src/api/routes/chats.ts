@@ -3,6 +3,8 @@ import { authenticate } from "../middleware/authenticate";
 import { requireChatAdmin } from "../middleware/requireChatAdmin";
 import { chatRepository } from "../../db/repositories/chatRepository";
 import { adminRepository } from "../../db/repositories/adminRepository";
+import { User } from "../../db/models/User";
+import { ActivityLog } from "../../db/models/ActivityLog";
 import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
 import { IChat } from "../../types";
@@ -91,6 +93,33 @@ export function createChatsRouter(): Router {
       res.json({ ...chat.toObject(), role });
     } catch (err) {
       logger.error({ action: "chats.detail", error: String(err), chatId });
+      res.status(500).json({ error: "internal_error" });
+    }
+  });
+
+  // Aggregate counts for the dashboard hero. `actionsToday` counts moderation
+  // actions only — feature/list/team/topic config changes are excluded so the
+  // number reflects "things YukiBot did to users today", not config noise.
+  router.get("/:chatId/stats", requireChatAdmin(), async (req: Request, res: Response) => {
+    const chatId = Number(req.params.chatId);
+    try {
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+
+      const [warnedCount, silencedCount, bannedCount, actionsToday] = await Promise.all([
+        User.countDocuments({ chatId, warnings: { $gt: 0 }, isMuted: { $ne: true }, isBanned: { $ne: true } }),
+        User.countDocuments({ chatId, isMuted: true, isBanned: { $ne: true } }),
+        User.countDocuments({ chatId, isBanned: true }),
+        ActivityLog.countDocuments({
+          chatId,
+          timestamp: { $gte: startOfToday },
+          type: { $in: ["warn", "unwarn", "silence", "unsilence", "ban", "unban", "kick", "autoban", "pardon"] },
+        }),
+      ]);
+
+      res.json({ warnedCount, silencedCount, bannedCount, actionsToday });
+    } catch (err) {
+      logger.error({ action: "chats.stats", error: String(err), chatId });
       res.status(500).json({ error: "internal_error" });
     }
   });

@@ -89,4 +89,22 @@ export const chatRepository = {
       { returnDocument: "after" }
     );
   },
+
+  /**
+   * Toggle whether an admin is rendered as hidden in the dashboard's admin list for
+   * this chat. Pure display flag; Telegram's admin list is unaffected.
+   */
+  async setAdminVisibility(
+    chatId: number,
+    userId: number,
+    hidden: boolean
+  ): Promise<IChat | null> {
+    return await Chat.findOneAndUpdate(
+      { chatId },
+      hidden
+        ? { $addToSet: { hiddenAdminIds: userId } }
+        : { $pull: { hiddenAdminIds: userId } },
+      { returnDocument: "after" }
+    );
+  },
 };

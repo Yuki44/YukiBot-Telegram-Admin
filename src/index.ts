@@ -11,6 +11,7 @@ import { loadChat } from "./bot/middleware/loadChat";
 import { isAdmin } from "./bot/middleware/isAdmin";
 import { adminOnlyCommands } from "./bot/middleware/adminOnlyCommands";
 import { trackUser } from "./bot/middleware/trackUser";
+import { trackTopic } from "./bot/middleware/trackTopic";
 import { topicFiltering } from "./features/topicFiltering";
 import { setupHandler } from "./bot/commands/setup";
 import { addTopicHandler } from "./bot/commands/addTopic";
@@ -58,6 +59,7 @@ bot.catch((err) => {
 
 bot.use(loadChat);
 bot.use(trackUser);
+bot.use(trackTopic);
 bot.use(isAdmin);
 bot.use(adminOnlyCommands);
 

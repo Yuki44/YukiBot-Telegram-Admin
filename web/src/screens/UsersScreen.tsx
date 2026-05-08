@@ -3,11 +3,17 @@ import { useNavigate, useParams } from "react-router-dom";
 import { AppBar } from "../components/AppBar";
 import { I } from "../components/Icon";
 import { StatusPills } from "../components/StatusPills";
+import { UserAvatar } from "../components/UserAvatar";
 import { ApiError, api } from "../lib/api";
 import { clearSession } from "../lib/auth";
 import { useChat } from "../lib/useChat";
-import { avClass, initials } from "../lib/utils";
 import type { UserListFilter, UserRecord } from "../types/api";
+
+// Note: a chat-wide "Sincronizar con Telegram" button used to live here, but it
+// fanned out to one getChatMember call per tracked user — easily 1000+ Telegram
+// API hits per click, and a fast path to a bot ban. The per-user /refresh on
+// UserDetailScreen covers the targeted "verify this user's state" case
+// without that risk; new silences/bans are persisted at action time.
 
 const FILTERS: { id: UserListFilter; label: string }[] = [
   { id: "all", label: "Todos" },
@@ -74,7 +80,7 @@ export function UsersScreen() {
       </div>
 
       <div className="yk-scroll yk-pad-nav">
-        <div style={{ padding: "8px 16px 16px" }}>
+        <div style={{ padding: "8px 16px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
           <div className="yk-banner" style={{ margin: 0 }}>
             {I.help({ size: 18 })}
             <div>
@@ -121,9 +127,10 @@ export function UsersScreen() {
                     className="yk-row"
                     onClick={() => navigate(`/chats/${chatId}/users/${u.userId}`)}
                   >
-                    <div className={`yk-avatar ${avClass(display)}`}>
-                      {noName ? "?" : initials(display)}
-                    </div>
+                    <UserAvatar
+                      name={noName ? "" : display}
+                      photoFileId={u.photoFileId}
+                    />
                     <div className="yk-row-body">
                       <div
                         className="yk-row-title"

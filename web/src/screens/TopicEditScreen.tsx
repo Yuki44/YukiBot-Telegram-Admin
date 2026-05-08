@@ -5,7 +5,7 @@ import { I } from "../components/Icon";
 import { ApiError, api } from "../lib/api";
 import { clearSession } from "../lib/auth";
 import { useChat } from "../lib/useChat";
-import type { MsgType, Topic } from "../types/api";
+import type { BannedWord, MsgType, Topic } from "../types/api";
 import { ALL_MSG_TYPES } from "../types/api";
 
 interface MsgTypeMeta {
@@ -39,6 +39,12 @@ export function TopicEditScreen() {
   const [topicIdInput, setTopicIdInput] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [adminOnly, setAdminOnly] = useState(false);
+  const [topicWords, setTopicWords] = useState<BannedWord[] | null>(null);
+  const [addingWord, setAddingWord] = useState(false);
+  const [newWord, setNewWord] = useState("");
+  const [wordBusy, setWordBusy] = useState(false);
+  const [wordError, setWordError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isNew) {
@@ -69,6 +75,60 @@ export function TopicEditScreen() {
         setError(err instanceof Error ? err.message : "error");
       });
   }, [chatId, numericTopicId, isNew, navigate]);
+
+  useEffect(() => {
+    if (isNew || !chatId || numericTopicId === null) {
+      setTopicWords(null);
+      return;
+    }
+    api.bannedWords
+      .list(chatId)
+      .then((all) => {
+        setTopicWords(all.filter((w) => w.scope === "topic" && w.topicId === numericTopicId));
+      })
+      .catch(() => {
+        // Non-blocking — leave the pill grid empty if listing fails.
+        setTopicWords([]);
+      });
+  }, [chatId, numericTopicId, isNew]);
+
+  async function addTopicWord() {
+    if (!chatId || numericTopicId === null || wordBusy) return;
+    const w = newWord.trim();
+    if (w.length === 0) {
+      setWordError("Escribe la palabra primero.");
+      return;
+    }
+    setWordBusy(true);
+    setWordError(null);
+    try {
+      const created = await api.bannedWords.create(chatId, {
+        word: w,
+        severity: "borrar",
+        exactMatch: false,
+        scope: "topic",
+        topicId: numericTopicId,
+      });
+      setTopicWords((prev) => (prev ? [...prev, created] : [created]));
+      setNewWord("");
+      setAddingWord(false);
+    } catch (err) {
+      setWordError(err instanceof ApiError ? err.code : "No se pudo añadir.");
+    } finally {
+      setWordBusy(false);
+    }
+  }
+
+  async function removeTopicWord(id: string) {
+    if (!chatId) return;
+    setWordError(null);
+    try {
+      await api.bannedWords.remove(chatId, id);
+      setTopicWords((prev) => (prev ? prev.filter((w) => w.id !== id) : prev));
+    } catch (err) {
+      setWordError(err instanceof ApiError ? err.code : "No se pudo borrar.");
+    }
+  }
 
   function toggle(id: MsgType) {
     setAllowed((prev) => {
@@ -246,6 +306,142 @@ export function TopicEditScreen() {
             </div>
           </div>
         </div>
+
+        {!isNew && (
+          <div className="yk-section">
+            <div className="yk-section-label">PALABRAS PROHIBIDAS DE ESTE TEMA</div>
+            <div className="yk-card" style={{ padding: 14 }}>
+              <div className="yk-pill-grid">
+                {(topicWords ?? []).map((w) => (
+                  <span
+                    key={w.id}
+                    className="yk-pill on yk-mono"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    {w.word}
+                    <button
+                      type="button"
+                      onClick={() => removeTopicWord(w.id)}
+                      aria-label={`Quitar "${w.word}"`}
+                      style={{
+                        background: "transparent",
+                        border: 0,
+                        padding: 2,
+                        marginLeft: 4,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        color: "inherit",
+                      }}
+                    >
+                      {I.close({ size: 12 })}
+                    </button>
+                  </span>
+                ))}
+                {addingWord ? (
+                  <span
+                    className="yk-pill on"
+                    style={{ padding: "4px 8px", display: "inline-flex", gap: 6 }}
+                  >
+                    <input
+                      autoFocus
+                      value={newWord}
+                      onChange={(e) => setNewWord(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") addTopicWord();
+                        else if (e.key === "Escape") {
+                          setAddingWord(false);
+                          setNewWord("");
+                          setWordError(null);
+                        }
+                      }}
+                      placeholder="palabra"
+                      disabled={wordBusy}
+                      style={{
+                        border: 0,
+                        outline: 0,
+                        background: "transparent",
+                        fontSize: 13,
+                        fontFamily: "'JetBrains Mono', monospace",
+                        width: 110,
+                        color: "inherit",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={addTopicWord}
+                      disabled={wordBusy}
+                      aria-label="Añadir"
+                      style={{
+                        background: "transparent",
+                        border: 0,
+                        cursor: "pointer",
+                        padding: 0,
+                        color: "inherit",
+                        display: "inline-flex",
+                      }}
+                    >
+                      {I.check({ size: 12 })}
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="yk-pill"
+                    onClick={() => {
+                      setAddingWord(true);
+                      setWordError(null);
+                    }}
+                  >
+                    {I.plus({ size: 12 })} añadir
+                  </button>
+                )}
+              </div>
+              {wordError && (
+                <div
+                  style={{
+                    marginTop: 8,
+                    color: "var(--danger-fg)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  {wordError}
+                </div>
+              )}
+              <div className="yk-help" style={{ marginTop: 8 }}>
+                Solo se aplican aquí (acción: borrar el mensaje). Para reglas con otra severidad o
+                que afecten al chat entero, ve a <b>Palabras prohibidas</b>.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!isNew && (
+          <div className="yk-section">
+            <div className="yk-card">
+              <div
+                className="yk-row"
+                onClick={() => setAdminOnly((v) => !v)}
+                style={{ cursor: "pointer", opacity: 0.55 }}
+              >
+                <div className="yk-row-icon">{I.lock({ size: 20 })}</div>
+                <div className="yk-row-body">
+                  <div
+                    className="yk-row-title"
+                    style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}
+                  >
+                    Solo admins pueden escribir
+                    <span className="yk-chip">Próximamente</span>
+                  </div>
+                  <div className="yk-row-sub" style={{ whiteSpace: "normal" }}>
+                    Útil para anuncios. La regla aún no está disponible en YukiBot.
+                  </div>
+                </div>
+                <div className={`yk-switch${adminOnly ? " on" : ""}`} />
+              </div>
+            </div>
+          </div>
+        )}
 
         <div style={{ padding: "8px 16px 16px", display: "flex", gap: 10 }}>
           {!isNew && (
