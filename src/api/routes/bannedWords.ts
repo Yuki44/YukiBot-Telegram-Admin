@@ -2,32 +2,51 @@ import { Router, Request, Response } from "express";
 import { authenticate } from "../middleware/authenticate";
 import { requireChatAdmin } from "../middleware/requireChatAdmin";
 import { bannedWordRepository } from "../../db/repositories/bannedWordRepository";
+import { invalidateBannedWordsCache } from "../../features/bannedWordsEnforcement/cache";
 import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
-import { BannedWordSeverity, IBannedWord } from "../../types";
-
-const VALID_SEVERITIES: BannedWordSeverity[] = ["flag", "aviso", "borrar", "silenciar", "kick"];
+import { IBannedWord } from "../../types";
+import { resolveActions } from "../../utils/bannedWord";
 
 interface CreateBody {
   word?: string;
-  severity?: string;
+  actions?: { delete?: boolean; warn?: boolean; silence?: boolean };
+  kick?: boolean;
+  flag?: boolean;
+  warnReason?: string;
   exactMatch?: boolean;
   scope?: string;
   topicId?: number;
 }
 
 function toDto(w: IBannedWord) {
+  const a = resolveActions(w);
   return {
     id: String(w._id),
     chatId: w.chatId,
     word: w.word,
+    // Legacy severity kept for any older client that hasn't refreshed yet.
     severity: w.severity,
+    actions: { delete: a.delete, warn: a.warn, silence: a.silence },
+    kick: a.kick,
+    flag: a.flag,
+    warnReason: a.warnReason,
     exactMatch: w.exactMatch,
     scope: w.scope,
     topicId: w.topicId ?? null,
     createdBy: w.createdBy,
     createdAt: w.createdAt.toISOString(),
   };
+}
+
+function summarizeActions(a: { delete: boolean; warn: boolean; silence: boolean; kick: boolean; flag: boolean }): string {
+  if (a.kick) return "expulsar";
+  const parts: string[] = [];
+  if (a.delete) parts.push("borrar");
+  if (a.warn) parts.push("aviso");
+  if (a.silence) parts.push("silenciar");
+  if (a.flag) parts.push("avisar admins");
+  return parts.join("+") || "flag";
 }
 
 export function createBannedWordsRouter(): Router {
@@ -56,11 +75,27 @@ export function createBannedWordsRouter(): Router {
       return;
     }
 
-    if (!VALID_SEVERITIES.includes(body.severity as BannedWordSeverity)) {
-      res.status(400).json({ error: "invalid_severity" });
+    const actions = {
+      delete: !!body.actions?.delete,
+      warn: !!body.actions?.warn,
+      silence: !!body.actions?.silence,
+    };
+    const kick = !!body.kick;
+    const flag = !!body.flag;
+
+    // At least one enforcement action must be picked. `flag` is intentionally NOT a valid
+    // standalone choice yet — the UI greys it out as "Próximamente".
+    const hasAction = actions.delete || actions.warn || actions.silence || kick;
+    if (!hasAction) {
+      res.status(400).json({ error: "no_action_selected" });
       return;
     }
-    const severity = body.severity as BannedWordSeverity;
+
+    // Kick is exclusive with the action triplet — defend against frontend bugs that
+    // send both.
+    const sanitizedActions = kick ? { delete: false, warn: false, silence: false } : actions;
+
+    const warnReason = body.warnReason?.toString().trim() || null;
 
     const scope = body.scope === "topic" ? "topic" : "all";
     let topicId: number | undefined;
@@ -76,17 +111,22 @@ export function createBannedWordsRouter(): Router {
       const created = await bannedWordRepository.create({
         chatId,
         word,
-        severity,
+        actions: sanitizedActions,
+        kick,
+        flag,
+        warnReason,
         exactMatch: !!body.exactMatch,
         scope,
         topicId,
         createdBy: req.user!.userId,
       });
+      invalidateBannedWordsCache(chatId);
+      const summary = summarizeActions({ ...sanitizedActions, kick, flag });
       logger.info({
         action: "bannedWords.create",
         chatId,
         word,
-        severity,
+        summary,
         scope,
         topicId,
         userId: req.user!.userId,
@@ -97,7 +137,7 @@ export function createBannedWordsRouter(): Router {
         source: "panel",
         actor: { id: req.user!.userId, name: req.user!.name, username: req.user!.username },
         targetRef: word,
-        reason: `${severity}${scope === "topic" ? ` · tema ${topicId}` : ""}`,
+        reason: `${summary}${scope === "topic" ? ` · tema ${topicId}` : ""}`,
         topicId,
       });
       res.json(toDto(created));
@@ -122,6 +162,7 @@ export function createBannedWordsRouter(): Router {
         res.status(404).json({ error: "not_found" });
         return;
       }
+      invalidateBannedWordsCache(chatId);
       logger.info({
         action: "bannedWords.delete",
         chatId,

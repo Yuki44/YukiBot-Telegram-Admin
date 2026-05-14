@@ -15,6 +15,7 @@ export const topicRepository = {
     topicId: number;
     name: string;
     allowedMsgTypes: string[];
+    adminOnly?: boolean;
   }): Promise<ITopic> {
     const result = await Topic.findOneAndUpdate(
       { chatId: data.chatId, topicId: data.topicId },

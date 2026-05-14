@@ -17,4 +17,12 @@ export const messageRepository = {
       timestamp: { $gte: cutoffDate },
     }).sort({ timestamp: -1 });
   },
+
+  async countSince(userId: number, chatId: number, since: Date): Promise<number> {
+    return await Message.countDocuments({
+      userId,
+      chatId,
+      timestamp: { $gte: since },
+    });
+  },
 };

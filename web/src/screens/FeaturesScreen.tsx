@@ -35,25 +35,20 @@ const FEATURE_META: FeatureMeta[] = [
     desc: "Avisa a quien envíe spam detectado.",
   },
   {
-    id: "spamDetection",
-    name: "Detección de spam",
-    desc: "Marca mensajes sospechosos para revisión.",
-  },
-  {
     id: "promoSpamDetection",
     name: "Detección de promo/scam",
     desc: "Detecta enlaces sospechosos y patrones de spam aprendidos.",
+  },
+  {
+    id: "bannedWordsEnforcement",
+    name: "Aplicar palabras prohibidas",
+    desc: "Cuando alguien escriba una palabra de la lista, se aplica la acción configurada (aviso, borrar, silenciar o expulsar).",
   },
   {
     id: "languageDetection",
     name: "Detección de idioma",
     desc: "Avisará si se habla fuera del idioma del grupo.",
     soon: true,
-  },
-  {
-    id: "commands",
-    name: "Comandos en el chat",
-    desc: "Habilita /av, /sil, /bn… para los admins.",
   },
 ];
 

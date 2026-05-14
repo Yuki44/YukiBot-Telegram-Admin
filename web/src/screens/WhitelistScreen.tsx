@@ -2,13 +2,14 @@ import { ReactNode, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppBar } from "../components/AppBar";
 import { I } from "../components/Icon";
+import { SpamDetectionCard } from "../components/SpamDetectionCard";
 import { ApiError, api } from "../lib/api";
 import { clearSession } from "../lib/auth";
 import { useChat } from "../lib/useChat";
 import { avClass, initials } from "../lib/utils";
-import type { UserDomainAllowance } from "../types/api";
+import type { SpamDetection, UserDomainAllowance } from "../types/api";
 
-type Tab = "links" | "users" | "combo";
+type Tab = "recent" | "links" | "users" | "combo";
 
 interface AddPanelProps {
   placeholder: string;
@@ -128,11 +129,12 @@ export function WhitelistScreen() {
   const { chatId } = useParams<{ chatId: string }>();
   const navigate = useNavigate();
   const chat = useChat(chatId);
-  const [tab, setTab] = useState<Tab>("links");
+  const [tab, setTab] = useState<Tab>("recent");
 
   const [links, setLinks] = useState<string[] | null>(null);
   const [users, setUsers] = useState<number[] | null>(null);
   const [combo, setCombo] = useState<UserDomainAllowance[] | null>(null);
+  const [recent, setRecent] = useState<SpamDetection[] | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [comboNewUserId, setComboNewUserId] = useState("");
@@ -152,6 +154,9 @@ export function WhitelistScreen() {
   useEffect(() => {
     if (!chatId) return;
     setError(null);
+    if (tab === "recent" && recent === null) {
+      api.spamDetections.list(chatId).then(setRecent).catch(handleApiErr);
+    }
     if (tab === "links" && links === null) {
       api.whitelist.listLinks(chatId).then(setLinks).catch(handleApiErr);
     }
@@ -163,6 +168,30 @@ export function WhitelistScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, tab]);
+
+  async function permitDetection(patternId: string) {
+    if (!chatId) return;
+    try {
+      const result = await api.spamDetections.permit(chatId, patternId);
+      setRecent((prev) => prev?.filter((d) => d.patternId !== patternId) ?? prev);
+      // The permit just changed one of the other whitelists — invalidate so the
+      // user sees the new entry if they switch tabs.
+      if (result.kind === "link") setLinks(null);
+      else setUsers(null);
+    } catch (err) {
+      handleApiErr(err);
+    }
+  }
+
+  async function discardDetection(patternId: string) {
+    if (!chatId) return;
+    try {
+      await api.spamDetections.discard(chatId, patternId);
+      setRecent((prev) => prev?.filter((d) => d.patternId !== patternId) ?? prev);
+    } catch (err) {
+      handleApiErr(err);
+    }
+  }
 
   async function addLink(value: string) {
     if (!chatId) return;
@@ -269,6 +298,9 @@ export function WhitelistScreen() {
       />
 
       <div className="yk-segmented">
+        <button className={tab === "recent" ? "active" : ""} onClick={() => setTab("recent")}>
+          Recientes
+        </button>
         <button className={tab === "links" ? "active" : ""} onClick={() => setTab("links")}>
           Enlaces
         </button>
@@ -291,6 +323,48 @@ export function WhitelistScreen() {
               <div>{error}</div>
             </div>
           </div>
+        )}
+
+        {tab === "recent" && (
+          <>
+            <div style={{ padding: "8px 16px 16px" }}>
+              <div className="yk-banner" style={{ margin: 0 }}>
+                {I.help({ size: 18 })}
+                <div>
+                  <div style={{ fontWeight: 700, marginBottom: 2 }}>Detecciones recientes</div>
+                  Cada vez que un admin usa <code>/spam</code>, el patrón aprendido aparece aquí.
+                  Toca <b>Permitir</b> si fue un falso positivo o <b>Descartar</b> para sacarlo de
+                  la bandeja (la regla aprendida se mantiene).
+                </div>
+              </div>
+            </div>
+
+            <div className="yk-section">
+              {recent === null ? (
+                <div className="yk-card">
+                  <div style={{ padding: 18, color: "var(--ink-500)" }}>Cargando…</div>
+                </div>
+              ) : recent.length === 0 ? (
+                <div className="yk-card">
+                  <div className="yk-empty">
+                    <div className="yk-empty-icon">{I.shield({ size: 28 })}</div>
+                    <div className="yk-empty-title">Sin detecciones recientes</div>
+                    <div>Cuando YukiBot marque un mensaje, aparecerá aquí.</div>
+                  </div>
+                </div>
+              ) : (
+                recent.map((d) => (
+                  <SpamDetectionCard
+                    key={d.patternId}
+                    detection={d}
+                    onPermit={permitDetection}
+                    onDiscard={discardDetection}
+                    onOpenProfile={(uid) => navigate(`/chats/${chatId}/users/${uid}`)}
+                  />
+                ))
+              )}
+            </div>
+          </>
         )}
 
         {tab === "links" && (

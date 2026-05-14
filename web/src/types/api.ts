@@ -3,6 +3,8 @@ export interface AuthUser {
   username?: string;
   name?: string;
   isSuperAdmin: boolean;
+  /** True when a password credential exists for this user (vs Telegram-only login). */
+  hasCredential?: boolean;
 }
 
 export interface TelegramAuthData {
@@ -28,16 +30,19 @@ export interface ChatSummary {
   type: "topics" | "normal";
   isActive: boolean;
   role: ChatRole;
+  /** Cached Telegram member count; null when never synced. */
+  members: number | null;
+  /** Cached chat photo file_id; null when checked-but-no-photo or unknown. */
+  photoFileId: string | null;
 }
 
 export interface ChatFeatures {
   languageDetection: boolean;
-  spamDetection: boolean;
   topicFiltering: boolean;
-  commands: boolean;
   autoBan: boolean;
   autoWarnSpam: boolean;
   promoSpamDetection: boolean;
+  bannedWordsEnforcement: boolean;
 }
 
 export interface ChatDetail extends ChatSummary {
@@ -55,6 +60,7 @@ export interface ChatStats {
   silencedCount: number;
   bannedCount: number;
   actionsToday: number;
+  bannedWordsCount: number;
 }
 
 export interface AdminRecord {
@@ -93,6 +99,8 @@ export interface Topic {
   topicId: number;
   name: string;
   allowedMsgTypes: string[];
+  /** When true, only chat admins may post in this topic. */
+  adminOnly: boolean;
 }
 
 export type UserStatus = "active" | "warned" | "silenced" | "banned";
@@ -125,7 +133,8 @@ export type ActivityLogType =
   | "banned_word_add"
   | "banned_word_remove"
   | "owner_delegate"
-  | "owner_revoke";
+  | "owner_revoke"
+  | "spam_confirmed";
 
 export type ActivityLogSource = "bot" | "panel" | "auto";
 
@@ -145,7 +154,29 @@ export interface ActivityLogEntry {
   topicId: number | null;
   warningsAfter: number | null;
   messageText: string | null;
+  /** ISO timestamp when this entry was reversed via Undo, or null. */
+  undoneAt: string | null;
   timestamp: string;
+}
+
+/**
+ * Types the dashboard's Undo button can reverse. Keep in sync with the server's UNDOABLE
+ * set in `src/api/routes/activityLogs.ts`.
+ */
+const UNDOABLE_TYPES: ReadonlySet<ActivityLogType> = new Set<ActivityLogType>([
+  "warn",
+  "silence",
+  "ban",
+  "autoban",
+  "feature_toggle",
+  "whitelist_add",
+  "combo_add",
+  "banned_word_add",
+  "owner_delegate",
+]);
+
+export function isUndoableLogType(type: ActivityLogType): boolean {
+  return UNDOABLE_TYPES.has(type);
 }
 
 export interface ActivityLogPage {
@@ -155,16 +186,38 @@ export interface ActivityLogPage {
 
 export type BannedWordSeverity = "flag" | "aviso" | "borrar" | "silenciar" | "kick";
 
+export interface BannedWordActions {
+  delete: boolean;
+  warn: boolean;
+  silence: boolean;
+}
+
 export interface BannedWord {
   id: string;
   chatId: number;
   word: string;
+  /** Legacy primary severity — derived server-side from the action combo. */
   severity: BannedWordSeverity;
+  actions: BannedWordActions;
+  kick: boolean;
+  flag: boolean;
+  warnReason: string | null;
   exactMatch: boolean;
   scope: "all" | "topic";
   topicId?: number | null;
   createdBy: number;
   createdAt: string;
+}
+
+export interface BannedWordCreateBody {
+  word: string;
+  actions: BannedWordActions;
+  kick: boolean;
+  flag: boolean;
+  warnReason?: string;
+  exactMatch: boolean;
+  scope: "all" | "topic";
+  topicId?: number;
 }
 
 export interface UserRecord {
@@ -187,6 +240,32 @@ export interface ActionResult {
   user: UserRecord;
   enforced: boolean;
   enforceError?: string;
+}
+
+export interface UserStats {
+  messagesLast30d: number;
+}
+
+export type SpamDetectionKind = "link" | "media" | "text";
+
+export interface SpamDetection {
+  patternId: string;
+  chatId: number;
+  kind: SpamDetectionKind;
+  preview: string;
+  fullText: string;
+  linkDomain?: string;
+  triggeredByUserId: number;
+  triggeredByName: string | null;
+  triggeredByUsername: string | null;
+  addedByUserId: number;
+  createdAt: string;
+}
+
+export interface SpamDetectionPermitResult {
+  kind: SpamDetectionKind;
+  linkDomain?: string;
+  userId?: number;
 }
 
 export function userStatus(u: UserRecord): UserStatus {

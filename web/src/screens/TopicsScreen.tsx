@@ -45,8 +45,8 @@ export function TopicsScreen() {
           {I.help({ size: 18 })}
           <div>
             <div style={{ fontWeight: 700, marginBottom: 2 }}>Sobre los nombres</div>
-            Los nombres se cachean automáticamente cuando un tema se crea o renombra dentro de
-            Telegram. Si un tema aparece como <b>Tema #ID</b>, todavía no se ha cacheado.
+            Los nombres se actualizan automáticamente cuando un tema se crea o renombra en
+            Telegram. Si aparece como <b>Tema #ID</b>, aún no se ha sincronizado.
           </div>
         </div>
 
@@ -78,6 +78,7 @@ export function TopicsScreen() {
                       {t.allowedMsgTypes.length === 0
                         ? "Sin tipos permitidos (todo se borra)"
                         : `${t.allowedMsgTypes.length} tipo${t.allowedMsgTypes.length === 1 ? "" : "s"} permitido${t.allowedMsgTypes.length === 1 ? "" : "s"}`}
+                      {t.adminOnly ? " · Solo admins" : ""}
                     </div>
                   </div>
                   <div className="yk-row-trail">{I.chevR()}</div>

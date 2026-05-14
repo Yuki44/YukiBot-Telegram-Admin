@@ -13,6 +13,7 @@ import { adminOnlyCommands } from "./bot/middleware/adminOnlyCommands";
 import { trackUser } from "./bot/middleware/trackUser";
 import { trackTopic } from "./bot/middleware/trackTopic";
 import { topicFiltering } from "./features/topicFiltering";
+import { bannedWordsEnforcement } from "./features/bannedWordsEnforcement";
 import { setupHandler } from "./bot/commands/setup";
 import { addTopicHandler } from "./bot/commands/addTopic";
 import { editTopicHandler } from "./bot/commands/editTopic";
@@ -128,6 +129,7 @@ bot.on("message:forum_topic_edited", async (ctx) => {
 
 bot.on("message", mediaForwardHandler);
 bot.on("message", topicFiltering);
+bot.on("message", bannedWordsEnforcement);
 bot.on("message", promoSpamDetection);
 bot.on("message", groupHelpSpamHandler);
 bot.on("channel_post", groupHelpSpamHandler);

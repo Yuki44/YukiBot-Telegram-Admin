@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppBar } from "../components/AppBar";
 import { I } from "../components/Icon";
 import { StatusPills } from "../components/StatusPills";
@@ -22,6 +22,11 @@ const FILTERS: { id: UserListFilter; label: string }[] = [
   { id: "banned", label: "Baneados" },
 ];
 
+function readFilterParam(raw: string | null): UserListFilter {
+  if (raw === "warned" || raw === "silenced" || raw === "banned" || raw === "all") return raw;
+  return "all";
+}
+
 function UserDisplayName(u: UserRecord): string {
   return u.name?.trim() || u.username?.trim() || `ID ${u.userId}`;
 }
@@ -30,10 +35,19 @@ export function UsersScreen() {
   const { chatId } = useParams<{ chatId: string }>();
   const navigate = useNavigate();
   const chat = useChat(chatId);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [users, setUsers] = useState<UserRecord[] | null>(null);
-  const [filter, setFilter] = useState<UserListFilter>("all");
+  const [filter, setFilter] = useState<UserListFilter>(() => readFilterParam(searchParams.get("filter")));
   const [q, setQ] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  function changeFilter(next: UserListFilter): void {
+    setFilter(next);
+    const params = new URLSearchParams(searchParams);
+    if (next === "all") params.delete("filter");
+    else params.set("filter", next);
+    setSearchParams(params, { replace: true });
+  }
 
   useEffect(() => {
     if (!chatId) return;
@@ -73,7 +87,7 @@ export function UsersScreen() {
 
       <div className="yk-segmented">
         {FILTERS.map((f) => (
-          <button key={f.id} className={filter === f.id ? "active" : ""} onClick={() => setFilter(f.id)}>
+          <button key={f.id} className={filter === f.id ? "active" : ""} onClick={() => changeFilter(f.id)}>
             {f.label}
           </button>
         ))}

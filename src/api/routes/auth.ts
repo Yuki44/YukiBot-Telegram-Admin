@@ -6,7 +6,7 @@ import { ADMIN_IDS, JWT_SECRET } from "../../config";
 import { adminRepository } from "../../db/repositories/adminRepository";
 import { credentialRepository } from "../../db/repositories/credentialRepository";
 import { logger } from "../../utils/logger";
-import { AuthUser } from "../middleware/authenticate";
+import { AuthUser, authenticate } from "../middleware/authenticate";
 
 const TOKEN_TTL = "7d";
 const MAX_AUTH_AGE_S = 86400; // 24h, per Telegram spec
@@ -117,12 +117,21 @@ export function createAuthRouter(): Router {
       return;
     }
 
+    let hasCredential = false;
+    try {
+      const existing = await credentialRepository.findByUserId(data.id);
+      hasCredential = !!existing;
+    } catch {
+      /* non-fatal — default to false */
+    }
+
     const name = [data.first_name, data.last_name].filter(Boolean).join(" ") || undefined;
     const payload: AuthUser = {
       userId: data.id,
       username: data.username,
       name,
       isSuperAdmin,
+      hasCredential,
     };
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: TOKEN_TTL });
 
@@ -168,6 +177,7 @@ export function createAuthRouter(): Router {
         username: cred.username,
         name: cred.name,
         isSuperAdmin,
+        hasCredential: true,
       };
       const token = jwt.sign(payload, JWT_SECRET, { expiresIn: TOKEN_TTL });
 
@@ -181,6 +191,44 @@ export function createAuthRouter(): Router {
       res.json({ token, user: payload });
     } catch (err) {
       logger.error({ action: "auth.password", error: String(err), username });
+      res.status(500).json({ error: "internal_error" });
+    }
+  });
+
+  router.post("/password/change", authenticate, async (req: Request, res: Response) => {
+    const body = req.body as { currentPassword?: unknown; newPassword?: unknown };
+    const currentPassword =
+      typeof body.currentPassword === "string" ? body.currentPassword : "";
+    const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
+
+    if (currentPassword.length === 0 || newPassword.length === 0) {
+      res.status(400).json({ error: "invalid_payload" });
+      return;
+    }
+    if (newPassword.length < 8) {
+      res.status(400).json({ error: "weak_password" });
+      return;
+    }
+
+    const userId = req.user!.userId;
+    try {
+      const cred = await credentialRepository.findByUserId(userId);
+      if (!cred) {
+        res.status(404).json({ error: "no_credential" });
+        return;
+      }
+      const match = await bcrypt.compare(currentPassword, cred.passwordHash);
+      if (!match) {
+        logger.warn({ action: "auth.password_change", reason: "bad_current", userId });
+        res.status(401).json({ error: "invalid_current_password" });
+        return;
+      }
+      const hash = await bcrypt.hash(newPassword, 10);
+      await credentialRepository.updatePasswordHash(userId, hash);
+      logger.info({ action: "auth.password_change", status: "ok", userId });
+      res.status(204).end();
+    } catch (err) {
+      logger.error({ action: "auth.password_change", error: String(err), userId });
       res.status(500).json({ error: "internal_error" });
     }
   });

@@ -12,6 +12,11 @@ export interface ISpamPattern extends Document {
   addedByUserId: number;
   /** User whose message was flagged (stored so /nospam <userId> works after they leave) */
   triggeredByUserId: number;
+  /** When an admin pressed ✅ Correcto on the spam log message, marking the detection as accepted. */
+  reviewedAt?: Date | null;
+  reviewedById?: number | null;
+  reviewedByName?: string | null;
+  reviewedByUsername?: string | null;
   createdAt: Date;
 }
 
@@ -23,6 +28,10 @@ const spamPatternSchema = new Schema<ISpamPattern>(
     patternId: { type: String, required: true },
     addedByUserId: { type: Number, required: true },
     triggeredByUserId: { type: Number, required: true },
+    reviewedAt: { type: Date, default: null },
+    reviewedById: { type: Number, default: null },
+    reviewedByName: { type: String, default: null },
+    reviewedByUsername: { type: String, default: null },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );

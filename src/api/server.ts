@@ -13,6 +13,7 @@ import { createBannedWordsRouter } from "./routes/bannedWords";
 import { createActivityLogsRouter } from "./routes/activityLogs";
 import { createAdminsRouter } from "./routes/admins";
 import { createPhotosRouter } from "./routes/photos";
+import { createSpamDetectionsRouter } from "./routes/spamDetections";
 import { BOT_LOGIN_DOMAIN, BOT_USERNAME } from "../config";
 
 const WEB_DIST = path.join(__dirname, "..", "..", "web", "dist");
@@ -33,13 +34,14 @@ export function createApiServer(bot: Bot<BotContext>): Express {
   });
 
   app.use("/api/auth", createAuthRouter());
-  app.use("/api/chats", createChatsRouter());
+  app.use("/api/chats", createChatsRouter(bot));
   app.use("/api/chats/:chatId/topics", createTopicsRouter());
   app.use("/api/chats/:chatId/users", createUsersRouter(bot));
   app.use("/api/chats/:chatId/whitelist", createWhitelistRouter());
   app.use("/api/chats/:chatId/banned-words", createBannedWordsRouter());
-  app.use("/api/chats/:chatId/logs", createActivityLogsRouter());
+  app.use("/api/chats/:chatId/logs", createActivityLogsRouter(bot));
   app.use("/api/chats/:chatId/admins", createAdminsRouter());
+  app.use("/api/chats/:chatId/spam-detections", createSpamDetectionsRouter());
   app.use("/api/photos", createPhotosRouter(bot));
 
   app.use(express.static(WEB_DIST));

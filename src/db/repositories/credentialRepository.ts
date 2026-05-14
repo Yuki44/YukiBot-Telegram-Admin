@@ -6,6 +6,15 @@ export const credentialRepository = {
     return await Credential.findOne({ username: username.toLowerCase() });
   },
 
+  async findByUserId(userId: number): Promise<ICredential | null> {
+    return await Credential.findOne({ userId });
+  },
+
+  async updatePasswordHash(userId: number, passwordHash: string): Promise<boolean> {
+    const r = await Credential.updateOne({ userId }, { $set: { passwordHash } });
+    return r.matchedCount > 0;
+  },
+
   async listAll(): Promise<ICredential[]> {
     return await Credential.find({}).sort({ username: 1 });
   },

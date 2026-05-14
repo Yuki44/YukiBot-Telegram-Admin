@@ -1,9 +1,11 @@
 import { ReactNode, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppBar } from "../components/AppBar";
+import { ChatAvatar } from "../components/ChatAvatar";
 import { I } from "../components/Icon";
 import { ApiError, api } from "../lib/api";
 import { clearSession } from "../lib/auth";
+import { formatMembers } from "../lib/utils";
 import type { ChatDetail, ChatStats } from "../types/api";
 
 interface NavRowProps {
@@ -48,6 +50,8 @@ export function DashboardScreen() {
   const [chat, setChat] = useState<ChatDetail | null>(null);
   const [stats, setStats] = useState<ChatStats | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
     if (!chatId) return;
@@ -66,13 +70,13 @@ export function DashboardScreen() {
         }
         setError(err instanceof Error ? err.message : "error");
       });
-  }, [chatId, navigate]);
+  }, [chatId, navigate, refreshTick]);
 
   // Stats render lazily — failure is non-fatal so the dashboard still works.
   useEffect(() => {
     if (!chatId) return;
     api.chats.stats(chatId).then(setStats).catch(() => setStats(null));
-  }, [chatId]);
+  }, [chatId, refreshTick]);
 
   if (error) {
     return (
@@ -109,29 +113,31 @@ export function DashboardScreen() {
 
   return (
     <div className="yk" style={{ minHeight: "100vh" }}>
-      <AppBar title="Panel del chat" onBack={() => navigate("/chats")} />
+      <AppBar
+        title="Panel del chat"
+        onBack={() => navigate("/chats")}
+        action={{
+          label: "Más acciones",
+          icon: I.more({ size: 20 }),
+          onClick: () => setMenuOpen(true),
+        }}
+      />
 
       <div className="yk-scroll yk-pad-nav">
         <div style={{ padding: "4px 16px 16px" }}>
           <div className="yk-card" style={{ padding: 18, display: "flex", gap: 14, alignItems: "center" }}>
-            <div
-              className="yk-avatar yk-av-3"
-              style={{
-                borderRadius: 18,
-                width: 56,
-                height: 56,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-              aria-hidden
-            >
-              {chat.type === "topics" ? I.hash({ size: 28 }) : I.group({ size: 28 })}
-            </div>
+            <ChatAvatar
+              chatId={chat.chatId}
+              photoFileId={chat.photoFileId}
+              glyph={chat.type === "topics" ? I.hash({ size: 28 }) : I.group({ size: 28 })}
+              size={56}
+              radius={18}
+            />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.01em" }}>{chat.name}</div>
               <div style={{ fontSize: 13, color: "var(--ink-500)", marginTop: 2 }}>
                 ID {chat.chatId}
+                {typeof chat.members === "number" && ` · ${formatMembers(chat.members)} miembros`}
               </div>
               <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                 <span className={`yk-chip ${chat.isActive ? "ok" : ""}`}>
@@ -149,7 +155,7 @@ export function DashboardScreen() {
           <button
             type="button"
             className="yk-stat yk-stat-btn"
-            onClick={() => navigate(`/chats/${chat.chatId}/logs?filter=warn`)}
+            onClick={() => navigate(`/chats/${chat.chatId}/users?filter=warned`)}
           >
             <div className="yk-stat-num" style={{ color: "var(--warn-fg)" }}>
               {stats ? stats.warnedCount : "—"}
@@ -159,7 +165,7 @@ export function DashboardScreen() {
           <button
             type="button"
             className="yk-stat yk-stat-btn"
-            onClick={() => navigate(`/chats/${chat.chatId}/logs?filter=silence`)}
+            onClick={() => navigate(`/chats/${chat.chatId}/users?filter=silenced`)}
           >
             <div className="yk-stat-num" style={{ color: "var(--info-fg)" }}>
               {stats ? stats.silencedCount : "—"}
@@ -169,7 +175,7 @@ export function DashboardScreen() {
           <button
             type="button"
             className="yk-stat yk-stat-btn"
-            onClick={() => navigate(`/chats/${chat.chatId}/logs?filter=ban`)}
+            onClick={() => navigate(`/chats/${chat.chatId}/users?filter=banned`)}
           >
             <div className="yk-stat-num" style={{ color: "var(--danger-fg)" }}>
               {stats ? stats.bannedCount : "—"}
@@ -233,7 +239,13 @@ export function DashboardScreen() {
               icon={I.word({ size: 20 })}
               iconClass="danger"
               title="Palabras prohibidas"
-              sub="Reglas que YukiBot aprenderá a aplicar pronto"
+              sub={
+                stats
+                  ? stats.bannedWordsCount === 0
+                    ? "Aún no hay reglas — añade la primera"
+                    : `${stats.bannedWordsCount} ${stats.bannedWordsCount === 1 ? "regla activa" : "reglas activas"}`
+                  : "Reglas que YukiBot aprenderá a aplicar pronto"
+              }
               onClick={() => navigate(`/chats/${chat.chatId}/banned-words`)}
             />
             <NavRow
@@ -246,6 +258,48 @@ export function DashboardScreen() {
           </div>
         </div>
       </div>
+
+      {menuOpen && (
+        <div className="yk-sheet-overlay" onClick={() => setMenuOpen(false)}>
+          <div className="yk-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="yk-sheet-handle" />
+            <div style={{ padding: "8px 12px 16px" }}>
+              <div className="yk-card" style={{ margin: 0 }}>
+                <button
+                  type="button"
+                  className="yk-row"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setRefreshTick((t) => t + 1);
+                  }}
+                >
+                  <div className="yk-row-icon">{I.refresh({ size: 20 })}</div>
+                  <div className="yk-row-body">
+                    <div className="yk-row-title">Actualizar datos</div>
+                    <div className="yk-row-sub">Vuelve a leer chat y estadísticas</div>
+                  </div>
+                  <div className="yk-row-trail">{I.chevR()}</div>
+                </button>
+                <button
+                  type="button"
+                  className="yk-row"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    navigate("/account");
+                  }}
+                >
+                  <div className="yk-row-icon">{I.settings({ size: 20 })}</div>
+                  <div className="yk-row-body">
+                    <div className="yk-row-title">Ajustes de cuenta</div>
+                    <div className="yk-row-sub">Notificaciones, contraseña, sesión</div>
+                  </div>
+                  <div className="yk-row-trail">{I.chevR()}</div>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

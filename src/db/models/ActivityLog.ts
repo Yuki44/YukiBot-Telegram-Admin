@@ -27,6 +27,7 @@ const schema = new Schema<IActivityLog>({
       "banned_word_remove",
       "owner_delegate",
       "owner_revoke",
+      "spam_confirmed",
     ],
     required: true,
   },
@@ -42,6 +43,7 @@ const schema = new Schema<IActivityLog>({
   topicId: { type: Number },
   warningsAfter: { type: Number },
   messageText: { type: String, maxlength: 500 },
+  undoneAt: { type: Date, default: null },
   timestamp: { type: Date, default: () => new Date(), required: true },
 });
 
