@@ -5,6 +5,7 @@ import { adminRepository } from "../../db/repositories/adminRepository";
 import { sendLog, LogUser } from "../helpers/sendLog";
 import { isKickInProgress, clearKick } from "../helpers/kickTracker";
 import { logger } from "../../utils/logger";
+import { recordActivity } from "../../utils/activityLog";
 
 export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">): Promise<void> {
   try {
@@ -159,6 +160,14 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
         logger.error({ action: "chatMember_autoReban", userId, chatId, error: String(err) });
       }
       sendLog(ctx.api, ctx.chatConfig, { action: "AUTO_BAN", target, chatId, chatName }).catch(() => {});
+      recordActivity({
+        chatId,
+        type: "autoban",
+        source: "auto",
+        actor: { id: ctx.me.id, name: "YukiBot" },
+        target: { id: userId, name: target.name, username: target.username },
+        reason: "wasBanned=true al reentrar",
+      });
       return;
     }
 

@@ -18,7 +18,7 @@ const COMMANDS_TEXT = `
 /qsilav [usuario] — Quitar el silencio y el último aviso de un usuario.
 
 <b>— Expulsiones y Bans —</b>
-/kk [usuario] — Echar a un usuario del grupo (puede volver a unirse).
+/kk [usuario] — Expulsar a un usuario del grupo (puede volver a unirse).
 /bn [usuario] — Banear a un usuario permanentemente (no puede volver).
 /qban [usuario] — Quitar el ban de un usuario y permitirle volver a unirse.
 

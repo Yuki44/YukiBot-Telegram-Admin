@@ -4,6 +4,7 @@ import { userRepository } from "../../db/repositories/userRepository";
 import { sendLog } from "../helpers/sendLog";
 import { buildActor, getChatTitle } from "../helpers/contextHelpers";
 import { logger } from "../../utils/logger";
+import { recordActivity } from "../../utils/activityLog";
 
 export async function quitarbanHandler(ctx: CommandContext<BotContext>): Promise<void> {
   const chatId = ctx.chat?.id;
@@ -66,13 +67,22 @@ export async function quitarbanHandler(ctx: CommandContext<BotContext>): Promise
     unbanFailed = true;
   }
 
+  const actor = buildActor(ctx);
   sendLog(ctx.api, ctx.chatConfig, {
     action: "Q_BAN",
-    actor: buildActor(ctx),
+    actor,
     target: { id: userId, name: userName, username: user.username },
     chatId,
     chatName: getChatTitle(ctx),
   }).catch(() => {});
+
+  recordActivity({
+    chatId,
+    type: "pardon",
+    source: "bot",
+    actor,
+    target: { id: userId, name: userName, username: user.username },
+  });
 
   const msg = unbanFailed
     ? `✅ Hecho. @${username} puede volver a unirse. (Desbanealo manualmente si es necesario.)`

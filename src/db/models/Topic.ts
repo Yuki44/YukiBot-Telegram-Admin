@@ -18,6 +18,10 @@ const topicSchema = new Schema<ITopic>({
     type: [String],
     required: true,
   },
+  adminOnly: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 // Compound unique index on chatId + topicId

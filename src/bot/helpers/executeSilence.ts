@@ -15,6 +15,9 @@ import { mention } from "./html";
 import { parseArgs, buildActor, getChatTitle } from "./contextHelpers";
 import { SILENCE_DURATION_MS, AUTO_DELETE_SHORT_MS } from "../../config/constants";
 import { t } from "../../locales/i18n";
+import { userRepository } from "../../db/repositories/userRepository";
+import { logger } from "../../utils/logger";
+import { recordActivity } from "../../utils/activityLog";
 
 export interface SilenceOptions {
   /** Delete the target's message (replied-to or last tracked). */
@@ -127,6 +130,20 @@ export async function executeSilence(ctx: BotContext, options: SilenceOptions): 
 
     const success = await silenceUser(ctx, target.userId, chatId);
     if (success) {
+      // Persist mute state so the dashboard's Silenciados tab reflects bot-initiated mutes (G9).
+      try {
+        await userRepository.upsert({
+          userId: target.userId,
+          chatId,
+          username: target.username,
+          name: target.name,
+          isMuted: true,
+          muteUntil: new Date(Date.now() + SILENCE_DURATION_MS),
+        });
+      } catch (err) {
+        logger.error({ action: "silence.persist", error: String(err), chatId, userId: target.userId });
+      }
+
       try {
         await ctx.deleteMessage();
       } catch {
@@ -154,6 +171,16 @@ export async function executeSilence(ctx: BotContext, options: SilenceOptions): 
         // Only attach replied message here when there's no AVISO following (which would be last)
         repliedMessage: !options.applyWarning ? repliedMessage : undefined,
       }).catch(() => {});
+
+      recordActivity({
+        chatId,
+        type: "silence",
+        source: "bot",
+        actor,
+        target: { id: target.userId, name: target.name, username: target.username },
+        topicId: ctx.message?.message_thread_id,
+        messageText: !options.applyWarning ? repliedMessage : undefined,
+      });
 
       if (options.applyWarning && reason) {
         await applyWarn(ctx, target.userId, chatId, target.name, target.username, reason, { repliedMessage });

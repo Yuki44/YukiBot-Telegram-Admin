@@ -1,0 +1,20 @@
+{
+  "name": "YukiBot",
+  "short_name": "YukiBot",
+  "description": "Panel de configuración de YukiBot",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fbf8f3",
+  "theme_color": "#21d4a8",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/yuki.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
