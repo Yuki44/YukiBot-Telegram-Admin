@@ -7,6 +7,7 @@ import { markKickInProgress } from "../helpers/kickTracker";
 import { mention } from "../helpers/html";
 import { parseArgs, buildActor, getChatTitle } from "../helpers/contextHelpers";
 import { logger } from "../../utils/logger";
+import { recordActivity } from "../../utils/activityLog";
 import { t } from "../../locales/i18n";
 
 export async function kkHandler(ctx: BotContext): Promise<void> {
@@ -59,17 +60,30 @@ export async function kkHandler(ctx: BotContext): Promise<void> {
     if (success) {
       await sendAndAutoDelete(ctx, t("kick.kicked", { user: mention(target.name, target.username) }), 0);
 
+      const actor = buildActor(ctx);
+      const repliedMessage = ctx.message?.reply_to_message
+        ? (ctx.message.reply_to_message.text ?? ctx.message.reply_to_message.caption)
+        : undefined;
+
       sendLog(ctx.api, ctx.chatConfig, {
         action: "KICK",
-        actor: buildActor(ctx),
+        actor,
         target: { id: target.userId, name: target.name, username: target.username },
         chatId,
         chatName: getChatTitle(ctx),
-        chatType: ctx.chatConfig.type,
         topicId: ctx.message?.message_thread_id,
-        refMsgId: ctx.message?.reply_to_message?.message_id,
-        repliedMsg: ctx.message?.reply_to_message ?? undefined,
+        repliedMessage,
       }).catch(() => {});
+
+      recordActivity({
+        chatId,
+        type: "kick",
+        source: "bot",
+        actor,
+        target: { id: target.userId, name: target.name, username: target.username },
+        topicId: ctx.message?.message_thread_id,
+        messageText: repliedMessage,
+      });
     } else {
       await sendAndAutoDelete(ctx, t("errors.kickFailed"), 0);
     }

@@ -7,6 +7,7 @@ import { displayName } from "../helpers/html";
 import { parseArgs, buildActor, getChatTitle } from "../helpers/contextHelpers";
 import { AUTO_DELETE_SHORT_MS, MAX_WARNINGS } from "../../config/constants";
 import { t } from "../../locales/i18n";
+import { recordActivity } from "../../utils/activityLog";
 
 async function executeQuitarAviso(ctx: BotContext, deleteReplied: boolean): Promise<void> {
   if (!ctx.chatConfig) return;
@@ -62,9 +63,10 @@ async function executeQuitarAviso(ctx: BotContext, deleteReplied: boolean): Prom
     AUTO_DELETE_SHORT_MS
   );
 
+  const actor = buildActor(ctx);
   sendLog(ctx.api, ctx.chatConfig, {
     action: "Q_AVISO",
-    actor: buildActor(ctx),
+    actor,
     target: { id: target.userId, name: target.name, username: target.username },
     chatId,
     chatName: getChatTitle(ctx),
@@ -72,6 +74,16 @@ async function executeQuitarAviso(ctx: BotContext, deleteReplied: boolean): Prom
     warnings: user.warnings,
     topicId: ctx.message?.message_thread_id,
   }).catch(() => {});
+
+  recordActivity({
+    chatId,
+    type: "unwarn",
+    source: "bot",
+    actor,
+    target: { id: target.userId, name: target.name, username: target.username },
+    warningsAfter: user.warnings,
+    topicId: ctx.message?.message_thread_id,
+  });
 
   try {
     await ctx.deleteMessage();

@@ -8,13 +8,13 @@
     "specifyReason": "⚠️ Especifica una razón.",
     "specifyReasonForWarn": "⚠️ Debes especificar una razón para el aviso.",
     "cannotSilenceAdmin": "❌ No puedes silenciar a un administrador.",
-    "cannotKickAdmin": "❌ No puedes echar a un administrador.",
+    "cannotKickAdmin": "❌ No puedes expulsar a un administrador.",
     "cannotBanAdmin": "❌ No puedes banear a un administrador.",
     "noWarningsRecorded": "❌ Este usuario no tiene avisos registrados.",
     "noRecordsForUser": "❌ Sin registros para este usuario.",
     "silenceFailed": "⚠️ No se pudo silenciar. ¿Tengo permisos?",
     "unsilenceFailed": "⚠️ No se pudo des-silenciar. ¿Tengo permisos?",
-    "kickFailed": "⚠️ No se pudo echar. ¿Tengo permisos?",
+    "kickFailed": "⚠️ No se pudo expulsar. ¿Tengo permisos?",
     "banFailed": "⚠️ No se pudo banear. ¿Tengo permisos?",
     "banExecFailed": "<i>(Error al ejecutar el ban, hazlo manualmente.)</i>"
   },
@@ -31,7 +31,7 @@
     "unsilenced": "🕊️ {user} ha recuperado su voz."
   },
   "kick": {
-    "kicked": "👢 {user} ha sido echado. Puede volver a unirse."
+    "kicked": "👢 {user} ha sido expulsado. Puede volver a unirse."
   },
   "ban": {
     "banned": "🚷 {user} ha sido baneado permanentemente.",
@@ -70,7 +70,7 @@
     "elsilav": "/elsilav [razón] — (responde a un mensaje) Eliminar el mensaje, silenciar al autor y registrar un aviso.",
     "qsil": "/qsil [usuario] — Quitar el silencio a un usuario.",
     "qsilav": "/qsilav [usuario] — Quitar el silencio y el último aviso de un usuario.",
-    "kk": "/kk [usuario] — Echar a un usuario del grupo (puede volver a unirse).",
+    "kk": "/kk [usuario] — Expulsar a un usuario del grupo (puede volver a unirse).",
     "bn": "/bn [usuario] — Banear a un usuario permanentemente (no puede volver).",
     "qban": "/qban [usuario] — Quitar el ban de un usuario y permitirle volver a unirse.",
     "setup": "/setup — Inicializar la configuración del grupo.",

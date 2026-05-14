@@ -1,14 +1,19 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+import { Server as HttpServer } from "http";
 import { Bot } from "grammy";
 import { BotContext } from "./types";
 import { connectDB, disconnectDB } from "./db/connection";
+import { createApiServer } from "./api/server";
+import { PORT, BOT_ENABLED } from "./config";
 import { loadChat } from "./bot/middleware/loadChat";
 import { isAdmin } from "./bot/middleware/isAdmin";
 import { adminOnlyCommands } from "./bot/middleware/adminOnlyCommands";
 import { trackUser } from "./bot/middleware/trackUser";
+import { trackTopic } from "./bot/middleware/trackTopic";
 import { topicFiltering } from "./features/topicFiltering";
+import { bannedWordsEnforcement } from "./features/bannedWordsEnforcement";
 import { setupHandler } from "./bot/commands/setup";
 import { addTopicHandler } from "./bot/commands/addTopic";
 import { editTopicHandler } from "./bot/commands/editTopic";
@@ -54,6 +59,7 @@ bot.catch((err) => {
 
 bot.use(loadChat);
 bot.use(trackUser);
+bot.use(trackTopic);
 bot.use(isAdmin);
 bot.use(adminOnlyCommands);
 
@@ -122,12 +128,20 @@ bot.on("message:forum_topic_edited", async (ctx) => {
 
 bot.on("message", mediaForwardHandler);
 bot.on("message", topicFiltering);
+bot.on("message", bannedWordsEnforcement);
 bot.on("message", promoSpamDetection);
+
+let httpServer: HttpServer | null = null;
 
 // Graceful shutdown
 function shutdown(signal: string) {
   logger.info({ action: "shutdown", signal });
   bot.stop();
+  if (httpServer) {
+    httpServer.close((err) => {
+      if (err) logger.error({ action: "shutdown_http", error: String(err) });
+    });
+  }
   disconnectDB()
     .catch((err) => logger.error({ action: "shutdown_db", error: String(err) }))
     .finally(() => process.exit(0));
@@ -139,6 +153,17 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 async function start() {
   logger.info({ action: "startup", status: "connecting to DB..." });
   await connectDB();
+
+  const app = createApiServer(bot);
+  httpServer = app.listen(PORT, () => {
+    logger.info({ action: "api_server", status: `listening on port ${PORT}` });
+  });
+
+  if (!BOT_ENABLED) {
+    logger.info({ action: "startup", status: "BOT_ENABLED=false — running API only, skipping bot polling" });
+    return;
+  }
+
   logger.info({ action: "startup", status: "starting bot polling..." });
   await bot.start({
     allowed_updates: ["message", "chat_member", "callback_query", "channel_post"],

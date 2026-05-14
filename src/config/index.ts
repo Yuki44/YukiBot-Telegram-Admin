@@ -4,12 +4,29 @@ export const BOT_ENABLED = process.env.BOT_ENABLED !== "false";
 
 // Parse ADMIN_IDS from comma-separated string
 // Example: ADMIN_IDS=7669001456,615291982,2988220074,6259545160
+// These users get super-admin access to the web dashboard (see all chats).
 export const ADMIN_IDS: number[] = process.env.ADMIN_IDS
   ? process.env.ADMIN_IDS.split(",")
       .map((id) => id.trim())
       .filter((id) => id)
       .map(Number)
   : [];
+
+export const PORT = Number(process.env.PORT ?? 3000);
+
+// Bot username (without @) — used by the web dashboard's Telegram Login Widget.
+// Required for the widget to render. Register the deploy domain in BotFather via /setdomain.
+export const BOT_USERNAME = process.env.BOT_USERNAME ?? "";
+
+// Hostname registered with BotFather via /setdomain (e.g. "yukibot.up.railway.app").
+// The dashboard only renders the Telegram Login Widget when window.location.hostname
+// matches this — that way local/ngrok hosts hide the widget instead of showing the
+// "Bot domain invalid" placeholder. Leave empty to disable the widget everywhere.
+export const BOT_LOGIN_DOMAIN = process.env.BOT_LOGIN_DOMAIN ?? "";
+
+// JWT signing secret for the web dashboard. 32+ chars recommended.
+// Required at startup if the API server is enabled.
+export const JWT_SECRET = process.env.JWT_SECRET ?? "";
 
 // Parse TOPIC_RULES from JSON string
 // Example: TOPIC_RULES={"4":["photo","video"],"2":["video"]}

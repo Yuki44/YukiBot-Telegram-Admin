@@ -8,6 +8,7 @@ import { displayName, mention } from "../helpers/html";
 import { parseArgs, buildActor, getChatTitle } from "../helpers/contextHelpers";
 import { AUTO_DELETE_SHORT_MS, MAX_WARNINGS } from "../../config/constants";
 import { t } from "../../locales/i18n";
+import { recordActivity } from "../../utils/activityLog";
 
 export async function qsilavHandler(ctx: BotContext): Promise<void> {
   if (!ctx.chatConfig) return;
@@ -36,6 +37,18 @@ export async function qsilavHandler(ctx: BotContext): Promise<void> {
     // 1. Unsilence
     const silenceSuccess = await unsilenceUser(ctx, target.userId, chatId);
     if (silenceSuccess) {
+      // Mirror the mute lift in the DB so the dashboard reflects it (G9).
+      try {
+        await userRepository.upsert({
+          userId: target.userId,
+          chatId,
+          isMuted: false,
+          muteUntil: undefined,
+        });
+      } catch {
+        /* silent (G10) */
+      }
+
       feedbackPromises.push(
         sendAndAutoDelete(
           ctx,
@@ -52,6 +65,15 @@ export async function qsilavHandler(ctx: BotContext): Promise<void> {
         chatType: ctx.chatConfig.type,
         topicId: ctx.message?.message_thread_id,
       }).catch(() => {});
+
+      recordActivity({
+        chatId,
+        type: "unsilence",
+        source: "bot",
+        actor,
+        target: { id: target.userId, name: target.name, username: target.username },
+        topicId: ctx.message?.message_thread_id,
+      });
     } else {
       feedbackPromises.push(sendAndAutoDelete(ctx, t("errors.unsilenceFailed"), AUTO_DELETE_SHORT_MS));
     }
@@ -79,6 +101,16 @@ export async function qsilavHandler(ctx: BotContext): Promise<void> {
         warnings: user.warnings,
         topicId: ctx.message?.message_thread_id,
       }).catch(() => {});
+
+      recordActivity({
+        chatId,
+        type: "unwarn",
+        source: "bot",
+        actor,
+        target: { id: target.userId, name: target.name, username: target.username },
+        warningsAfter: user.warnings,
+        topicId: ctx.message?.message_thread_id,
+      });
     }
 
     await Promise.all(feedbackPromises);

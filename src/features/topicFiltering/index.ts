@@ -19,6 +19,16 @@ export const topicFiltering: Middleware<BotContext> = async (ctx, next) => {
     const topic = await topicRepository.findByChatAndTopic(chatId, threadId);
     if (!topic) return await next();
 
+    if (topic.adminOnly) {
+      logger.info({ action: "topicFilter_adminOnly_delete", chatId, topicId: threadId });
+      try {
+        await ctx.deleteMessage();
+      } catch {
+        // silent fail — bot may lack permission
+      }
+      return;
+    }
+
     const messageType = ctx.message ? detectMessageType(ctx.message) : null;
     if (!messageType) return await next();
 

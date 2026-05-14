@@ -6,6 +6,10 @@ export const adminRepository = {
     return await Admin.find({ chatId });
   },
 
+  async findByUserId(userId: number): Promise<IAdmin[]> {
+    return await Admin.find({ userId });
+  },
+
   async isChatAdmin(userId: number, chatId: number): Promise<boolean> {
     const admin = await Admin.findOne({ userId, chatId });
     return admin !== null;

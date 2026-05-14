@@ -7,6 +7,9 @@ import { mention } from "../helpers/html";
 import { parseArgs, buildActor, getChatTitle } from "../helpers/contextHelpers";
 import { AUTO_DELETE_SHORT_MS } from "../../config/constants";
 import { t } from "../../locales/i18n";
+import { userRepository } from "../../db/repositories/userRepository";
+import { logger } from "../../utils/logger";
+import { recordActivity } from "../../utils/activityLog";
 
 export async function qsilHandler(ctx: BotContext): Promise<void> {
   if (!ctx.chatConfig) return;
@@ -33,6 +36,18 @@ export async function qsilHandler(ctx: BotContext): Promise<void> {
 
     const success = await unsilenceUser(ctx, target.userId, chatId);
     if (success) {
+      // Mirror the mute lift in the DB so the dashboard's Silenciados tab updates (G9).
+      try {
+        await userRepository.upsert({
+          userId: target.userId,
+          chatId,
+          isMuted: false,
+          muteUntil: undefined,
+        });
+      } catch (err) {
+        logger.error({ action: "qsil.persist", error: String(err), chatId, userId: target.userId });
+      }
+
       try {
         await ctx.deleteMessage();
       } catch {
@@ -44,15 +59,25 @@ export async function qsilHandler(ctx: BotContext): Promise<void> {
         AUTO_DELETE_SHORT_MS
       );
 
+      const actor = buildActor(ctx);
       sendLog(ctx.api, ctx.chatConfig, {
         action: "Q_SILENCIO",
-        actor: buildActor(ctx),
+        actor,
         target: { id: target.userId, name: target.name, username: target.username },
         chatId,
         chatName: getChatTitle(ctx),
         chatType: ctx.chatConfig.type,
         topicId: ctx.message?.message_thread_id,
       }).catch(() => {});
+
+      recordActivity({
+        chatId,
+        type: "unsilence",
+        source: "bot",
+        actor,
+        target: { id: target.userId, name: target.name, username: target.username },
+        topicId: ctx.message?.message_thread_id,
+      });
     } else {
       await ctx.reply(t("errors.unsilenceFailed"), {
         parse_mode: "HTML",

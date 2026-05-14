@@ -5,6 +5,7 @@ import { adminRepository } from "../../db/repositories/adminRepository";
 import { sendLog, LogUser } from "../helpers/sendLog";
 import { isKickInProgress, clearKick } from "../helpers/kickTracker";
 import { logger } from "../../utils/logger";
+import { recordActivity } from "../../utils/activityLog";
 
 export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">): Promise<void> {
   try {
@@ -73,14 +74,9 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
             name: [from.first_name, from.last_name].filter(Boolean).join(" "),
             username: from.username,
           };
-          sendLog(ctx.api, ctx.chatConfig, {
-            action: "KICK",
-            actor,
-            target,
-            chatId,
-            chatName,
-            chatType: ctx.chatConfig.type,
-          }).catch(() => {});
+          sendLog(ctx.api, ctx.chatConfig, { action: "KICK", actor, target, chatId, chatName }).catch(
+            () => {}
+          );
         }
         return;
       }
@@ -97,14 +93,7 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
           name: [from.first_name, from.last_name].filter(Boolean).join(" "),
           username: from.username,
         };
-        sendLog(ctx.api, ctx.chatConfig, {
-          action: "BAN",
-          actor,
-          target,
-          chatId,
-          chatName,
-          chatType: ctx.chatConfig.type,
-        }).catch(() => {});
+        sendLog(ctx.api, ctx.chatConfig, { action: "BAN", actor, target, chatId, chatName }).catch(() => {});
       }
       return;
     }
@@ -131,23 +120,15 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
           .catch((err) =>
             logger.error({ action: "chatMember_leftStamp", userId, chatId, error: String(err) })
           );
-        sendLog(ctx.api, ctx.chatConfig, {
-          action: "SALIDA_USUARIO",
-          target,
-          chatId,
-          chatName,
-          chatType: ctx.chatConfig.type,
-        }).catch(() => {});
+        sendLog(ctx.api, ctx.chatConfig, { action: "SALIDA_USUARIO", target, chatId, chatName }).catch(
+          () => {}
+        );
         return;
       }
 
-      sendLog(ctx.api, ctx.chatConfig, {
-        action: "SALIDA_USUARIO",
-        target,
-        chatId,
-        chatName,
-        chatType: ctx.chatConfig.type,
-      }).catch(() => {});
+      sendLog(ctx.api, ctx.chatConfig, { action: "SALIDA_USUARIO", target, chatId, chatName }).catch(
+        () => {}
+      );
       userRepository
         .remove(userId, chatId)
         .catch((err) =>
@@ -178,13 +159,15 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
       } catch (err) {
         logger.error({ action: "chatMember_autoReban", userId, chatId, error: String(err) });
       }
-      sendLog(ctx.api, ctx.chatConfig, {
-        action: "AUTO_BAN",
-        target,
+      sendLog(ctx.api, ctx.chatConfig, { action: "AUTO_BAN", target, chatId, chatName }).catch(() => {});
+      recordActivity({
         chatId,
-        chatName,
-        chatType: ctx.chatConfig.type,
-      }).catch(() => {});
+        type: "autoban",
+        source: "auto",
+        actor: { id: ctx.me.id, name: "YukiBot" },
+        target: { id: userId, name: target.name, username: target.username },
+        reason: "wasBanned=true al reentrar",
+      });
       return;
     }
 
@@ -219,7 +202,6 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
         target,
         chatId,
         chatName,
-        chatType: ctx.chatConfig.type,
         inviter,
       }).catch(() => {});
     }

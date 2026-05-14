@@ -6,14 +6,21 @@
   "scripts": {
     "start": "node dist/index.js",
     "dev": "nodemon src/index.ts",
-    "build": "tsc",
+    "dev:web": "npm --prefix web run dev",
+    "build": "npm run build:web && npm run build:bot",
+    "build:bot": "tsc",
+    "build:web": "npm --prefix web run build",
+    "install:web": "npm --prefix web ci",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "cred:add": "ts-node src/cli/credentials.ts add",
+    "cred:list": "ts-node src/cli/credentials.ts list",
+    "cred:rm": "ts-node src/cli/credentials.ts rm"
   },
   "repository": {
     "type": "git",
@@ -28,12 +35,19 @@
   },
   "homepage": "https://github.com/Yuki44/YukiBot-Telegram-Admin#readme",
   "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
     "dotenv": "^17.3.1",
+    "express": "^4.21.2",
     "grammy": "^1.41.1",
+    "jsonwebtoken": "^9.0.2",
     "mongoose": "^9.3.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.23",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/mongoose": "^5.11.96",
     "@types/node": "^25.5.0",
     "eslint": "^10.2.0",

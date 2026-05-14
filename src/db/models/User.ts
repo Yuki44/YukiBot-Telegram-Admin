@@ -43,6 +43,14 @@ const userSchema = new Schema<IUser>({
   leftWithWarningsAt: {
     type: Date,
   },
+  // null = checked, no photo. undefined = never checked.
+  photoFileId: {
+    type: String,
+    default: undefined,
+  },
+  photoCheckedAt: {
+    type: Date,
+  },
 });
 
 // Compound unique index on userId + chatId

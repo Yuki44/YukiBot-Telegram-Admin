@@ -2,8 +2,10 @@ import { BotContext } from "../../types";
 import { parseCallbackData } from "../../features/promoSpamDetection";
 import { userRepository } from "../../db/repositories/userRepository";
 import { chatRepository } from "../../db/repositories/chatRepository";
+import { spamPatternRepository } from "../../db/repositories/spamPatternRepository";
 import { sendLog } from "../helpers/sendLog";
 import { unsilenceUser } from "../helpers/unsilenceUser";
+import { recordActivity } from "../../utils/activityLog";
 import { t } from "../../locales/i18n";
 import { logger } from "../../utils/logger";
 
@@ -35,7 +37,44 @@ export async function spamCallbackHandler(ctx: BotContext): Promise<void> {
     };
 
     if (verdict === "ok") {
+      const reviewer = {
+        id: ctx.from!.id,
+        name: ctx.from!.first_name,
+        username: ctx.from?.username,
+      };
+
+      // Mark the most recent matching SpamPattern as reviewed-by-admin so the
+      // dashboard's Recientes list can hide already-handled rows. Best-effort:
+      // link-only detections (no /spam command) won't have a SpamPattern row,
+      // so this is silently a no-op for those.
+      let targetUser: { name?: string; username?: string } = {};
+      try {
+        const pattern = await spamPatternRepository.markLatestReviewed(chatId, userId, reviewer);
+        if (pattern) {
+          // Best-effort hydrate target display fields from the user collection.
+          try {
+            const u = await userRepository.findByUserAndChat(userId, chatId);
+            targetUser = { name: u?.name, username: u?.username };
+          } catch {
+            /* silent */
+          }
+        }
+      } catch (err) {
+        logger.error({ action: "spamCallback_confirm_mark", chatId, userId, error: String(err) });
+      }
+
+      // Audit trail: surface the confirmation in the dashboard's Registro screen.
+      recordActivity({
+        chatId,
+        type: "spam_confirmed",
+        source: "bot",
+        actor: reviewer,
+        target: { id: userId, name: targetUser.name, username: targetUser.username },
+        reason: "spam confirmado en revisión",
+      });
+
       await appendToLog(t("spam.confirmed"));
+      logger.info({ action: "spamCallback_confirm", chatId, userId, reviewerId: reviewer.id });
     } else if (verdict === "rv") {
       const issues: string[] = [];
 
