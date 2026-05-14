@@ -2,10 +2,12 @@ import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppBar } from "../components/AppBar";
 import { I } from "../components/Icon";
+import { LogUndoSheet } from "../components/LogUndoSheet";
 import { ApiError, api } from "../lib/api";
 import { clearSession } from "../lib/auth";
 import { useChat } from "../lib/useChat";
 import { timeAgo } from "../lib/utils";
+import { isUndoableLogType } from "../types/api";
 import type { ActivityLogEntry, ActivityLogType } from "../types/api";
 
 interface FilterDef {
@@ -89,6 +91,8 @@ function metaFor(type: ActivityLogType): TypeMeta {
       return { icon: () => I.star({ size: 14 }), bg: "var(--brand-50)", fg: "var(--brand-700)", label: "Delegación de propietario" };
     case "owner_revoke":
       return { icon: () => I.star({ size: 14 }), bg: "var(--warn-bg)", fg: "var(--warn-fg)", label: "Delegación revocada" };
+    case "spam_confirmed":
+      return { icon: () => I.shield({ size: 14 }), bg: "var(--info-bg)", fg: "var(--info-fg)", label: "Spam confirmado" };
   }
 }
 
@@ -114,13 +118,15 @@ function dayKey(ts: string): string {
 interface LogRowProps {
   log: ActivityLogEntry;
   onOpenUser?: () => void;
+  onUndo?: () => void;
 }
 
-function LogRow({ log, onOpenUser }: LogRowProps) {
+function LogRow({ log, onOpenUser, onUndo }: LogRowProps) {
   const cfg = metaFor(log.type);
   const target = targetLabel(log);
   const actor = actorLabel(log);
   const isUserTarget = log.targetId !== null;
+  const canUndo = !!onUndo && !log.undoneAt && isUndoableLogType(log.type);
 
   return (
     <div className="yk-row" style={{ alignItems: "flex-start", cursor: "default" }}>
@@ -199,6 +205,43 @@ function LogRow({ log, onOpenUser }: LogRowProps) {
             “{log.messageText}”
           </div>
         )}
+        {(canUndo || log.undoneAt) && (
+          <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
+            {canUndo && (
+              <button
+                type="button"
+                onClick={onUndo}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "6px 12px",
+                  borderRadius: 999,
+                  border: "1px solid var(--ink-100)",
+                  background: "var(--bg-card)",
+                  color: "var(--ink-700)",
+                  fontWeight: 600,
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                {I.refresh({ size: 14 })}
+                Deshacer
+              </button>
+            )}
+            {log.undoneAt && (
+              <span
+                style={{
+                  fontSize: 11,
+                  color: "var(--ink-400)",
+                  fontStyle: "italic",
+                }}
+              >
+                deshecho {timeAgo(log.undoneAt)}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -219,6 +262,7 @@ export function LogsScreen() {
   const [nextBefore, setNextBefore] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [undoTarget, setUndoTarget] = useState<ActivityLogEntry | null>(null);
 
   const filterDef = FILTERS.find((f) => f.id === filter) ?? FILTERS[0];
 
@@ -251,6 +295,22 @@ export function LogsScreen() {
     return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, filter, q]);
+
+  async function performUndo(log: ActivityLogEntry) {
+    if (!chatId) return;
+    await api.logs.undo(chatId, log.id);
+    // Reflect the new state without a full re-fetch: mark the entry as undone in place.
+    // A paired inverse entry will appear after the next load — but the user sees the
+    // immediate result right away.
+    setEntries((prev) =>
+      prev
+        ? prev.map((e) =>
+            e.id === log.id ? { ...e, undoneAt: new Date().toISOString() } : e
+          )
+        : prev
+    );
+    setUndoTarget(null);
+  }
 
   async function loadMore() {
     if (!chatId || !nextBefore || loadingMore) return;
@@ -367,7 +427,7 @@ export function LogsScreen() {
             {I.help({ size: 18 })}
             <div>
               Historial de los últimos 90 días. Después se borra automáticamente para mantener la
-              base de datos liviana.
+              base de datos ligera.
             </div>
           </div>
         </div>
@@ -414,6 +474,7 @@ export function LogsScreen() {
                         ? () => navigate(`/chats/${chatId}/users/${log.targetId}`)
                         : undefined
                     }
+                    onUndo={() => setUndoTarget(log)}
                   />
                 ))}
               </div>
@@ -434,6 +495,14 @@ export function LogsScreen() {
           </div>
         )}
       </div>
+
+      {undoTarget && (
+        <LogUndoSheet
+          log={undoTarget}
+          onClose={() => setUndoTarget(null)}
+          onConfirm={() => performUndo(undoTarget)}
+        />
+      )}
     </div>
   );
 }

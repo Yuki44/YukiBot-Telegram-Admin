@@ -6,16 +6,19 @@ import type {
   AuthResponse,
   AuthUser,
   BannedWord,
-  BannedWordSeverity,
+  BannedWordCreateBody,
   ChatDetail,
   ChatFeatures,
   ChatStats,
   ChatSummary,
+  SpamDetection,
+  SpamDetectionPermitResult,
   TelegramAuthData,
   Topic,
   UserDomainAllowance,
   UserListFilter,
   UserRecord,
+  UserStats,
 } from "../types/api";
 import { clearSession, getToken } from "./auth";
 
@@ -81,6 +84,8 @@ export const api = {
     password: (username: string, password: string): Promise<AuthResponse> =>
       request<AuthResponse>("POST", "/auth/password", { username, password }),
     me: (): Promise<{ user: AuthUser }> => request<{ user: AuthUser }>("GET", "/auth/me"),
+    changePassword: (currentPassword: string, newPassword: string): Promise<void> =>
+      request<void>("POST", "/auth/password/change", { currentPassword, newPassword }),
   },
   chats: {
     list: (): Promise<ChatSummary[]> => request<ChatSummary[]>("GET", "/chats"),
@@ -94,10 +99,15 @@ export const api = {
   topics: {
     list: (chatId: number | string): Promise<Topic[]> =>
       request<Topic[]>("GET", `/chats/${chatId}/topics`),
-    create: (chatId: number | string, body: { topicId: number; name: string; allowedMsgTypes: string[] }): Promise<Topic> =>
-      request<Topic>("POST", `/chats/${chatId}/topics`, body),
-    update: (chatId: number | string, topicId: number, body: { name?: string; allowedMsgTypes?: string[] }): Promise<Topic> =>
-      request<Topic>("PUT", `/chats/${chatId}/topics/${topicId}`, body),
+    create: (
+      chatId: number | string,
+      body: { topicId: number; name: string; allowedMsgTypes: string[]; adminOnly?: boolean }
+    ): Promise<Topic> => request<Topic>("POST", `/chats/${chatId}/topics`, body),
+    update: (
+      chatId: number | string,
+      topicId: number,
+      body: { name?: string; allowedMsgTypes?: string[]; adminOnly?: boolean }
+    ): Promise<Topic> => request<Topic>("PUT", `/chats/${chatId}/topics/${topicId}`, body),
     remove: (chatId: number | string, topicId: number): Promise<void> =>
       request<void>("DELETE", `/chats/${chatId}/topics/${topicId}`),
   },
@@ -114,6 +124,8 @@ export const api = {
     },
     get: (chatId: number | string, userId: number | string): Promise<UserRecord> =>
       request<UserRecord>("GET", `/chats/${chatId}/users/${userId}`),
+    stats: (chatId: number | string, userId: number | string): Promise<UserStats> =>
+      request<UserStats>("GET", `/chats/${chatId}/users/${userId}/stats`),
     warn: (chatId: number | string, userId: number, reason?: string): Promise<ActionResult> =>
       request<ActionResult>("POST", `/chats/${chatId}/users/${userId}/warn`, { reason }),
     silence: (chatId: number | string, userId: number): Promise<ActionResult> =>
@@ -170,16 +182,7 @@ export const api = {
   bannedWords: {
     list: (chatId: number | string): Promise<BannedWord[]> =>
       request<BannedWord[]>("GET", `/chats/${chatId}/banned-words`),
-    create: (
-      chatId: number | string,
-      body: {
-        word: string;
-        severity: BannedWordSeverity;
-        exactMatch: boolean;
-        scope: "all" | "topic";
-        topicId?: number;
-      }
-    ): Promise<BannedWord> =>
+    create: (chatId: number | string, body: BannedWordCreateBody): Promise<BannedWord> =>
       request<BannedWord>("POST", `/chats/${chatId}/banned-words`, body),
     remove: (chatId: number | string, id: string): Promise<void> =>
       request<void>("DELETE", `/chats/${chatId}/banned-words/${id}`),
@@ -202,6 +205,17 @@ export const api = {
         { hidden }
       ),
   },
+  spamDetections: {
+    list: (chatId: number | string, limit = 50): Promise<SpamDetection[]> =>
+      request<SpamDetection[]>("GET", `/chats/${chatId}/spam-detections?limit=${limit}`),
+    permit: (chatId: number | string, patternId: string): Promise<SpamDetectionPermitResult> =>
+      request<SpamDetectionPermitResult>(
+        "POST",
+        `/chats/${chatId}/spam-detections/${patternId}/permit`
+      ),
+    discard: (chatId: number | string, patternId: string): Promise<void> =>
+      request<void>("DELETE", `/chats/${chatId}/spam-detections/${patternId}`),
+  },
   logs: {
     list: (
       chatId: number | string,
@@ -215,6 +229,8 @@ export const api = {
       const suffix = qs.toString() ? `?${qs.toString()}` : "";
       return request<ActivityLogPage>("GET", `/chats/${chatId}/logs${suffix}`);
     },
+    undo: (chatId: number | string, id: string): Promise<void> =>
+      request<void>("POST", `/chats/${chatId}/logs/${id}/undo`),
   },
 };
 

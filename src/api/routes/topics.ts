@@ -12,6 +12,7 @@ interface TopicBody {
   topicId?: number;
   name?: string;
   allowedMsgTypes?: string[];
+  adminOnly?: boolean;
 }
 
 function sanitizeTypes(types: unknown): string[] | null {
@@ -42,6 +43,7 @@ export function createTopicsRouter(): Router {
             topicId: t.topicId,
             name: t.name,
             allowedMsgTypes: t.allowedMsgTypes,
+            adminOnly: t.adminOnly ?? false,
           }))
           .sort((a, b) => a.topicId - b.topicId)
       );
@@ -68,12 +70,15 @@ export function createTopicsRouter(): Router {
       return;
     }
 
+    const adminOnly = typeof body.adminOnly === "boolean" ? body.adminOnly : false;
+
     try {
       const created = await topicRepository.upsert({
         chatId,
         topicId: body.topicId,
         name,
         allowedMsgTypes,
+        adminOnly,
       });
       logger.info({
         action: "topics.upsert",
@@ -88,13 +93,14 @@ export function createTopicsRouter(): Router {
         actor: { id: req.user!.userId, name: req.user!.name, username: req.user!.username },
         targetRef: created.name?.trim() || `Tema #${created.topicId}`,
         topicId: created.topicId,
-        reason: `tipos: ${allowedMsgTypes.join(", ") || "ninguno"}`,
+        reason: `tipos: ${allowedMsgTypes.join(", ") || "ninguno"}${adminOnly ? " · solo admins" : ""}`,
       });
       res.json({
         chatId: created.chatId,
         topicId: created.topicId,
         name: created.name,
         allowedMsgTypes: created.allowedMsgTypes,
+        adminOnly: created.adminOnly ?? false,
       });
     } catch (err) {
       logger.error({ action: "topics.upsert", error: String(err), chatId });
@@ -136,8 +142,17 @@ export function createTopicsRouter(): Router {
         allowedMsgTypes = sanitized;
       }
 
+      const adminOnly =
+        typeof body.adminOnly === "boolean" ? body.adminOnly : existing.adminOnly ?? false;
+
       try {
-        const updated = await topicRepository.upsert({ chatId, topicId, name, allowedMsgTypes });
+        const updated = await topicRepository.upsert({
+          chatId,
+          topicId,
+          name,
+          allowedMsgTypes,
+          adminOnly,
+        });
         logger.info({
           action: "topics.update",
           chatId,
@@ -151,13 +166,14 @@ export function createTopicsRouter(): Router {
           actor: { id: req.user!.userId, name: req.user!.name, username: req.user!.username },
           targetRef: updated.name?.trim() || `Tema #${updated.topicId}`,
           topicId: updated.topicId,
-          reason: `tipos: ${allowedMsgTypes.join(", ") || "ninguno"}`,
+          reason: `tipos: ${allowedMsgTypes.join(", ") || "ninguno"}${adminOnly ? " · solo admins" : ""}`,
         });
         res.json({
           chatId: updated.chatId,
           topicId: updated.topicId,
           name: updated.name,
           allowedMsgTypes: updated.allowedMsgTypes,
+          adminOnly: updated.adminOnly ?? false,
         });
       } catch (err) {
         logger.error({ action: "topics.update", error: String(err), chatId, topicId });

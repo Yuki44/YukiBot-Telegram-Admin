@@ -107,4 +107,21 @@ export const chatRepository = {
       { returnDocument: "after" }
     );
   },
+
+  async setMembersCount(chatId: number, members: number): Promise<IChat | null> {
+    return await Chat.findOneAndUpdate(
+      { chatId },
+      { $set: { members, membersCheckedAt: new Date() } },
+      { returnDocument: "after" }
+    );
+  },
+
+  /** `fileId === null` records "checked, no photo" so we don't re-poll on every render. */
+  async setPhoto(chatId: number, fileId: string | null): Promise<IChat | null> {
+    return await Chat.findOneAndUpdate(
+      { chatId },
+      { $set: { photoFileId: fileId, photoCheckedAt: new Date() } },
+      { returnDocument: "after" }
+    );
+  },
 };

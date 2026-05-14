@@ -32,12 +32,12 @@ export interface IChat extends Document {
   whitelist: boolean;
   features: {
     languageDetection: boolean;
-    spamDetection: boolean;
     topicFiltering?: boolean;
-    commands: boolean;
     autoBan: boolean;
     autoWarnSpam: boolean;
     promoSpamDetection: boolean;
+    /** When true, messages matching configured BannedWord rules trigger enforcement (warn/delete/silence/kick). */
+    bannedWordsEnforcement?: boolean;
   };
   /** Domains/URLs exempt from link spam detection (e.g. "example.com") */
   linkWhitelist: string[];
@@ -48,6 +48,15 @@ export interface IChat extends Document {
    * for this chat. Display-only — does not affect Telegram's own admin list.
    */
   hiddenAdminIds?: number[];
+  /** Cached member count from Telegram (getChatMemberCount). Refreshed weekly on read. */
+  members?: number;
+  membersCheckedAt?: Date;
+  /**
+   * Cached Telegram chat photo file_id (smallest size). `null` = checked and no photo.
+   * Refreshed weekly on read (same pattern as User.photoFileId).
+   */
+  photoFileId?: string | null;
+  photoCheckedAt?: Date;
   /**
    * UserId of an admin who has been delegated YukiBot owner powers by the Telegram
    * chat creator (see ScreenAdmins). When set, that user is treated as owner inside
@@ -100,6 +109,8 @@ export interface ITopic extends Document {
   topicId: number;
   name: string;
   allowedMsgTypes: string[];
+  /** When true, only chat admins may post in this topic — non-admin messages are deleted. */
+  adminOnly?: boolean;
 }
 
 export interface IUser extends Document {
@@ -158,7 +169,8 @@ export type ActivityLogType =
   | "banned_word_add"
   | "banned_word_remove"
   | "owner_delegate"
-  | "owner_revoke";
+  | "owner_revoke"
+  | "spam_confirmed";
 
 /** Where the action originated. */
 export type ActivityLogSource = "bot" | "panel" | "auto";
@@ -188,6 +200,8 @@ export interface IActivityLog extends Document {
   warningsAfter?: number;
   /** Snippet of the original message (e.g. for word deletes — kept short). */
   messageText?: string;
+  /** When set, this entry was reversed by a paired log; the UI hides the Undo button. */
+  undoneAt?: Date | null;
   timestamp: Date;
 }
 
@@ -202,14 +216,29 @@ export interface IActivityLog extends Document {
 export type BannedWordSeverity = "flag" | "aviso" | "borrar" | "silenciar" | "kick";
 
 /**
- * Banned word/phrase configured from the dashboard. The bot enforcement layer that
- * actually scans messages for these is a future, separate feature — Phase 7 only stores
- * and surfaces them in the UI.
+ * Banned word/phrase configured from the dashboard. The bot scans incoming messages and
+ * applies the configured combination of actions (any subset of delete/warn/silence, or
+ * kick on its own). `severity` is kept for back-compat with rows persisted before the
+ * multi-action refactor; new code should prefer `actions`/`kick`/`flag`/`warnReason`
+ * (see `resolveActions` in src/utils/bannedWord.ts).
  */
 export interface IBannedWord extends Document {
   chatId: number;
   word: string;
+  /** Legacy single-pick severity; kept in sync as the "primary" action for back-compat. */
   severity: BannedWordSeverity;
+  /** New multi-action shape. Any combination of these three is allowed. */
+  actions?: {
+    delete?: boolean;
+    warn?: boolean;
+    silence?: boolean;
+  };
+  /** Standalone kick — when true, `actions` is ignored. */
+  kick?: boolean;
+  /** Standalone admin-notification flag (currently disabled in the UI as "Próximamente"). */
+  flag?: boolean;
+  /** Custom reason text appended to the user-visible warn message when `actions.warn` is true. */
+  warnReason?: string | null;
   /** When true, only matches the whole word; when false, matches substrings too. */
   exactMatch: boolean;
   /** Whether this rule applies to the whole chat or just one topic. */

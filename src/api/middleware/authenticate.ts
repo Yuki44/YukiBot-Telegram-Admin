@@ -8,6 +8,12 @@ export interface AuthUser {
   username?: string;
   name?: string;
   isSuperAdmin: boolean;
+  /**
+   * True when a password credential exists for this user. Frontend uses it to gate the
+   * "Cambiar contraseña" button — Telegram-only logins have no password to change.
+   * Optional on the type so older tokens (pre-rollout) don't fail verification.
+   */
+  hasCredential?: boolean;
 }
 
 declare module "express-serve-static-core" {

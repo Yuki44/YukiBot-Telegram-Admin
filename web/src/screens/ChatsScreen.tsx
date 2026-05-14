@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppBar } from "../components/AppBar";
+import { ChatAvatar } from "../components/ChatAvatar";
 import { I } from "../components/Icon";
+import { InstallToHomeBanner } from "../components/InstallToHomeBanner";
 import { api } from "../lib/api";
 import { ApiError } from "../lib/api";
 import { clearSession, getStoredUser } from "../lib/auth";
+import { formatMembers } from "../lib/utils";
 import type { ChatSummary } from "../types/api";
 
 function ChatRow({ chat, onClick }: { chat: ChatSummary; onClick: () => void }) {
@@ -15,24 +18,12 @@ function ChatRow({ chat, onClick }: { chat: ChatSummary; onClick: () => void }) 
 
   return (
     <button className="yk-row" onClick={onClick}>
-      <div
-        className="yk-avatar yk-av-3"
-        style={{
-          borderRadius: 14,
-          width: 44,
-          height: 44,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-        aria-hidden
-      >
-        {icon}
-      </div>
+      <ChatAvatar chatId={chat.chatId} photoFileId={chat.photoFileId} glyph={icon} />
       <div className="yk-row-body">
         <div className="yk-row-title">{chat.name}</div>
         <div className="yk-row-sub">
           {roleLabel} · {typeLabel}
+          {typeof chat.members === "number" && ` · ${formatMembers(chat.members)} miembros`}
           {!chat.isActive && " · Inactivo"}
         </div>
       </div>
@@ -76,7 +67,9 @@ export function ChatsScreen() {
 
       <div className="yk-scroll yk-pad-nav">
         <div className="yk-hero" style={{ paddingTop: 0 }}>
-          <h1>Hola, {greetingName} 👋</h1>
+          <h1>
+            Hola, {greetingName} <span className="yk-wave" aria-hidden="true">👋</span>
+          </h1>
           <div className="yk-hero-sub">
             {chats === null
               ? "Cargando tus chats…"
@@ -85,6 +78,8 @@ export function ChatsScreen() {
                 : `Tienes acceso a ${chats.length} chats.`}
           </div>
         </div>
+
+        <InstallToHomeBanner />
 
         {error && (
           <div className="yk-section">

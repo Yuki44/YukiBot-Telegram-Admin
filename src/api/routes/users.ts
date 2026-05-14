@@ -6,6 +6,7 @@ import { requireChatAdmin } from "../middleware/requireChatAdmin";
 import { userRepository, UserListFilter } from "../../db/repositories/userRepository";
 import { chatRepository } from "../../db/repositories/chatRepository";
 import { adminRepository } from "../../db/repositories/adminRepository";
+import { messageRepository } from "../../db/repositories/messageRepository";
 import { logger } from "../../utils/logger";
 import { BotContext, IUser } from "../../types";
 import {
@@ -70,6 +71,23 @@ export function createUsersRouter(bot: Bot<BotContext>): Router {
       res.json(users.map((u) => userToDto(u, admins.has(u.userId))));
     } catch (err) {
       logger.error({ action: "users.list", error: String(err), chatId });
+      res.status(500).json({ error: "internal_error" });
+    }
+  });
+
+  router.get("/:userId/stats", requireChatAdmin(), async (req: Request, res: Response) => {
+    const chatId = Number(req.params.chatId);
+    const userId = Number(req.params.userId);
+    if (!Number.isFinite(userId)) {
+      res.status(400).json({ error: "invalid_user_id" });
+      return;
+    }
+    try {
+      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const messagesLast30d = await messageRepository.countSince(userId, chatId, since);
+      res.json({ messagesLast30d });
+    } catch (err) {
+      logger.error({ action: "users.stats", error: String(err), chatId, userId });
       res.status(500).json({ error: "internal_error" });
     }
   });

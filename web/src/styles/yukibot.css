@@ -551,3 +551,23 @@ body {
   display: flex; align-items: center; justify-content: center;
   color: var(--ink-500); font-family: 'JetBrains Mono', monospace; font-size: 12px;
 }
+
+/* Slow hand-wave for the greeting emoji. Waves over the first ~1.4s then rests
+   for ~1.6s so the motion feels relaxed rather than jittery. */
+@keyframes yk-wave {
+  0%   { transform: rotate(0deg); }
+  10%  { transform: rotate(14deg); }
+  20%  { transform: rotate(-8deg); }
+  30%  { transform: rotate(14deg); }
+  40%  { transform: rotate(-4deg); }
+  50%  { transform: rotate(10deg); }
+  60%, 100% { transform: rotate(0deg); }
+}
+.yk-wave {
+  display: inline-block;
+  transform-origin: 70% 70%;
+  animation: yk-wave 3s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .yk-wave { animation: none; }
+}

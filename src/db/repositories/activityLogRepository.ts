@@ -15,6 +15,18 @@ export const activityLogRepository = {
     return await ActivityLog.create(entry);
   },
 
+  async findById(id: string): Promise<IActivityLog | null> {
+    return await ActivityLog.findById(id);
+  },
+
+  async markUndone(id: string): Promise<IActivityLog | null> {
+    return await ActivityLog.findByIdAndUpdate(
+      id,
+      { $set: { undoneAt: new Date() } },
+      { returnDocument: "after" }
+    );
+  },
+
   async listByChat(chatId: number, opts: ActivityLogQuery = {}): Promise<IActivityLog[]> {
     const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
 

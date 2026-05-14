@@ -46,7 +46,15 @@ export function createPhotosRouter(bot: Bot<BotContext>): Router {
       const { Readable } = await import("stream");
       Readable.fromWeb(upstream.body as never).pipe(res);
     } catch (err) {
-      logger.warn({ action: "photos.proxy", error: String(err), fileId });
+      const msg = String(err);
+      // Telegram returns 400 "wrong file_id or the file is temporarily unavailable"
+      // when a cached photoFileId has aged out. The avatar fallback in the UI handles
+      // it cleanly — no operator action needed, so we skip the WARN noise.
+      const isStaleFileId =
+        msg.includes("wrong file_id") || msg.includes("file is temporarily unavailable");
+      if (!isStaleFileId) {
+        logger.warn({ action: "photos.proxy", error: msg, fileId });
+      }
       res.status(404).json({ error: "not_found" });
     }
   });

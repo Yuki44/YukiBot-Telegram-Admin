@@ -36,6 +36,17 @@ export function timeUntil(input: Date | string | number): string {
   return `${Math.ceil(d)} d`;
 }
 
+/** Compact Spanish member-count label, e.g. 12 → "12", 4321 → "4,3K", 1_200_000 → "1,2M". */
+export function formatMembers(n: number): string {
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) {
+    const k = n / 1000;
+    return `${k.toFixed(k < 10 ? 1 : 0).replace(".", ",")}K`;
+  }
+  const m = n / 1_000_000;
+  return `${m.toFixed(m < 10 ? 1 : 0).replace(".", ",")}M`;
+}
+
 export async function copyText(s: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(s);

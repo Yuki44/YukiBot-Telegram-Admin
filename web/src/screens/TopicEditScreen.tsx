@@ -32,7 +32,9 @@ export function TopicEditScreen() {
   const numericTopicId = isNew ? null : Number(topicId);
 
   const [topic, setTopic] = useState<Topic | null>(
-    isNew ? { chatId: Number(chatId), topicId: 0, name: "", allowedMsgTypes: [] } : null
+    isNew
+      ? { chatId: Number(chatId), topicId: 0, name: "", allowedMsgTypes: [], adminOnly: false }
+      : null
   );
   const [allowed, setAllowed] = useState<Set<string>>(new Set());
   const [name, setName] = useState("");
@@ -65,6 +67,7 @@ export function TopicEditScreen() {
         setTopic(found);
         setName(found.name);
         setAllowed(new Set(found.allowedMsgTypes));
+        setAdminOnly(!!found.adminOnly);
       })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) {
@@ -104,7 +107,9 @@ export function TopicEditScreen() {
     try {
       const created = await api.bannedWords.create(chatId, {
         word: w,
-        severity: "borrar",
+        actions: { delete: true, warn: false, silence: false },
+        kick: false,
+        flag: false,
         exactMatch: false,
         scope: "topic",
         topicId: numericTopicId,
@@ -162,6 +167,7 @@ export function TopicEditScreen() {
         // Don't send name on update — it's read-only here, owned by Telegram.
         await api.topics.update(chatId, numericTopicId, {
           allowedMsgTypes: allowedArr,
+          adminOnly,
         });
       }
       navigate(`/chats/${chatId}/topics`);
@@ -382,6 +388,27 @@ export function TopicEditScreen() {
                     >
                       {I.check({ size: 12 })}
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAddingWord(false);
+                        setNewWord("");
+                        setWordError(null);
+                      }}
+                      disabled={wordBusy}
+                      aria-label="Cancelar"
+                      style={{
+                        background: "transparent",
+                        border: 0,
+                        cursor: "pointer",
+                        padding: 0,
+                        marginLeft: 2,
+                        color: "var(--ink-500)",
+                        display: "inline-flex",
+                      }}
+                    >
+                      {I.close({ size: 12 })}
+                    </button>
                   </span>
                 ) : (
                   <button
@@ -422,19 +449,13 @@ export function TopicEditScreen() {
               <div
                 className="yk-row"
                 onClick={() => setAdminOnly((v) => !v)}
-                style={{ cursor: "pointer", opacity: 0.55 }}
+                style={{ cursor: "pointer" }}
               >
                 <div className="yk-row-icon">{I.lock({ size: 20 })}</div>
                 <div className="yk-row-body">
-                  <div
-                    className="yk-row-title"
-                    style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}
-                  >
-                    Solo admins pueden escribir
-                    <span className="yk-chip">Próximamente</span>
-                  </div>
+                  <div className="yk-row-title">Solo admins pueden escribir</div>
                   <div className="yk-row-sub" style={{ whiteSpace: "normal" }}>
-                    Útil para anuncios. La regla aún no está disponible en YukiBot.
+                    Útil para anuncios. Los mensajes de no-admins se borran al instante.
                   </div>
                 </div>
                 <div className={`yk-switch${adminOnly ? " on" : ""}`} />

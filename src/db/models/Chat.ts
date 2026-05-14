@@ -29,15 +29,7 @@ const chatSchema = new Schema<IChat>({
       type: Boolean,
       default: false,
     },
-    spamDetection: {
-      type: Boolean,
-      default: false,
-    },
     topicFiltering: {
-      type: Boolean,
-      default: false,
-    },
-    commands: {
       type: Boolean,
       default: false,
     },
@@ -53,6 +45,10 @@ const chatSchema = new Schema<IChat>({
       type: Boolean,
       default: false,
     },
+    bannedWordsEnforcement: {
+      type: Boolean,
+      default: false,
+    },
   },
   linkWhitelist: {
     type: [String],
@@ -65,6 +61,26 @@ const chatSchema = new Schema<IChat>({
   hiddenAdminIds: {
     type: [Number],
     default: [],
+  },
+  members: {
+    type: Number,
+    required: false,
+    default: undefined,
+  },
+  membersCheckedAt: {
+    type: Date,
+    required: false,
+    default: undefined,
+  },
+  photoFileId: {
+    type: String,
+    required: false,
+    default: undefined,
+  },
+  photoCheckedAt: {
+    type: Date,
+    required: false,
+    default: undefined,
   },
   delegatedOwnerId: {
     type: Number,

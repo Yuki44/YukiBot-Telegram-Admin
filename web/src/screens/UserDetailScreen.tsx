@@ -8,8 +8,14 @@ import { UserAvatar } from "../components/UserAvatar";
 import { ApiError, api } from "../lib/api";
 import { clearSession } from "../lib/auth";
 import { useChat } from "../lib/useChat";
-import { copyText, timeAgo } from "../lib/utils";
-import type { ActionResult, ActivityLogEntry, ActivityLogType, UserRecord } from "../types/api";
+import { copyText, formatMembers, timeAgo } from "../lib/utils";
+import type {
+  ActionResult,
+  ActivityLogEntry,
+  ActivityLogType,
+  UserRecord,
+  UserStats,
+} from "../types/api";
 
 type Sheet = null | "warn" | "silence" | "unsilence" | "ban" | "unban" | "pardon";
 
@@ -240,6 +246,7 @@ export function UserDetailScreen() {
   const [copied, setCopied] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [history, setHistory] = useState<ActivityLogEntry[] | null>(null);
+  const [stats, setStats] = useState<UserStats | null>(null);
 
   function load() {
     if (!chatId || !userId) return;
@@ -275,6 +282,14 @@ export function UserDetailScreen() {
       })
       .catch(() => {
         if (!cancelled) setHistory([]);
+      });
+    api.users
+      .stats(chatId, user.userId)
+      .then((s) => {
+        if (!cancelled) setStats(s);
+      })
+      .catch(() => {
+        if (!cancelled) setStats({ messagesLast30d: 0 });
       });
     return () => {
       cancelled = true;
@@ -490,7 +505,7 @@ export function UserDetailScreen() {
           </div>
         )}
 
-        <div className="yk-stats">
+        <div className="yk-stats" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
           <div className="yk-stat">
             <div className="yk-stat-num" style={{ color: "var(--warn-fg)" }}>
               {user.warnings}/3
@@ -500,6 +515,12 @@ export function UserDetailScreen() {
           <div className="yk-stat">
             <div className="yk-stat-num">{user.warningReasons.length}</div>
             <div className="yk-stat-label">MOTIVOS</div>
+          </div>
+          <div className="yk-stat">
+            <div className="yk-stat-num">
+              {stats ? formatMembers(stats.messagesLast30d) : "…"}
+            </div>
+            <div className="yk-stat-label">MENSAJES (30D)</div>
           </div>
         </div>
 
