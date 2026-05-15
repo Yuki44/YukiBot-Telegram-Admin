@@ -180,7 +180,8 @@ export async function executeSilence(ctx: BotContext, options: SilenceOptions): 
         actor,
         target: { id: target.userId, name: target.name, username: target.username },
         topicId: ctx.message?.message_thread_id,
-        messageText: !options.applyWarning ? repliedMessage : undefined,
+        messageText:
+          !options.applyWarning && repliedMsg ? (repliedMsg.text ?? repliedMsg.caption) : undefined,
       });
 
       if (options.applyWarning && reason) {

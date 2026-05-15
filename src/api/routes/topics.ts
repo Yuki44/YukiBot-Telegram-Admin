@@ -44,6 +44,7 @@ export function createTopicsRouter(): Router {
             name: t.name,
             allowedMsgTypes: t.allowedMsgTypes,
             adminOnly: t.adminOnly ?? false,
+            isUserConfigured: t.isUserConfigured ?? false,
           }))
           .sort((a, b) => a.topicId - b.topicId)
       );
@@ -101,6 +102,7 @@ export function createTopicsRouter(): Router {
         name: created.name,
         allowedMsgTypes: created.allowedMsgTypes,
         adminOnly: created.adminOnly ?? false,
+        isUserConfigured: created.isUserConfigured ?? true,
       });
     } catch (err) {
       logger.error({ action: "topics.upsert", error: String(err), chatId });
@@ -108,114 +110,106 @@ export function createTopicsRouter(): Router {
     }
   });
 
-  router.put(
-    "/:topicId",
-    requireChatAdmin({ ownerOnly: true }),
-    async (req: Request, res: Response) => {
-      const chatId = Number(req.params.chatId);
-      const topicId = Number(req.params.topicId);
-      if (!Number.isFinite(topicId)) {
-        res.status(400).json({ error: "invalid_topic_id" });
-        return;
-      }
-      const body = req.body as TopicBody;
-
-      const existing = await topicRepository.findByChatAndTopic(chatId, topicId);
-      if (!existing) {
-        res.status(404).json({ error: "topic_not_found" });
-        return;
-      }
-
-      const name = body.name !== undefined ? body.name.toString().trim() : existing.name;
-      if (!name) {
-        res.status(400).json({ error: "invalid_name" });
-        return;
-      }
-
-      let allowedMsgTypes: string[] = existing.allowedMsgTypes;
-      if (body.allowedMsgTypes !== undefined) {
-        const sanitized = sanitizeTypes(body.allowedMsgTypes);
-        if (sanitized === null) {
-          res.status(400).json({ error: "invalid_allowed_types" });
-          return;
-        }
-        allowedMsgTypes = sanitized;
-      }
-
-      const adminOnly =
-        typeof body.adminOnly === "boolean" ? body.adminOnly : existing.adminOnly ?? false;
-
-      try {
-        const updated = await topicRepository.upsert({
-          chatId,
-          topicId,
-          name,
-          allowedMsgTypes,
-          adminOnly,
-        });
-        logger.info({
-          action: "topics.update",
-          chatId,
-          topicId,
-          userId: req.user!.userId,
-        });
-        recordActivity({
-          chatId,
-          type: "topic_rule_change",
-          source: "panel",
-          actor: { id: req.user!.userId, name: req.user!.name, username: req.user!.username },
-          targetRef: updated.name?.trim() || `Tema #${updated.topicId}`,
-          topicId: updated.topicId,
-          reason: `tipos: ${allowedMsgTypes.join(", ") || "ninguno"}${adminOnly ? " · solo admins" : ""}`,
-        });
-        res.json({
-          chatId: updated.chatId,
-          topicId: updated.topicId,
-          name: updated.name,
-          allowedMsgTypes: updated.allowedMsgTypes,
-          adminOnly: updated.adminOnly ?? false,
-        });
-      } catch (err) {
-        logger.error({ action: "topics.update", error: String(err), chatId, topicId });
-        res.status(500).json({ error: "internal_error" });
-      }
+  router.put("/:topicId", requireChatAdmin({ ownerOnly: true }), async (req: Request, res: Response) => {
+    const chatId = Number(req.params.chatId);
+    const topicId = Number(req.params.topicId);
+    if (!Number.isFinite(topicId)) {
+      res.status(400).json({ error: "invalid_topic_id" });
+      return;
     }
-  );
+    const body = req.body as TopicBody;
 
-  router.delete(
-    "/:topicId",
-    requireChatAdmin({ ownerOnly: true }),
-    async (req: Request, res: Response) => {
-      const chatId = Number(req.params.chatId);
-      const topicId = Number(req.params.topicId);
-      if (!Number.isFinite(topicId)) {
-        res.status(400).json({ error: "invalid_topic_id" });
+    const existing = await topicRepository.findByChatAndTopic(chatId, topicId);
+    if (!existing) {
+      res.status(404).json({ error: "topic_not_found" });
+      return;
+    }
+
+    const name = body.name !== undefined ? body.name.toString().trim() : existing.name;
+    if (!name) {
+      res.status(400).json({ error: "invalid_name" });
+      return;
+    }
+
+    let allowedMsgTypes: string[] = existing.allowedMsgTypes;
+    if (body.allowedMsgTypes !== undefined) {
+      const sanitized = sanitizeTypes(body.allowedMsgTypes);
+      if (sanitized === null) {
+        res.status(400).json({ error: "invalid_allowed_types" });
         return;
       }
-      try {
-        await topicRepository.deleteOne(chatId, topicId);
-        logger.info({
-          action: "topics.delete",
-          chatId,
-          topicId,
-          userId: req.user!.userId,
-        });
-        recordActivity({
-          chatId,
-          type: "topic_rule_change",
-          source: "panel",
-          actor: { id: req.user!.userId, name: req.user!.name, username: req.user!.username },
-          targetRef: `Tema #${topicId}`,
-          topicId,
-          reason: "regla eliminada",
-        });
-        res.status(204).end();
-      } catch (err) {
-        logger.error({ action: "topics.delete", error: String(err), chatId, topicId });
-        res.status(500).json({ error: "internal_error" });
-      }
+      allowedMsgTypes = sanitized;
     }
-  );
+
+    const adminOnly = typeof body.adminOnly === "boolean" ? body.adminOnly : (existing.adminOnly ?? false);
+
+    try {
+      const updated = await topicRepository.upsert({
+        chatId,
+        topicId,
+        name,
+        allowedMsgTypes,
+        adminOnly,
+      });
+      logger.info({
+        action: "topics.update",
+        chatId,
+        topicId,
+        userId: req.user!.userId,
+      });
+      recordActivity({
+        chatId,
+        type: "topic_rule_change",
+        source: "panel",
+        actor: { id: req.user!.userId, name: req.user!.name, username: req.user!.username },
+        targetRef: updated.name?.trim() || `Tema #${updated.topicId}`,
+        topicId: updated.topicId,
+        reason: `tipos: ${allowedMsgTypes.join(", ") || "ninguno"}${adminOnly ? " · solo admins" : ""}`,
+      });
+      res.json({
+        chatId: updated.chatId,
+        topicId: updated.topicId,
+        name: updated.name,
+        allowedMsgTypes: updated.allowedMsgTypes,
+        adminOnly: updated.adminOnly ?? false,
+        isUserConfigured: updated.isUserConfigured ?? true,
+      });
+    } catch (err) {
+      logger.error({ action: "topics.update", error: String(err), chatId, topicId });
+      res.status(500).json({ error: "internal_error" });
+    }
+  });
+
+  router.delete("/:topicId", requireChatAdmin({ ownerOnly: true }), async (req: Request, res: Response) => {
+    const chatId = Number(req.params.chatId);
+    const topicId = Number(req.params.topicId);
+    if (!Number.isFinite(topicId)) {
+      res.status(400).json({ error: "invalid_topic_id" });
+      return;
+    }
+    try {
+      await topicRepository.deleteOne(chatId, topicId);
+      logger.info({
+        action: "topics.delete",
+        chatId,
+        topicId,
+        userId: req.user!.userId,
+      });
+      recordActivity({
+        chatId,
+        type: "topic_rule_change",
+        source: "panel",
+        actor: { id: req.user!.userId, name: req.user!.name, username: req.user!.username },
+        targetRef: `Tema #${topicId}`,
+        topicId,
+        reason: "regla eliminada",
+      });
+      res.status(204).end();
+    } catch (err) {
+      logger.error({ action: "topics.delete", error: String(err), chatId, topicId });
+      res.status(500).json({ error: "internal_error" });
+    }
+  });
 
   return router;
 }

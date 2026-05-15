@@ -45,7 +45,15 @@
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\dariu\\\\Documents\\\\PROJECTS\\\\YukiBot-Telegram-Admin\\\\src\\\\api\" -Recurse -ErrorAction SilentlyContinue)",
       "Bash(npx eslint *)",
       "Bash(gh pr *)",
-      "Bash(dir tmp *)"
+      "Bash(dir tmp *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\dariu\\\\Documents\\\\PROJECTS\\\\YukiBot-Telegram-Admin\" -Recurse -Directory -Name)",
+      "Bash(Select-Object -First 30)",
+      "Bash(xargs grep -l \"allowedMsgTypes\")",
+      "Bash(grep -E \"\\\\.\\(tsx|ts|json\\)$\")",
+      "Bash(Get-ChildItem -Path . -Depth 1)",
+      "Bash(Select-Object Name, FullName)",
+      "Bash(npm test *)",
+      "Bash(npx *)"
     ]
   }
 }

@@ -27,12 +27,20 @@ export function LoginScreen() {
   const [tgError, setTgError] = useState<string | null>(null);
   const [tgEnabled, setTgEnabled] = useState(false);
   const [tgFallbackUrl, setTgFallbackUrl] = useState<string | null>(null);
+  // Stores the resolved bot username when the domain check passes.
+  // Setting this triggers the second effect below which injects the widget script
+  // safely AFTER React has rendered the container div (making widgetRef.current available).
+  const [widgetUsername, setWidgetUsername] = useState<string | null>(null);
   const [showResetHelp, setShowResetHelp] = useState(false);
 
+  // Effect 1 — register the Telegram auth callback and fetch public config.
+  // Does NOT touch the DOM; only updates state once config is available.
   useEffect(() => {
     let cancelled = false;
 
     window.onTelegramAuth = async (user: TelegramAuthData) => {
+      // eslint-disable-next-line no-console
+      console.info("[login] onTelegramAuth fired", { id: user.id, hasHash: !!user.hash });
       setTgBusy(true);
       setTgError(null);
       try {
@@ -53,38 +61,79 @@ export function LoginScreen() {
       .publicConfig()
       .then((cfg) => {
         if (cancelled) return;
-        const hasConfig = cfg.botUsername.length > 0 && cfg.botLoginDomain.length > 0;
-        // The widget only renders correctly when the current host matches the BotFather
-        // domain — otherwise it shows a "Bot domain invalid" iframe placeholder.
-        const matches = hasConfig && window.location.hostname === cfg.botLoginDomain;
+        const expected = cfg.botLoginDomain.trim().toLowerCase().replace(/^www\./, "").replace(/\.+$/, "");
+        const actual = window.location.hostname.toLowerCase().replace(/^www\./, "").replace(/\.+$/, "");
+        const username = cfg.botUsername.trim().replace(/^@/, "");
+        const hasConfig = username.length > 0 && expected.length > 0;
+        const matches = hasConfig && actual === expected;
+        // Diagnostic — one-line console hint so the user can confirm the comparison
+        // without us guessing what their env value actually is.
+        if (hasConfig) {
+          // eslint-disable-next-line no-console
+          console.info(`[login] telegram widget: expected=${expected} got=${actual} match=${matches}`);
+        }
         if (matches) {
-          setTgEnabled(true);
-          const script = document.createElement("script");
-          script.src = "https://telegram.org/js/telegram-widget.js?22";
-          script.async = true;
-          script.setAttribute("data-telegram-login", cfg.botUsername);
-          script.setAttribute("data-size", "large");
-          script.setAttribute("data-radius", "12");
-          script.setAttribute("data-onauth", "onTelegramAuth(user)");
-          script.setAttribute("data-request-access", "write");
-          widgetRef.current?.appendChild(script);
+          // Setting widgetUsername causes React to render the widget container div, which
+          // makes widgetRef.current non-null. Effect 2 (below) picks it up and injects
+          // the script after that render completes — avoiding the null-ref race.
+          setWidgetUsername(username);
           return;
         }
         if (hasConfig) {
           // Off-domain (e.g. local dev): show a fallback button that points users to the
           // production login URL where the official widget actually works.
-          setTgFallbackUrl(`https://${cfg.botLoginDomain}/login`);
+          setTgFallbackUrl(`https://${expected}/login`);
         }
       })
       .catch(() => {
         // Public config failure — silently keep Telegram hidden; password still works.
       });
 
+    // Note: we intentionally do NOT delete window.onTelegramAuth on cleanup.
+    // The Telegram widget invokes the global callback asynchronously after the
+    // OAuth popup completes; if we delete it on a re-render or unmount, the
+    // callback never fires when the user authorizes. Leaving the global resident
+    // on the login screen is safe — once the user navigates away, the closure's
+    // navigate() ref is stale but harmless, and a re-mount overwrites it.
     return () => {
       cancelled = true;
-      delete window.onTelegramAuth;
     };
   }, [navigate]);
+
+  // Effect 2 — inject the Telegram widget script.
+  // Runs AFTER the render triggered by setWidgetUsername(), so widgetRef.current is
+  // guaranteed to be a mounted DOM node at this point.
+  //
+  // We use createContextualFragment instead of document.createElement + appendChild
+  // because the Telegram widget script relies on document.currentScript at run-time
+  // to find its parent element for iframe insertion. With the createElement path,
+  // document.currentScript is null inside the loaded script (browsers do not set it
+  // for scripts inserted by other scripts), and the widget renders an empty button
+  // that does nothing on click. Parsing the script via Range.createContextualFragment
+  // keeps the script element associated with the document so the widget can locate
+  // its container and attach its postMessage listener correctly.
+  useEffect(() => {
+    const container = widgetRef.current;
+    if (!widgetUsername || !container) return;
+    setTgEnabled(true);
+    container.replaceChildren();
+    const range = document.createRange();
+    range.selectNode(container);
+    const fragment = range.createContextualFragment(
+      `<script src="https://telegram.org/js/telegram-widget.js?22" async ` +
+        `data-telegram-login="${widgetUsername}" data-size="large" data-radius="12" ` +
+        `data-onauth="onTelegramAuth(user)" data-request-access="write"></script>`
+    );
+    container.appendChild(fragment);
+    // eslint-disable-next-line no-console
+    console.info("[login] widget script injected");
+    const probe = window.setTimeout(() => {
+      const hasIframe = !!container.querySelector("iframe");
+      // eslint-disable-next-line no-console
+      console.info(`[login] widget iframe ${hasIframe ? "present" : "NOT present"}`);
+    }, 1500);
+    return () => window.clearTimeout(probe);
+  }, [widgetUsername]);
 
   async function submitPassword(e: React.FormEvent) {
     e.preventDefault();
@@ -127,7 +176,7 @@ export function LoginScreen() {
             Hola de nuevo
           </h1>
           <div style={{ color: "var(--ink-500)", marginTop: 6, fontSize: 15 }}>
-            Configura tu YukiBot desde aquí 🌿
+            Panel de administración de tu grupo.
           </div>
         </div>
 
@@ -247,7 +296,12 @@ export function LoginScreen() {
             </button>
           </form>
 
-          {(tgEnabled || tgFallbackUrl) && (
+          {/* The conditional section shows once config is resolved.
+              widgetUsername is set by Effect 1 when the domain matches;
+              tgFallbackUrl is set when we're on the wrong domain.
+              The widget container div (ref={widgetRef}) lives here so it is
+              in the DOM when Effect 2 runs, giving it a non-null ref to inject into. */}
+          {(widgetUsername !== null || tgFallbackUrl !== null) && (
             <>
               <div
                 aria-hidden
@@ -265,14 +319,15 @@ export function LoginScreen() {
                 <div style={{ flex: 1, height: 1, background: "var(--ink-100)" }} />
               </div>
 
-              {tgEnabled && (
-                <div
-                  ref={widgetRef}
-                  style={{ minHeight: 48, display: "flex", justifyContent: "center" }}
-                />
-              )}
+              {/* Widget container — rendered here (inside the conditional) so widgetRef
+                  is populated at the time Effect 2 runs (after this render completes).
+                  display:none collapses it until the Telegram script renders the button. */}
+              <div
+                ref={widgetRef}
+                style={{ display: tgEnabled ? "flex" : "none", justifyContent: "center" }}
+              />
 
-              {!tgEnabled && tgFallbackUrl && (
+              {!widgetUsername && tgFallbackUrl && (
                 <>
                   <a
                     href={tgFallbackUrl}
@@ -289,16 +344,6 @@ export function LoginScreen() {
                   >
                     {I.telegram({ size: 20 })} Continuar con Telegram
                   </a>
-                  <div
-                    style={{
-                      color: "var(--ink-500)",
-                      fontSize: 12,
-                      textAlign: "center",
-                      marginTop: 8,
-                    }}
-                  >
-                    El login con Telegram solo funciona desde el dominio principal.
-                  </div>
                 </>
               )}
 

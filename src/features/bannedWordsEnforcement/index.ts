@@ -112,8 +112,10 @@ export async function bannedWordsEnforcement(ctx: BotContext): Promise<void> {
           target,
           chatId,
           chatName,
+          chatType: chatConfig.type,
           topicId: threadId,
           reason,
+          repliedMsg: msg,
         }).catch(() => {});
         recordActivity({
           chatId,
@@ -144,7 +146,7 @@ export async function bannedWordsEnforcement(ctx: BotContext): Promise<void> {
         chatName,
         topicId: threadId,
         actor: botActor,
-        repliedMessage: text,
+        repliedMsg: msg,
       });
     }
 
@@ -158,9 +160,11 @@ export async function bannedWordsEnforcement(ctx: BotContext): Promise<void> {
           target,
           chatId,
           chatName,
+          chatType: chatConfig.type,
           topicId: threadId,
           muteUntil,
           reason,
+          repliedMsg: msg,
         }).catch(() => {});
         recordActivity({
           chatId,
@@ -174,7 +178,6 @@ export async function bannedWordsEnforcement(ctx: BotContext): Promise<void> {
         });
       }
     }
-
   } catch (err) {
     logger.error({ action: "bannedWordsEnforcement", error: String(err) });
   }

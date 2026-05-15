@@ -6,18 +6,11 @@ export const userDomainAllowanceRepository = {
     return await UserDomainAllowance.find({ chatId }).sort({ userId: 1 });
   },
 
-  async findByUserAndChat(
-    userId: number,
-    chatId: number
-  ): Promise<IUserDomainAllowance | null> {
+  async findByUserAndChat(userId: number, chatId: number): Promise<IUserDomainAllowance | null> {
     return await UserDomainAllowance.findOne({ userId, chatId });
   },
 
-  async addDomain(
-    userId: number,
-    chatId: number,
-    domain: string
-  ): Promise<IUserDomainAllowance> {
+  async addDomain(userId: number, chatId: number, domain: string): Promise<IUserDomainAllowance> {
     return (await UserDomainAllowance.findOneAndUpdate(
       { userId, chatId },
       { $addToSet: { domains: domain } },
@@ -25,11 +18,7 @@ export const userDomainAllowanceRepository = {
     ))!;
   },
 
-  async removeDomain(
-    userId: number,
-    chatId: number,
-    domain: string
-  ): Promise<IUserDomainAllowance | null> {
+  async removeDomain(userId: number, chatId: number, domain: string): Promise<IUserDomainAllowance | null> {
     return await UserDomainAllowance.findOneAndUpdate(
       { userId, chatId },
       { $pull: { domains: domain } },

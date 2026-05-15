@@ -1,11 +1,13 @@
-import { ReactNode, useEffect, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppBar } from "../components/AppBar";
 import { I } from "../components/Icon";
 import { LogUndoSheet } from "../components/LogUndoSheet";
+import { ScrollToTopButton } from "../components/ScrollToTopButton";
 import { ApiError, api } from "../lib/api";
 import { clearSession } from "../lib/auth";
 import { useChat } from "../lib/useChat";
+import { useScrollRestore } from "../lib/useScrollRestore";
 import { timeAgo } from "../lib/utils";
 import { isUndoableLogType } from "../types/api";
 import type { ActivityLogEntry, ActivityLogType } from "../types/api";
@@ -263,6 +265,9 @@ export function LogsScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [undoTarget, setUndoTarget] = useState<ActivityLogEntry | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useScrollRestore(scrollRef, `logs:${chatId ?? "_"}:${filter}:${q.trim()}`, entries !== null);
 
   const filterDef = FILTERS.find((f) => f.id === filter) ?? FILTERS[0];
 
@@ -418,7 +423,7 @@ export function LogsScreen() {
         })}
       </div>
 
-      <div className="yk-scroll yk-pad-nav">
+      <div ref={scrollRef} className="yk-scroll yk-pad-nav">
         <div style={{ padding: "0 16px 16px" }}>
           <div
             className="yk-banner"
@@ -503,6 +508,7 @@ export function LogsScreen() {
           onConfirm={() => performUndo(undoTarget)}
         />
       )}
+      <ScrollToTopButton containerRef={scrollRef} />
     </div>
   );
 }

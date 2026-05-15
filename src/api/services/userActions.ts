@@ -81,6 +81,7 @@ export async function warnUserViaApi(
       target: targetToLog(updated),
       chatId: chatConfig.chatId,
       chatName: chatConfig.name,
+      chatType: chatConfig.type,
       reason: "3 avisos (desde panel)",
     }).catch(() => {});
 
@@ -100,6 +101,7 @@ export async function warnUserViaApi(
     target: targetToLog(updated),
     chatId: chatConfig.chatId,
     chatName: chatConfig.name,
+    chatType: chatConfig.type,
     warnings: updated.warnings,
     reason,
   }).catch(() => {});
@@ -172,6 +174,7 @@ export async function silenceUserViaApi(
     target: targetToLog(updated),
     chatId: chatConfig.chatId,
     chatName: chatConfig.name,
+    chatType: chatConfig.type,
     muteUntil,
   }).catch(() => {});
 
@@ -235,6 +238,7 @@ export async function unsilenceUserViaApi(
     target: targetToLog(updated),
     chatId: chatConfig.chatId,
     chatName: chatConfig.name,
+    chatType: chatConfig.type,
   }).catch(() => {});
 
   recordActivity({
@@ -279,6 +283,7 @@ export async function banUserViaApi(
     target: targetToLog(updated),
     chatId: chatConfig.chatId,
     chatName: chatConfig.name,
+    chatType: chatConfig.type,
     reason,
   }).catch(() => {});
 
@@ -329,6 +334,7 @@ export async function unbanUserViaApi(
     target: targetToLog(updated),
     chatId: chatConfig.chatId,
     chatName: chatConfig.name,
+    chatType: chatConfig.type,
   }).catch(() => {});
 
   recordActivity({

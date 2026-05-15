@@ -38,8 +38,7 @@ export function expandLegacySeverity(severity: BannedWordSeverity): ResolvedBann
  * `severity` field is expanded.
  */
 export function resolveActions(word: IBannedWord): ResolvedBannedWordActions {
-  const hasNewShape =
-    !!word.actions || word.kick === true || word.flag === true || !!word.warnReason;
+  const hasNewShape = !!word.actions || word.kick === true || word.flag === true || !!word.warnReason;
   if (hasNewShape) {
     return {
       delete: !!word.actions?.delete,

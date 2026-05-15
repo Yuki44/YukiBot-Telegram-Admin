@@ -18,6 +18,7 @@ import {
   unsilenceUserViaApi,
   warnUserViaApi,
 } from "../services/userActions";
+import { discoverProfilePhoto, shouldRecheckPhoto } from "../../bot/helpers/profilePhoto";
 
 const VALID_FILTERS: UserListFilter[] = ["all", "warned", "silenced", "banned"];
 
@@ -147,7 +148,11 @@ export function createUsersRouter(bot: Bot<BotContext>): Router {
       if (!chat) return;
       if (await rejectIfTargetIsAdmin(chatId, userId, res)) return;
       const result = await warnUserViaApi(bot.api, chat, userId, actorFromReq(req), reason);
-      res.json({ user: userToDto(result.user), enforced: result.enforced, enforceError: result.enforceError });
+      res.json({
+        user: userToDto(result.user),
+        enforced: result.enforced,
+        enforceError: result.enforceError,
+      });
     } catch (err) {
       logger.error({ action: "users.warn", error: String(err), chatId, userId });
       res.status(500).json({ error: "internal_error" });
@@ -162,7 +167,11 @@ export function createUsersRouter(bot: Bot<BotContext>): Router {
       if (!chat) return;
       if (await rejectIfTargetIsAdmin(chatId, userId, res)) return;
       const result = await silenceUserViaApi(bot.api, chat, userId, actorFromReq(req));
-      res.json({ user: userToDto(result.user), enforced: result.enforced, enforceError: result.enforceError });
+      res.json({
+        user: userToDto(result.user),
+        enforced: result.enforced,
+        enforceError: result.enforceError,
+      });
     } catch (err) {
       logger.error({ action: "users.silence", error: String(err), chatId, userId });
       res.status(500).json({ error: "internal_error" });
@@ -176,7 +185,11 @@ export function createUsersRouter(bot: Bot<BotContext>): Router {
       const chat = await loadChatOr404(chatId, res);
       if (!chat) return;
       const result = await unsilenceUserViaApi(bot.api, chat, userId, actorFromReq(req));
-      res.json({ user: userToDto(result.user), enforced: result.enforced, enforceError: result.enforceError });
+      res.json({
+        user: userToDto(result.user),
+        enforced: result.enforced,
+        enforceError: result.enforceError,
+      });
     } catch (err) {
       logger.error({ action: "users.unsilence", error: String(err), chatId, userId });
       res.status(500).json({ error: "internal_error" });
@@ -192,7 +205,11 @@ export function createUsersRouter(bot: Bot<BotContext>): Router {
       if (!chat) return;
       if (await rejectIfTargetIsAdmin(chatId, userId, res)) return;
       const result = await banUserViaApi(bot.api, chat, userId, actorFromReq(req), reason);
-      res.json({ user: userToDto(result.user), enforced: result.enforced, enforceError: result.enforceError });
+      res.json({
+        user: userToDto(result.user),
+        enforced: result.enforced,
+        enforceError: result.enforceError,
+      });
     } catch (err) {
       logger.error({ action: "users.ban", error: String(err), chatId, userId });
       res.status(500).json({ error: "internal_error" });
@@ -206,46 +223,16 @@ export function createUsersRouter(bot: Bot<BotContext>): Router {
       const chat = await loadChatOr404(chatId, res);
       if (!chat) return;
       const result = await unbanUserViaApi(bot.api, chat, userId, actorFromReq(req));
-      res.json({ user: userToDto(result.user), enforced: result.enforced, enforceError: result.enforceError });
+      res.json({
+        user: userToDto(result.user),
+        enforced: result.enforced,
+        enforceError: result.enforceError,
+      });
     } catch (err) {
       logger.error({ action: "users.unban", error: String(err), chatId, userId });
       res.status(500).json({ error: "internal_error" });
     }
   });
-
-  // Re-check the cached photoFileId at most once per week. Telegram doesn't expose a
-  // change feed for profile photos, but checking too often burns API quota; weekly
-  // strikes a balance for a moderation dashboard.
-  const PHOTO_RECHECK_MS = 7 * 24 * 60 * 60 * 1000;
-
-  /**
-   * Cache the smallest available profile-photo file_id for a user. Stores `null` if
-   * the user has no photo (or the bot can't see it) so we don't re-call the API on
-   * every avatar render.
-   */
-  async function discoverProfilePhoto(userId: number, chatId: number): Promise<void> {
-    try {
-      const photos = await bot.api.getUserProfilePhotos(userId, { limit: 1 });
-      // photos.photos is PhotoSize[][] — outer array is "photos" (we asked for 1),
-      // inner array is the same photo at multiple resolutions, smallest first.
-      const smallest = photos.photos[0]?.[0];
-      const fileId = smallest?.file_id ?? null;
-
-      await userRepository.upsert({
-        userId,
-        chatId,
-        photoFileId: fileId,
-        photoCheckedAt: new Date(),
-      });
-    } catch (err) {
-      logger.warn({ action: "users.discoverPhoto_failed", chatId, userId, error: String(err) });
-    }
-  }
-
-  function shouldRecheckPhoto(u: IUser): boolean {
-    if (!u.photoCheckedAt) return true;
-    return Date.now() - u.photoCheckedAt.getTime() > PHOTO_RECHECK_MS;
-  }
 
   /**
    * Reconcile a single user's mute/ban state from a Telegram ChatMember response.
@@ -258,7 +245,8 @@ export function createUsersRouter(bot: Bot<BotContext>): Router {
     previous: IUser | null
   ): Promise<{ user: IUser; changed: boolean }> {
     const isMutedFromTg =
-      member.status === "restricted" && (member as { can_send_messages?: boolean }).can_send_messages === false;
+      member.status === "restricted" &&
+      (member as { can_send_messages?: boolean }).can_send_messages === false;
     const isBannedFromTg = member.status === "kicked";
     const muteUntilFromTg =
       isMutedFromTg && typeof (member as { until_date?: number }).until_date === "number"
@@ -312,8 +300,17 @@ export function createUsersRouter(bot: Bot<BotContext>): Router {
       const previous = await userRepository.findByUserAndChat(userId, chatId);
       const { user: updated } = await reconcileFromMember(chatId, member, previous);
       if (shouldRecheckPhoto(updated)) {
-        await discoverProfilePhoto(userId, chatId);
+        await discoverProfilePhoto(bot.api, userId, chatId);
       }
+      // Propagate identity (not per-chat mute/ban state) so the same user looks
+      // identical across every chat where the dashboard shows them.
+      void userRepository.syncIdentityAcrossChats(userId, {
+        name:
+          [member.user.first_name, member.user.last_name].filter(Boolean).join(" ") ||
+          member.user.username ||
+          null,
+        username: member.user.username ?? null,
+      });
       const final = (await userRepository.findByUserAndChat(userId, chatId)) ?? updated;
       const isAdmin = await adminRepository.isChatAdmin(userId, chatId);
       logger.info({

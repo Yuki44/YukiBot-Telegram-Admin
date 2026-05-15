@@ -108,6 +108,23 @@ export function createWhitelistRouter(): Router {
 
   // ─── Spam-user whitelist ────────────────────────────────────────────
 
+  // Hydrate raw userIds → identity DTO so the dashboard can render name + username + ID.
+  // Best-effort: users who've never spoken here have no User row → name/username are null
+  // and the row falls back to "ID xxx" in the UI.
+  async function hydrateWhitelistUsers(chatId: number, userIds: number[]) {
+    return await Promise.all(
+      userIds.map(async (uid) => {
+        const u = await userRepository.findByUserAndChat(uid, chatId).catch(() => null);
+        return {
+          userId: uid,
+          name: u?.name ?? null,
+          username: u?.username ?? null,
+          photoFileId: u?.photoFileId ?? null,
+        };
+      })
+    );
+  }
+
   router.get("/users", requireChatAdmin(), async (req: Request, res: Response) => {
     const chatId = Number(req.params.chatId);
     try {
@@ -116,7 +133,8 @@ export function createWhitelistRouter(): Router {
         res.status(404).json({ error: "chat_not_found" });
         return;
       }
-      res.json(chat.spamUserWhitelist ?? []);
+      const hydrated = await hydrateWhitelistUsers(chatId, chat.spamUserWhitelist ?? []);
+      res.json(hydrated);
     } catch (err) {
       logger.error({ action: "whitelist.users.list", error: String(err), chatId });
       res.status(500).json({ error: "internal_error" });
@@ -150,7 +168,8 @@ export function createWhitelistRouter(): Router {
         target: { id: userId },
         reason: "usuario",
       });
-      res.json(updated.spamUserWhitelist ?? []);
+      const hydrated = await hydrateWhitelistUsers(chatId, updated.spamUserWhitelist ?? []);
+      res.json(hydrated);
     } catch (err) {
       logger.error({ action: "whitelist.users.add", error: String(err), chatId });
       res.status(500).json({ error: "internal_error" });
@@ -184,7 +203,8 @@ export function createWhitelistRouter(): Router {
         target: { id: userId },
         reason: "usuario",
       });
-      res.json(updated.spamUserWhitelist ?? []);
+      const hydrated = await hydrateWhitelistUsers(chatId, updated.spamUserWhitelist ?? []);
+      res.json(hydrated);
     } catch (err) {
       logger.error({ action: "whitelist.users.remove", error: String(err), chatId });
       res.status(500).json({ error: "internal_error" });
@@ -254,45 +274,41 @@ export function createWhitelistRouter(): Router {
     }
   });
 
-  router.delete(
-    "/combo/:userId/domains/:domain",
-    requireChatAdmin(),
-    async (req: Request, res: Response) => {
-      const chatId = Number(req.params.chatId);
-      const userId = Number(req.params.userId);
-      const domain = decodeURIComponent(req.params.domain);
-      try {
-        const updated = await userDomainAllowanceRepository.removeDomain(userId, chatId, domain);
-        if (!updated) {
-          res.status(404).json({ error: "combo_entry_not_found" });
-          return;
-        }
-        // If the user has no domains left, remove the entry entirely so the list stays clean.
-        if (updated.domains.length === 0) {
-          await userDomainAllowanceRepository.removeAllForUser(userId, chatId);
-        }
-        logger.info({
-          action: "whitelist.combo.remove",
-          chatId,
-          targetUserId: userId,
-          domain,
-          userId: req.user!.userId,
-        });
-        recordActivity({
-          chatId,
-          type: "combo_remove",
-          source: "panel",
-          actor: { id: req.user!.userId, name: req.user!.name, username: req.user!.username },
-          target: { id: userId },
-          targetRef: domain,
-        });
-        res.json({ userId, chatId, domains: updated.domains });
-      } catch (err) {
-        logger.error({ action: "whitelist.combo.remove", error: String(err), chatId });
-        res.status(500).json({ error: "internal_error" });
+  router.delete("/combo/:userId/domains/:domain", requireChatAdmin(), async (req: Request, res: Response) => {
+    const chatId = Number(req.params.chatId);
+    const userId = Number(req.params.userId);
+    const domain = decodeURIComponent(req.params.domain);
+    try {
+      const updated = await userDomainAllowanceRepository.removeDomain(userId, chatId, domain);
+      if (!updated) {
+        res.status(404).json({ error: "combo_entry_not_found" });
+        return;
       }
+      // If the user has no domains left, remove the entry entirely so the list stays clean.
+      if (updated.domains.length === 0) {
+        await userDomainAllowanceRepository.removeAllForUser(userId, chatId);
+      }
+      logger.info({
+        action: "whitelist.combo.remove",
+        chatId,
+        targetUserId: userId,
+        domain,
+        userId: req.user!.userId,
+      });
+      recordActivity({
+        chatId,
+        type: "combo_remove",
+        source: "panel",
+        actor: { id: req.user!.userId, name: req.user!.name, username: req.user!.username },
+        target: { id: userId },
+        targetRef: domain,
+      });
+      res.json({ userId, chatId, domains: updated.domains });
+    } catch (err) {
+      logger.error({ action: "whitelist.combo.remove", error: String(err), chatId });
+      res.status(500).json({ error: "internal_error" });
     }
-  );
+  });
 
   router.delete("/combo/:userId", requireChatAdmin(), async (req: Request, res: Response) => {
     const chatId = Number(req.params.chatId);

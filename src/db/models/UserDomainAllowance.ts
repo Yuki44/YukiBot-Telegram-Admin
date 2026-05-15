@@ -9,7 +9,4 @@ const schema = new Schema<IUserDomainAllowance>({
 
 schema.index({ chatId: 1, userId: 1 }, { unique: true });
 
-export const UserDomainAllowance = model<IUserDomainAllowance>(
-  "UserDomainAllowance",
-  schema
-);
+export const UserDomainAllowance = model<IUserDomainAllowance>("UserDomainAllowance", schema);

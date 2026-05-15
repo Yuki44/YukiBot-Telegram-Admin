@@ -58,7 +58,7 @@ export async function applyWarn(
       reason,
       topicId,
       warningsAfter: user.warnings,
-      messageText: options?.repliedMessage,
+      messageText: options?.repliedMsg ? (options.repliedMsg.text ?? options.repliedMsg.caption) : undefined,
     });
 
     let warnMsgId: number | undefined;

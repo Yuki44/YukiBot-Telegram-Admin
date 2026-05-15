@@ -15,15 +15,19 @@ export const spamPatternRepository = {
     chatId: number,
     text: string,
     addedByUserId: number,
-    triggeredByUserId: number
+    triggeredByUserId: number,
+    mediaFileId?: string | null
   ): Promise<ISpamPattern> {
     const normalized = normalizeText(text);
     const normalizedHash = buildHash(normalized);
     const patternId = normalizedHash.slice(0, 7);
 
+    const setFields: Record<string, unknown> = { text, patternId, addedByUserId, triggeredByUserId };
+    if (mediaFileId !== undefined) setFields.mediaFileId = mediaFileId;
+
     return await SpamPattern.findOneAndUpdate(
       { chatId, normalizedHash },
-      { $set: { text, patternId, addedByUserId, triggeredByUserId } },
+      { $set: setFields },
       { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
     );
   },
@@ -56,10 +60,7 @@ export const spamPatternRepository = {
   },
 
   /** Latest pattern record for a given (chat, triggeredBy) pair, regardless of review state. */
-  async findLatestByTriggeredUser(
-    chatId: number,
-    triggeredByUserId: number
-  ): Promise<ISpamPattern | null> {
+  async findLatestByTriggeredUser(chatId: number, triggeredByUserId: number): Promise<ISpamPattern | null> {
     return await SpamPattern.findOne({ chatId, triggeredByUserId }, null, {
       sort: { createdAt: -1 },
     });

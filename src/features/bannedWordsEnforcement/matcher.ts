@@ -3,10 +3,7 @@ import { IBannedWord } from "../../types";
 // Combining diacritical marks block (U+0300–U+036F). Defined via String.fromCharCode
 // so the source file stays pure ASCII — file-encoding issues can otherwise corrupt
 // the raw range characters.
-const COMBINING_MARKS_RE = new RegExp(
-  `[${String.fromCharCode(0x0300)}-${String.fromCharCode(0x036f)}]`,
-  "g"
-);
+const COMBINING_MARKS_RE = new RegExp(`[${String.fromCharCode(0x0300)}-${String.fromCharCode(0x036f)}]`, "g");
 
 /** Lowercase + strip diacritics so "Camión" and "camion" compare equal. */
 export function normalize(text: string): string {
@@ -44,10 +41,7 @@ export function findMatchingRule(
     if (!needle) continue;
 
     if (rule.exactMatch) {
-      const re = new RegExp(
-        `(?:^|[^\\p{L}\\p{N}])${escapeForRegex(needle)}(?:[^\\p{L}\\p{N}]|$)`,
-        "u"
-      );
+      const re = new RegExp(`(?:^|[^\\p{L}\\p{N}])${escapeForRegex(needle)}(?:[^\\p{L}\\p{N}]|$)`, "u");
       if (re.test(haystack)) return rule;
     } else if (haystack.includes(needle)) {
       return rule;

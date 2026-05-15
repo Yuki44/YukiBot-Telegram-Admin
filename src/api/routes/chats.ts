@@ -159,18 +159,24 @@ export function createChatsRouter(bot: Bot<BotContext>): Router {
       const startOfToday = new Date();
       startOfToday.setHours(0, 0, 0, 0);
 
-      const [warnedCount, silencedCount, bannedCount, actionsToday, bannedWordsCount] =
-        await Promise.all([
-          User.countDocuments({ chatId, warnings: { $gt: 0 }, isMuted: { $ne: true }, isBanned: { $ne: true } }),
-          User.countDocuments({ chatId, isMuted: true, isBanned: { $ne: true } }),
-          User.countDocuments({ chatId, isBanned: true }),
-          ActivityLog.countDocuments({
-            chatId,
-            timestamp: { $gte: startOfToday },
-            type: { $in: ["warn", "unwarn", "silence", "unsilence", "ban", "unban", "kick", "autoban", "pardon"] },
-          }),
-          BannedWord.countDocuments({ chatId }),
-        ]);
+      const [warnedCount, silencedCount, bannedCount, actionsToday, bannedWordsCount] = await Promise.all([
+        User.countDocuments({
+          chatId,
+          warnings: { $gt: 0 },
+          isMuted: { $ne: true },
+          isBanned: { $ne: true },
+        }),
+        User.countDocuments({ chatId, isMuted: true, isBanned: { $ne: true } }),
+        User.countDocuments({ chatId, isBanned: true }),
+        ActivityLog.countDocuments({
+          chatId,
+          timestamp: { $gte: startOfToday },
+          type: {
+            $in: ["warn", "unwarn", "silence", "unsilence", "ban", "unban", "kick", "autoban", "pardon"],
+          },
+        }),
+        BannedWord.countDocuments({ chatId }),
+      ]);
 
       res.json({ warnedCount, silencedCount, bannedCount, actionsToday, bannedWordsCount });
     } catch (err) {

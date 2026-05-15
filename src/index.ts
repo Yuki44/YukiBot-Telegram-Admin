@@ -154,6 +154,17 @@ async function start() {
   logger.info({ action: "startup", status: "connecting to DB..." });
   await connectDB();
 
+  // Backfill isUserConfigured on Topic rows created before the field existed.
+  // Idempotent — only touches rows where the field is missing. See topicRepository.
+  try {
+    const result = await topicRepository.backfillIsUserConfigured();
+    if (result.configured > 0 || result.unconfigured > 0) {
+      logger.info({ action: "startup.topic_backfill", ...result });
+    }
+  } catch (err) {
+    logger.error({ action: "startup.topic_backfill", error: String(err) });
+  }
+
   const app = createApiServer(bot);
   httpServer = app.listen(PORT, () => {
     logger.info({ action: "api_server", status: `listening on port ${PORT}` });

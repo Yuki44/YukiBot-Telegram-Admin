@@ -10,11 +10,7 @@ import { bannedWordRepository } from "../../db/repositories/bannedWordRepository
 import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
 import { ActivityLogType, BotContext, IActivityLog } from "../../types";
-import {
-  ActorInfo,
-  unbanUserViaApi,
-  unsilenceUserViaApi,
-} from "../services/userActions";
+import { ActorInfo, unbanUserViaApi, unsilenceUserViaApi } from "../services/userActions";
 import { userRepository } from "../../db/repositories/userRepository";
 
 const VALID_TYPES: ActivityLogType[] = [
@@ -58,6 +54,8 @@ const UNDOABLE: ReadonlySet<ActivityLogType> = new Set([
   "banned_word_add",
   "owner_delegate",
 ]);
+
+type ChatFeatureKey = keyof import("../../types").IChat["features"];
 
 function toDto(log: IActivityLog) {
   return {
@@ -218,7 +216,7 @@ export function createActivityLogsRouter(bot: Bot<BotContext>): Router {
               return;
             }
           }
-          const key = log.targetRef as keyof typeof chatFeatureKeys | undefined;
+          const key = log.targetRef as ChatFeatureKey | undefined;
           if (!key) {
             res.status(409).json({ error: "no_inverse" });
             return;
@@ -230,7 +228,7 @@ export function createActivityLogsRouter(bot: Bot<BotContext>): Router {
           }
           // Flip the value currently on the chat — undo means "set back to whatever it
           // wasn't last toggled to", which is just the inverse of the current state.
-          const cur = chat.features[key as keyof typeof chat.features];
+          const cur = chat.features[key];
           if (typeof cur !== "boolean") {
             res.status(409).json({ error: "no_inverse" });
             return;
@@ -279,11 +277,7 @@ export function createActivityLogsRouter(bot: Bot<BotContext>): Router {
         }
 
         case "combo_add": {
-          if (
-            log.targetId === undefined ||
-            log.targetId === null ||
-            !log.targetRef
-          ) {
+          if (log.targetId === undefined || log.targetId === null || !log.targetRef) {
             res.status(409).json({ error: "no_inverse" });
             return;
           }
@@ -389,7 +383,3 @@ export function createActivityLogsRouter(bot: Bot<BotContext>): Router {
 
   return router;
 }
-
-// Used only to constrain the `keyof` indexing on chat.features in the feature_toggle case
-// — never instantiated.
-declare const chatFeatureKeys: import("../../types").IChat["features"];

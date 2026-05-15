@@ -22,6 +22,10 @@ const topicSchema = new Schema<ITopic>({
     type: Boolean,
     default: false,
   },
+  isUserConfigured: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 // Compound unique index on chatId + topicId
