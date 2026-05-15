@@ -52,15 +52,17 @@ Every PR must include **Changes** and **How to test** sections:
 
 ## Pre-merge Checklist
 
-- [ ] No `console.log` left in committed code (G11)
+- [ ] No `console.log` / `console.error` left — only the structured `logger` (G11)
 - [ ] No hardcoded chatIds, userIds, or credentials (G2)
 - [ ] `wasBanned` is never set to `false` (G3)
 - [ ] Admin bypass check is intact (G4)
-- [ ] New commands added to `adminOnlyCommands` list (G7)
+- [ ] New commands added to the `adminOnlyCommands` set (G7)
 - [ ] New features default to `false` (G8)
 - [ ] All DB calls in try/catch (G9)
-- [ ] Errors logged with tags, not sent to group (G10)
-- [ ] `npm run build` succeeds with no errors
+- [ ] Errors logged with `action` tags, not sent to group chat (G10)
+- [ ] New user-facing strings live in `src/locales/es.json` (no inlined Spanish)
+- [ ] `npm run lint`, `npm run format:check`, `npm test`, and `npm run build` all succeed (G13)
+- [ ] If the SPA changed: `npm run install:web` ran cleanly and the build produced `web/dist`
 
 ## Merge Rules
 
