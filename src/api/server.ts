@@ -53,7 +53,6 @@ export function createApiServer(bot: Bot<BotContext>): Express {
     });
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     logger.error({ action: "api.error", error: String(err) });
     res.status(500).json({ error: "internal_error" });

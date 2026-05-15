@@ -45,7 +45,7 @@ function classifyPattern(text: string): { kind: DetectionKind; linkDomain?: stri
   }
 
   const TELEGRAM_HOSTS = new Set(["t.me", "telegram.me", "telegram.dog"]);
-  const hostRx = /(?:https?:\/\/)?(?:www\.)?((?:[a-z0-9-]+\.)+[a-z]{2,})(?:[\/:?#]|\b)/gi;
+  const hostRx = /(?:https?:\/\/)?(?:www\.)?((?:[a-z0-9-]+\.)+[a-z]{2,})(?:[/:?#]|\b)/gi;
 
   let firstHost: string | null = null;
   let firstNonTelegramHost: string | null = null;
