@@ -69,9 +69,7 @@ function buildPreview(kind: DetectionKind, text: string, linkDomain?: string): s
   if (kind === "link" && linkDomain) return linkDomain;
   if (kind === "media") return text.trim();
   const oneLine = text.replace(/\s+/g, " ").trim();
-  return oneLine.length > PREVIEW_MAX_CHARS
-    ? oneLine.slice(0, PREVIEW_MAX_CHARS - 1) + "…"
-    : oneLine;
+  return oneLine.length > PREVIEW_MAX_CHARS ? oneLine.slice(0, PREVIEW_MAX_CHARS - 1) + "…" : oneLine;
 }
 
 export function createSpamDetectionsRouter(): Router {
@@ -82,9 +80,8 @@ export function createSpamDetectionsRouter(): Router {
   router.get("/", requireChatAdmin(), async (req: Request, res: Response) => {
     const chatId = Number(req.params.chatId);
     const rawLimit = Number(req.query.limit);
-    const limit = Number.isFinite(rawLimit) && rawLimit > 0
-      ? Math.min(rawLimit, LIST_LIMIT_MAX)
-      : LIST_LIMIT_DEFAULT;
+    const limit =
+      Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, LIST_LIMIT_MAX) : LIST_LIMIT_DEFAULT;
 
     try {
       const patterns = await spamPatternRepository.findRecentByChatId(chatId, limit);
@@ -93,9 +90,7 @@ export function createSpamDetectionsRouter(): Router {
       // even when the inbox has dozens of patterns from many distinct users.
       const userIds = Array.from(new Set(patterns.map((p) => p.triggeredByUserId)));
       const users = await Promise.all(
-        userIds.map((id) =>
-          userRepository.findByUserAndChat(id, chatId).catch(() => null)
-        )
+        userIds.map((id) => userRepository.findByUserAndChat(id, chatId).catch(() => null))
       );
       const userById = new Map(
         users.filter((u): u is NonNullable<typeof u> => u !== null).map((u) => [u.userId, u])

@@ -36,10 +36,7 @@ export const chatRepository = {
   },
 
   /** Partial feature update — only changes the keys provided, leaves the rest untouched. */
-  async patchFeatures(
-    chatId: number,
-    partial: Partial<IChat["features"]>
-  ): Promise<IChat | null> {
+  async patchFeatures(chatId: number, partial: Partial<IChat["features"]>): Promise<IChat | null> {
     const $set: Record<string, boolean> = {};
     for (const [k, v] of Object.entries(partial)) {
       if (typeof v === "boolean") $set[`features.${k}`] = v;
@@ -94,16 +91,10 @@ export const chatRepository = {
    * Toggle whether an admin is rendered as hidden in the dashboard's admin list for
    * this chat. Pure display flag; Telegram's admin list is unaffected.
    */
-  async setAdminVisibility(
-    chatId: number,
-    userId: number,
-    hidden: boolean
-  ): Promise<IChat | null> {
+  async setAdminVisibility(chatId: number, userId: number, hidden: boolean): Promise<IChat | null> {
     return await Chat.findOneAndUpdate(
       { chatId },
-      hidden
-        ? { $addToSet: { hiddenAdminIds: userId } }
-        : { $pull: { hiddenAdminIds: userId } },
+      hidden ? { $addToSet: { hiddenAdminIds: userId } } : { $pull: { hiddenAdminIds: userId } },
       { returnDocument: "after" }
     );
   },

@@ -63,11 +63,7 @@ export const userRepository = {
                   { $eq: [{ $ifNull: ["$isMuted", false] }, true] },
                   2,
                   {
-                    $cond: [
-                      { $gt: [{ $ifNull: ["$warnings", 0] }, 0] },
-                      1,
-                      0,
-                    ],
+                    $cond: [{ $gt: [{ $ifNull: ["$warnings", 0] }, 0] }, 1, 0],
                   },
                 ],
               },

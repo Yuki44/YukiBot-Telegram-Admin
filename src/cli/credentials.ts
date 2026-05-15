@@ -40,8 +40,7 @@ function readSecret(prompt: string): Promise<string> {
     });
     process.stdout.write(prompt);
     // Suppress echo while the user types.
-    const writeToOutput = (rl as unknown as { _writeToOutput: (s: string) => void })
-      ._writeToOutput;
+    const writeToOutput = (rl as unknown as { _writeToOutput: (s: string) => void })._writeToOutput;
     (rl as unknown as { _writeToOutput: (s: string) => void })._writeToOutput = (s) => {
       if (s.includes("\n") || s.includes("\r")) writeToOutput.call(rl, s);
     };
@@ -76,9 +75,7 @@ async function cmdAdd(args: string[]): Promise<void> {
 
   const passwordHash = await bcrypt.hash(pw1, BCRYPT_ROUNDS);
   const cred = await credentialRepository.upsert({ username, passwordHash, userId, name });
-  writeLine(
-    `OK · ${cred.username} (userId ${cred.userId}${cred.name ? `, "${cred.name}"` : ""})`
-  );
+  writeLine(`OK · ${cred.username} (userId ${cred.userId}${cred.name ? `, "${cred.name}"` : ""})`);
 }
 
 async function cmdList(): Promise<void> {

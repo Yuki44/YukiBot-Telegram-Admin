@@ -59,9 +59,7 @@ export async function setupHandler(ctx: CommandContext<BotContext>) {
     // getChatAdministrators when the chat has "anonymous admins" enabled but they don't
     // represent a real person and would render as blank rows in the dashboard.
     const ANON_ADMIN_BOT_ID = 1087968824;
-    const realAdmins = admins.filter(
-      (a) => !a.user.is_bot && a.user.id !== ANON_ADMIN_BOT_ID,
-    );
+    const realAdmins = admins.filter((a) => !a.user.is_bot && a.user.id !== ANON_ADMIN_BOT_ID);
 
     for (const admin of realAdmins) {
       const fullName = [admin.user.first_name, admin.user.last_name].filter(Boolean).join(" ");

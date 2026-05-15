@@ -7,11 +7,7 @@ export const bannedWordRepository = {
     return await BannedWord.find({ chatId }).sort({ scope: 1, topicId: 1, word: 1 });
   },
 
-  async findByChatAndScope(
-    chatId: number,
-    scope: "all" | "topic",
-    topicId?: number
-  ): Promise<IBannedWord[]> {
+  async findByChatAndScope(chatId: number, scope: "all" | "topic", topicId?: number): Promise<IBannedWord[]> {
     const query: Record<string, unknown> = { chatId, scope };
     if (scope === "topic" && topicId !== undefined) query.topicId = topicId;
     return await BannedWord.find(query).sort({ word: 1 });

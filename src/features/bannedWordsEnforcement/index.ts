@@ -174,7 +174,6 @@ export async function bannedWordsEnforcement(ctx: BotContext): Promise<void> {
         });
       }
     }
-
   } catch (err) {
     logger.error({ action: "bannedWordsEnforcement", error: String(err) });
   }

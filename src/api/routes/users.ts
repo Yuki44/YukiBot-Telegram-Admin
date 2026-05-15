@@ -148,7 +148,11 @@ export function createUsersRouter(bot: Bot<BotContext>): Router {
       if (!chat) return;
       if (await rejectIfTargetIsAdmin(chatId, userId, res)) return;
       const result = await warnUserViaApi(bot.api, chat, userId, actorFromReq(req), reason);
-      res.json({ user: userToDto(result.user), enforced: result.enforced, enforceError: result.enforceError });
+      res.json({
+        user: userToDto(result.user),
+        enforced: result.enforced,
+        enforceError: result.enforceError,
+      });
     } catch (err) {
       logger.error({ action: "users.warn", error: String(err), chatId, userId });
       res.status(500).json({ error: "internal_error" });
@@ -163,7 +167,11 @@ export function createUsersRouter(bot: Bot<BotContext>): Router {
       if (!chat) return;
       if (await rejectIfTargetIsAdmin(chatId, userId, res)) return;
       const result = await silenceUserViaApi(bot.api, chat, userId, actorFromReq(req));
-      res.json({ user: userToDto(result.user), enforced: result.enforced, enforceError: result.enforceError });
+      res.json({
+        user: userToDto(result.user),
+        enforced: result.enforced,
+        enforceError: result.enforceError,
+      });
     } catch (err) {
       logger.error({ action: "users.silence", error: String(err), chatId, userId });
       res.status(500).json({ error: "internal_error" });
@@ -177,7 +185,11 @@ export function createUsersRouter(bot: Bot<BotContext>): Router {
       const chat = await loadChatOr404(chatId, res);
       if (!chat) return;
       const result = await unsilenceUserViaApi(bot.api, chat, userId, actorFromReq(req));
-      res.json({ user: userToDto(result.user), enforced: result.enforced, enforceError: result.enforceError });
+      res.json({
+        user: userToDto(result.user),
+        enforced: result.enforced,
+        enforceError: result.enforceError,
+      });
     } catch (err) {
       logger.error({ action: "users.unsilence", error: String(err), chatId, userId });
       res.status(500).json({ error: "internal_error" });
@@ -193,7 +205,11 @@ export function createUsersRouter(bot: Bot<BotContext>): Router {
       if (!chat) return;
       if (await rejectIfTargetIsAdmin(chatId, userId, res)) return;
       const result = await banUserViaApi(bot.api, chat, userId, actorFromReq(req), reason);
-      res.json({ user: userToDto(result.user), enforced: result.enforced, enforceError: result.enforceError });
+      res.json({
+        user: userToDto(result.user),
+        enforced: result.enforced,
+        enforceError: result.enforceError,
+      });
     } catch (err) {
       logger.error({ action: "users.ban", error: String(err), chatId, userId });
       res.status(500).json({ error: "internal_error" });
@@ -207,7 +223,11 @@ export function createUsersRouter(bot: Bot<BotContext>): Router {
       const chat = await loadChatOr404(chatId, res);
       if (!chat) return;
       const result = await unbanUserViaApi(bot.api, chat, userId, actorFromReq(req));
-      res.json({ user: userToDto(result.user), enforced: result.enforced, enforceError: result.enforceError });
+      res.json({
+        user: userToDto(result.user),
+        enforced: result.enforced,
+        enforceError: result.enforceError,
+      });
     } catch (err) {
       logger.error({ action: "users.unban", error: String(err), chatId, userId });
       res.status(500).json({ error: "internal_error" });
@@ -225,7 +245,8 @@ export function createUsersRouter(bot: Bot<BotContext>): Router {
     previous: IUser | null
   ): Promise<{ user: IUser; changed: boolean }> {
     const isMutedFromTg =
-      member.status === "restricted" && (member as { can_send_messages?: boolean }).can_send_messages === false;
+      member.status === "restricted" &&
+      (member as { can_send_messages?: boolean }).can_send_messages === false;
     const isBannedFromTg = member.status === "kicked";
     const muteUntilFromTg =
       isMutedFromTg && typeof (member as { until_date?: number }).until_date === "number"

@@ -149,8 +149,7 @@ export function createAuthRouter(): Router {
     }
 
     const body = req.body as { username?: unknown; password?: unknown };
-    const username =
-      typeof body.username === "string" ? body.username.trim().toLowerCase() : "";
+    const username = typeof body.username === "string" ? body.username.trim().toLowerCase() : "";
     const password = typeof body.password === "string" ? body.password : "";
     if (username.length === 0 || password.length === 0) {
       res.status(400).json({ error: "invalid_payload" });
@@ -197,8 +196,7 @@ export function createAuthRouter(): Router {
 
   router.post("/password/change", authenticate, async (req: Request, res: Response) => {
     const body = req.body as { currentPassword?: unknown; newPassword?: unknown };
-    const currentPassword =
-      typeof body.currentPassword === "string" ? body.currentPassword : "";
+    const currentPassword = typeof body.currentPassword === "string" ? body.currentPassword : "";
     const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
 
     if (currentPassword.length === 0 || newPassword.length === 0) {

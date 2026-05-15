@@ -51,9 +51,7 @@ export async function spamHandler(ctx: CommandContext<BotContext>): Promise<void
 
     const repliedMsg = replied as NonNullable<CommandContext<BotContext>["message"]>;
     const patternText =
-      (replied.text ?? replied.caption)
-        ? (replied.text ?? replied.caption)!
-        : describeMedia(repliedMsg);
+      (replied.text ?? replied.caption) ? (replied.text ?? replied.caption)! : describeMedia(repliedMsg);
     const mediaFileId = extractMediaFileId(repliedMsg);
 
     const normalized = normalizeText(patternText);

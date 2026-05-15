@@ -274,45 +274,41 @@ export function createWhitelistRouter(): Router {
     }
   });
 
-  router.delete(
-    "/combo/:userId/domains/:domain",
-    requireChatAdmin(),
-    async (req: Request, res: Response) => {
-      const chatId = Number(req.params.chatId);
-      const userId = Number(req.params.userId);
-      const domain = decodeURIComponent(req.params.domain);
-      try {
-        const updated = await userDomainAllowanceRepository.removeDomain(userId, chatId, domain);
-        if (!updated) {
-          res.status(404).json({ error: "combo_entry_not_found" });
-          return;
-        }
-        // If the user has no domains left, remove the entry entirely so the list stays clean.
-        if (updated.domains.length === 0) {
-          await userDomainAllowanceRepository.removeAllForUser(userId, chatId);
-        }
-        logger.info({
-          action: "whitelist.combo.remove",
-          chatId,
-          targetUserId: userId,
-          domain,
-          userId: req.user!.userId,
-        });
-        recordActivity({
-          chatId,
-          type: "combo_remove",
-          source: "panel",
-          actor: { id: req.user!.userId, name: req.user!.name, username: req.user!.username },
-          target: { id: userId },
-          targetRef: domain,
-        });
-        res.json({ userId, chatId, domains: updated.domains });
-      } catch (err) {
-        logger.error({ action: "whitelist.combo.remove", error: String(err), chatId });
-        res.status(500).json({ error: "internal_error" });
+  router.delete("/combo/:userId/domains/:domain", requireChatAdmin(), async (req: Request, res: Response) => {
+    const chatId = Number(req.params.chatId);
+    const userId = Number(req.params.userId);
+    const domain = decodeURIComponent(req.params.domain);
+    try {
+      const updated = await userDomainAllowanceRepository.removeDomain(userId, chatId, domain);
+      if (!updated) {
+        res.status(404).json({ error: "combo_entry_not_found" });
+        return;
       }
+      // If the user has no domains left, remove the entry entirely so the list stays clean.
+      if (updated.domains.length === 0) {
+        await userDomainAllowanceRepository.removeAllForUser(userId, chatId);
+      }
+      logger.info({
+        action: "whitelist.combo.remove",
+        chatId,
+        targetUserId: userId,
+        domain,
+        userId: req.user!.userId,
+      });
+      recordActivity({
+        chatId,
+        type: "combo_remove",
+        source: "panel",
+        actor: { id: req.user!.userId, name: req.user!.name, username: req.user!.username },
+        target: { id: userId },
+        targetRef: domain,
+      });
+      res.json({ userId, chatId, domains: updated.domains });
+    } catch (err) {
+      logger.error({ action: "whitelist.combo.remove", error: String(err), chatId });
+      res.status(500).json({ error: "internal_error" });
     }
-  );
+  });
 
   router.delete("/combo/:userId", requireChatAdmin(), async (req: Request, res: Response) => {
     const chatId = Number(req.params.chatId);

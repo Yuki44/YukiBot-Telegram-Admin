@@ -39,7 +39,13 @@ function toDto(w: IBannedWord) {
   };
 }
 
-function summarizeActions(a: { delete: boolean; warn: boolean; silence: boolean; kick: boolean; flag: boolean }): string {
+function summarizeActions(a: {
+  delete: boolean;
+  warn: boolean;
+  silence: boolean;
+  kick: boolean;
+  flag: boolean;
+}): string {
   if (a.kick) return "expulsar";
   const parts: string[] = [];
   if (a.delete) parts.push("borrar");

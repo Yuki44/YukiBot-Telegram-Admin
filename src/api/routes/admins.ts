@@ -178,55 +178,51 @@ export function createAdminsRouter(): Router {
   // owner": the logged-in user can only flip their own row, and must be the Telegram
   // chat creator (or a super-admin via the global bypass). Display-only — Telegram's
   // own admin list is not affected.
-  router.post(
-    "/:userId/visibility",
-    requireChatAdmin(),
-    async (req: Request, res: Response) => {
-      const chatId = Number(req.params.chatId);
-      const userId = Number(req.params.userId);
-      if (!Number.isFinite(userId)) {
-        res.status(400).json({ error: "invalid_user_id" });
-        return;
-      }
-
-      const actor = req.user!;
-      const isSelf = actor.userId === userId;
-      const isTelegramOwner = await adminRepository.isOwner(actor.userId, chatId);
-      const allowed = actor.isSuperAdmin || (isSelf && isTelegramOwner);
-      if (!allowed) {
-        res.status(403).json({ error: "forbidden" });
-        return;
-      }
-
-      const hiddenRaw = (req.body as { hidden?: unknown })?.hidden;
-      if (typeof hiddenRaw !== "boolean") {
-        res.status(400).json({ error: "invalid_hidden_flag" });
-        return;
-      }
-
-      try {
-        const updated = await chatRepository.setAdminVisibility(chatId, userId, hiddenRaw);
-        if (!updated) {
-          res.status(404).json({ error: "chat_not_found" });
-          return;
-        }
-        logger.info({
-          action: "admins.visibility",
-          chatId,
-          userId,
-          hidden: hiddenRaw,
-          by: actor.userId,
-        });
-        res.json({
-          userId,
-          hiddenInAdminList: hiddenRaw,
-        });
-      } catch (err) {
-        logger.error({ action: "admins.visibility", error: String(err), chatId, userId });
-        res.status(500).json({ error: "internal_error" });
-      }
+  router.post("/:userId/visibility", requireChatAdmin(), async (req: Request, res: Response) => {
+    const chatId = Number(req.params.chatId);
+    const userId = Number(req.params.userId);
+    if (!Number.isFinite(userId)) {
+      res.status(400).json({ error: "invalid_user_id" });
+      return;
     }
-  );
+
+    const actor = req.user!;
+    const isSelf = actor.userId === userId;
+    const isTelegramOwner = await adminRepository.isOwner(actor.userId, chatId);
+    const allowed = actor.isSuperAdmin || (isSelf && isTelegramOwner);
+    if (!allowed) {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+
+    const hiddenRaw = (req.body as { hidden?: unknown })?.hidden;
+    if (typeof hiddenRaw !== "boolean") {
+      res.status(400).json({ error: "invalid_hidden_flag" });
+      return;
+    }
+
+    try {
+      const updated = await chatRepository.setAdminVisibility(chatId, userId, hiddenRaw);
+      if (!updated) {
+        res.status(404).json({ error: "chat_not_found" });
+        return;
+      }
+      logger.info({
+        action: "admins.visibility",
+        chatId,
+        userId,
+        hidden: hiddenRaw,
+        by: actor.userId,
+      });
+      res.json({
+        userId,
+        hiddenInAdminList: hiddenRaw,
+      });
+    } catch (err) {
+      logger.error({ action: "admins.visibility", error: String(err), chatId, userId });
+      res.status(500).json({ error: "internal_error" });
+    }
+  });
 
   return router;
 }

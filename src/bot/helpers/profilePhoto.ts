@@ -22,11 +22,7 @@ export function shouldRecheckPhoto(u: IUser): boolean {
  * API on every avatar render. Safe to call repeatedly — silent on Telegram API
  * failure (logged at WARN), the caller doesn't need to await failure paths.
  */
-export async function discoverProfilePhoto(
-  api: Api,
-  userId: number,
-  chatId: number
-): Promise<void> {
+export async function discoverProfilePhoto(api: Api, userId: number, chatId: number): Promise<void> {
   try {
     const photos = await api.getUserProfilePhotos(userId, { limit: 1 });
     // photos.photos is PhotoSize[][] — outer is "photos" (we asked for 1),

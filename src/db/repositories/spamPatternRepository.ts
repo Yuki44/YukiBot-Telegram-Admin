@@ -60,10 +60,7 @@ export const spamPatternRepository = {
   },
 
   /** Latest pattern record for a given (chat, triggeredBy) pair, regardless of review state. */
-  async findLatestByTriggeredUser(
-    chatId: number,
-    triggeredByUserId: number
-  ): Promise<ISpamPattern | null> {
+  async findLatestByTriggeredUser(chatId: number, triggeredByUserId: number): Promise<ISpamPattern | null> {
     return await SpamPattern.findOne({ chatId, triggeredByUserId }, null, {
       sort: { createdAt: -1 },
     });

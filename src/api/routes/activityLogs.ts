@@ -10,11 +10,7 @@ import { bannedWordRepository } from "../../db/repositories/bannedWordRepository
 import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
 import { ActivityLogType, BotContext, IActivityLog } from "../../types";
-import {
-  ActorInfo,
-  unbanUserViaApi,
-  unsilenceUserViaApi,
-} from "../services/userActions";
+import { ActorInfo, unbanUserViaApi, unsilenceUserViaApi } from "../services/userActions";
 import { userRepository } from "../../db/repositories/userRepository";
 
 const VALID_TYPES: ActivityLogType[] = [
@@ -281,11 +277,7 @@ export function createActivityLogsRouter(bot: Bot<BotContext>): Router {
         }
 
         case "combo_add": {
-          if (
-            log.targetId === undefined ||
-            log.targetId === null ||
-            !log.targetRef
-          ) {
+          if (log.targetId === undefined || log.targetId === null || !log.targetRef) {
             res.status(409).json({ error: "no_inverse" });
             return;
           }
@@ -391,4 +383,3 @@ export function createActivityLogsRouter(bot: Bot<BotContext>): Router {
 
   return router;
 }
-
