@@ -9,6 +9,10 @@ import { credentialRepository } from "../db/repositories/credentialRepository";
 
 const BCRYPT_ROUNDS = 12;
 
+function writeLine(text: string): void {
+  process.stdout.write(`${text}\n`);
+}
+
 function usage(): never {
   console.error(
     [
@@ -72,7 +76,7 @@ async function cmdAdd(args: string[]): Promise<void> {
 
   const passwordHash = await bcrypt.hash(pw1, BCRYPT_ROUNDS);
   const cred = await credentialRepository.upsert({ username, passwordHash, userId, name });
-  console.log(
+  writeLine(
     `OK · ${cred.username} (userId ${cred.userId}${cred.name ? `, "${cred.name}"` : ""})`
   );
 }
@@ -80,11 +84,11 @@ async function cmdAdd(args: string[]): Promise<void> {
 async function cmdList(): Promise<void> {
   const all = await credentialRepository.listAll();
   if (all.length === 0) {
-    console.log("(sin credenciales)");
+    writeLine("(sin credenciales)");
     return;
   }
   for (const c of all) {
-    console.log(
+    writeLine(
       `${c.username}\tuserId=${c.userId}\tname=${c.name ?? "-"}\tcreated=${c.createdAt.toISOString()}`
     );
   }
@@ -98,7 +102,7 @@ async function cmdRm(args: string[]): Promise<void> {
     console.error(`No existe credencial "${username}".`);
     process.exit(1);
   }
-  console.log(`OK · "${username}" eliminado.`);
+  writeLine(`OK · "${username}" eliminado.`);
 }
 
 async function main(): Promise<void> {
