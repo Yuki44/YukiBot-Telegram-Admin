@@ -27,8 +27,14 @@ export function LoginScreen() {
   const [tgError, setTgError] = useState<string | null>(null);
   const [tgEnabled, setTgEnabled] = useState(false);
   const [tgFallbackUrl, setTgFallbackUrl] = useState<string | null>(null);
+  // Stores the resolved bot username when the domain check passes.
+  // Setting this triggers the second effect below which injects the widget script
+  // safely AFTER React has rendered the container div (making widgetRef.current available).
+  const [widgetUsername, setWidgetUsername] = useState<string | null>(null);
   const [showResetHelp, setShowResetHelp] = useState(false);
 
+  // Effect 1 — register the Telegram auth callback and fetch public config.
+  // Does NOT touch the DOM; only updates state once config is available.
   useEffect(() => {
     let cancelled = false;
 
@@ -64,20 +70,11 @@ export function LoginScreen() {
           // eslint-disable-next-line no-console
           console.info(`[login] telegram widget: expected=${expected} got=${actual} match=${matches}`);
         }
-        if (matches && widgetRef.current) {
-          setTgEnabled(true);
-          // Clear any previous children (guards against React strict-mode double-mount
-          // in dev, which would otherwise stack two widget scripts).
-          widgetRef.current.replaceChildren();
-          const script = document.createElement("script");
-          script.src = "https://telegram.org/js/telegram-widget.js?22";
-          script.async = true;
-          script.setAttribute("data-telegram-login", username);
-          script.setAttribute("data-size", "large");
-          script.setAttribute("data-radius", "12");
-          script.setAttribute("data-onauth", "onTelegramAuth(user)");
-          script.setAttribute("data-request-access", "write");
-          widgetRef.current.appendChild(script);
+        if (matches) {
+          // Setting widgetUsername causes React to render the widget container div, which
+          // makes widgetRef.current non-null. Effect 2 (below) picks it up and injects
+          // the script after that render completes — avoiding the null-ref race.
+          setWidgetUsername(username);
           return;
         }
         if (hasConfig) {
@@ -95,6 +92,25 @@ export function LoginScreen() {
       delete window.onTelegramAuth;
     };
   }, [navigate]);
+
+  // Effect 2 — inject the Telegram widget script.
+  // Runs AFTER the render triggered by setWidgetUsername(), so widgetRef.current is
+  // guaranteed to be a mounted DOM node at this point.
+  useEffect(() => {
+    if (!widgetUsername || !widgetRef.current) return;
+    setTgEnabled(true);
+    // Clear any previous children (guards against React strict-mode double-mount in dev).
+    widgetRef.current.replaceChildren();
+    const script = document.createElement("script");
+    script.src = "https://telegram.org/js/telegram-widget.js?22";
+    script.async = true;
+    script.setAttribute("data-telegram-login", widgetUsername);
+    script.setAttribute("data-size", "large");
+    script.setAttribute("data-radius", "12");
+    script.setAttribute("data-onauth", "onTelegramAuth(user)");
+    script.setAttribute("data-request-access", "write");
+    widgetRef.current.appendChild(script);
+  }, [widgetUsername]);
 
   async function submitPassword(e: React.FormEvent) {
     e.preventDefault();
@@ -257,7 +273,12 @@ export function LoginScreen() {
             </button>
           </form>
 
-          {(tgEnabled || tgFallbackUrl) && (
+          {/* The conditional section shows once config is resolved.
+              widgetUsername is set by Effect 1 when the domain matches;
+              tgFallbackUrl is set when we're on the wrong domain.
+              The widget container div (ref={widgetRef}) lives here so it is
+              in the DOM when Effect 2 runs, giving it a non-null ref to inject into. */}
+          {(widgetUsername !== null || tgFallbackUrl !== null) && (
             <>
               <div
                 aria-hidden
@@ -275,14 +296,15 @@ export function LoginScreen() {
                 <div style={{ flex: 1, height: 1, background: "var(--ink-100)" }} />
               </div>
 
-              {tgEnabled && (
-                <div
-                  ref={widgetRef}
-                  style={{ minHeight: 48, display: "flex", justifyContent: "center" }}
-                />
-              )}
+              {/* Widget container — rendered here (inside the conditional) so widgetRef
+                  is populated at the time Effect 2 runs (after this render completes).
+                  display:none collapses it until the Telegram script renders the button. */}
+              <div
+                ref={widgetRef}
+                style={{ display: tgEnabled ? "flex" : "none", justifyContent: "center" }}
+              />
 
-              {!tgEnabled && tgFallbackUrl && (
+              {!widgetUsername && tgFallbackUrl && (
                 <>
                   <a
                     href={tgFallbackUrl}
