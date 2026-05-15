@@ -1,5 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { GlobalLoadingOverlay } from "./components/GlobalLoadingOverlay";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { ScrollToTop } from "./components/ScrollToTop";
 import { LoginScreen } from "./screens/LoginScreen";
 import { ChatsScreen } from "./screens/ChatsScreen";
 import { DashboardScreen } from "./screens/DashboardScreen";
@@ -18,6 +20,8 @@ import { isAuthenticated } from "./lib/auth";
 export function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
+      <GlobalLoadingOverlay />
       <Routes>
         <Route path="/login" element={<LoginScreen />} />
         <Route

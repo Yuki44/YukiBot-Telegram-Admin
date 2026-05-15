@@ -444,27 +444,49 @@ export function UserDetailScreen() {
             )}
           </div>
 
-          <button
-            onClick={doCopyId}
-            type="button"
-            style={{
-              marginTop: 10,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "6px 12px",
-              borderRadius: 999,
-              background: "var(--bg-sunken)",
-              border: 0,
-              cursor: "pointer",
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 13,
-              color: "var(--ink-700)",
-            }}
-          >
-            ID {user.userId}
-            {copied ? I.check({ size: 14, stroke: "var(--ok-fg)" }) : I.copy({ size: 14 })}
-          </button>
+          <div style={{ display: "inline-flex", gap: 8, marginTop: 10, flexWrap: "wrap", justifyContent: "center" }}>
+            <button
+              onClick={doCopyId}
+              type="button"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "6px 12px",
+                borderRadius: 999,
+                background: "var(--bg-sunken)",
+                border: 0,
+                cursor: "pointer",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 13,
+                color: "var(--ink-700)",
+              }}
+            >
+              ID {user.userId}
+              {copied ? I.check({ size: 14, stroke: "var(--ok-fg)" }) : I.copy({ size: 14 })}
+            </button>
+            <a
+              href={user.username ? `https://t.me/${user.username.replace(/^@/, "")}` : `tg://user?id=${user.userId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "6px 12px",
+                borderRadius: 999,
+                background: "var(--brand-50)",
+                border: "1px solid var(--brand-200)",
+                color: "var(--brand-700)",
+                textDecoration: "none",
+                fontSize: 13,
+                fontWeight: 600,
+              }}
+            >
+              {I.telegram({ size: 14 })}
+              Abrir en Telegram
+            </a>
+          </div>
 
           <div
             style={{

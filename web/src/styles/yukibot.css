@@ -2,31 +2,35 @@
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  /* Brand: warm mint/teal — friendly, distinct from Telegram blue */
-  --brand-50:  oklch(0.97 0.02 175);
-  --brand-100: oklch(0.93 0.04 175);
-  --brand-200: oklch(0.86 0.07 175);
-  --brand-300: oklch(0.78 0.10 175);
-  --brand-400: oklch(0.68 0.12 175);
-  --brand-500: oklch(0.58 0.13 175);  /* primary */
-  --brand-600: oklch(0.50 0.12 175);
-  --brand-700: oklch(0.42 0.10 175);
-  --brand-800: oklch(0.32 0.07 175);
-  --brand-900: oklch(0.22 0.04 175);
+  /* Brand — same warm mint/teal but with deeper chroma so buttons and links
+     actually pop against the lighter paper background (v2.0.1: light-theme
+     contrast pass). */
+  --brand-50:  oklch(0.96 0.03 175);
+  --brand-100: oklch(0.92 0.05 175);
+  --brand-200: oklch(0.85 0.08 175);
+  --brand-300: oklch(0.76 0.12 175);
+  --brand-400: oklch(0.64 0.15 175);
+  --brand-500: oklch(0.54 0.16 175);  /* primary */
+  --brand-600: oklch(0.46 0.15 175);
+  --brand-700: oklch(0.38 0.13 175);
+  --brand-800: oklch(0.30 0.10 175);
+  --brand-900: oklch(0.22 0.06 175);
 
-  /* Warm neutral — paper, not plain white */
-  --bg:         #fbf8f3;
+  /* Warm paper — deeper than v2.0.0 so white cards lift off the background
+     instead of blending into a near-white wash. Card borders use --ink-100
+     and now read as a real outline rather than a 1.2:1 phantom. */
+  --bg:         #f0ece4;
   --bg-card:   #ffffff;
-  --bg-elev:   #fdfaf5;
-  --bg-sunken: #f3efe7;
+  --bg-elev:   #f7f3eb;
+  --bg-sunken: #e6e1d6;
 
   --ink-900: #1c1a17;
-  --ink-700: #3d3934;
-  --ink-500: #75706a;
-  --ink-400: #948f87;
-  --ink-300: #b8b3aa;
-  --ink-200: #d8d3ca;
-  --ink-100: #ebe7df;
+  --ink-700: #36322d;
+  --ink-500: #5a5550;     /* secondary text — now ~7:1 on bg */
+  --ink-400: #7a746a;
+  --ink-300: #9a9388;
+  --ink-200: #bcb6a8;
+  --ink-100: #d6d0c4;     /* card borders / dividers — visible */
 
   /* Status accents — same chroma family */
   --warn-bg:   oklch(0.95 0.04 75);
@@ -42,6 +46,18 @@
 
   --ok-bg:     oklch(0.94 0.04 155);
   --ok-fg:     oklch(0.45 0.12 155);
+
+  --radius-sm: 10px;
+  --radius:    16px;
+  --radius-lg: 22px;
+  --radius-xl: 28px;
+
+  /* Light-mode card lift — v2.0.1 makes cards float over the deeper paper
+     background instead of blending in. Layered shadows give a softer fall-off
+     than a single drop-shadow at the same strength. */
+  --shadow-sm: 0 1px 2px rgba(28, 26, 23, 0.06), 0 1px 3px rgba(28, 26, 23, 0.07);
+  --shadow:    0 2px 6px rgba(28, 26, 23, 0.06), 0 10px 24px rgba(28, 26, 23, 0.09);
+  --shadow-lg: 0 14px 40px rgba(28, 26, 23, 0.16);
 }
 
 /* Dark mode — easier on the eyes, same warmth */
@@ -81,15 +97,6 @@
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.35);
   --shadow:    0 4px 16px rgba(0,0,0,0.45);
   --shadow-lg: 0 16px 48px rgba(0,0,0,0.6);
-
-  --radius-sm: 10px;
-  --radius:    16px;
-  --radius-lg: 22px;
-  --radius-xl: 28px;
-
-  --shadow-sm: 0 1px 2px rgba(28, 26, 23, 0.04), 0 1px 3px rgba(28, 26, 23, 0.05);
-  --shadow:    0 2px 4px rgba(28, 26, 23, 0.04), 0 8px 24px rgba(28, 26, 23, 0.06);
-  --shadow-lg: 0 12px 40px rgba(28, 26, 23, 0.12);
 }
 
 /* App-level base — body follows current theme so scroll-bounce and pre-paint match */
@@ -171,6 +178,7 @@ body {
   background: var(--bg-card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--ink-100);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
 .yk-section {
@@ -353,9 +361,15 @@ body {
 .yk-slide-label {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  font-weight: 700; font-size: 15px;
+  font-weight: 700; font-size: 13px;
   color: var(--ink-700);
   pointer-events: none;
+  /* Keep long labels (e.g. "Permitir a <very long name>") inside the slider on
+     ≤360px phones — fade out before they reach the thumb, then ellipsis. */
+  padding: 0 64px 0 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .yk-slide.danger .yk-slide-label { color: var(--danger-fg); }
 .yk-slide-thumb {
@@ -394,7 +408,7 @@ body {
 
 /* Sheet (modal) */
 .yk-sheet-overlay {
-  position: absolute; inset: 0;
+  position: fixed; inset: 0;
   background: rgba(28, 26, 23, 0.45);
   display: flex; align-items: flex-end;
   z-index: 50;

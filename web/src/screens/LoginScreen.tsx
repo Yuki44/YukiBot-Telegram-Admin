@@ -53,27 +53,37 @@ export function LoginScreen() {
       .publicConfig()
       .then((cfg) => {
         if (cancelled) return;
-        const hasConfig = cfg.botUsername.length > 0 && cfg.botLoginDomain.length > 0;
-        // The widget only renders correctly when the current host matches the BotFather
-        // domain — otherwise it shows a "Bot domain invalid" iframe placeholder.
-        const matches = hasConfig && window.location.hostname === cfg.botLoginDomain;
-        if (matches) {
+        const expected = cfg.botLoginDomain.trim().toLowerCase().replace(/^www\./, "").replace(/\.+$/, "");
+        const actual = window.location.hostname.toLowerCase().replace(/^www\./, "").replace(/\.+$/, "");
+        const username = cfg.botUsername.trim().replace(/^@/, "");
+        const hasConfig = username.length > 0 && expected.length > 0;
+        const matches = hasConfig && actual === expected;
+        // Diagnostic — one-line console hint so the user can confirm the comparison
+        // without us guessing what their env value actually is.
+        if (hasConfig) {
+          // eslint-disable-next-line no-console
+          console.info(`[login] telegram widget: expected=${expected} got=${actual} match=${matches}`);
+        }
+        if (matches && widgetRef.current) {
           setTgEnabled(true);
+          // Clear any previous children (guards against React strict-mode double-mount
+          // in dev, which would otherwise stack two widget scripts).
+          widgetRef.current.replaceChildren();
           const script = document.createElement("script");
           script.src = "https://telegram.org/js/telegram-widget.js?22";
           script.async = true;
-          script.setAttribute("data-telegram-login", cfg.botUsername);
+          script.setAttribute("data-telegram-login", username);
           script.setAttribute("data-size", "large");
           script.setAttribute("data-radius", "12");
           script.setAttribute("data-onauth", "onTelegramAuth(user)");
           script.setAttribute("data-request-access", "write");
-          widgetRef.current?.appendChild(script);
+          widgetRef.current.appendChild(script);
           return;
         }
         if (hasConfig) {
           // Off-domain (e.g. local dev): show a fallback button that points users to the
           // production login URL where the official widget actually works.
-          setTgFallbackUrl(`https://${cfg.botLoginDomain}/login`);
+          setTgFallbackUrl(`https://${expected}/login`);
         }
       })
       .catch(() => {
@@ -127,7 +137,7 @@ export function LoginScreen() {
             Hola de nuevo
           </h1>
           <div style={{ color: "var(--ink-500)", marginTop: 6, fontSize: 15 }}>
-            Configura tu YukiBot desde aquí 🌿
+            Panel de administración de tu grupo.
           </div>
         </div>
 

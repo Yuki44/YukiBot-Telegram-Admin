@@ -12,6 +12,13 @@ export interface ISpamPattern extends Document {
   addedByUserId: number;
   /** User whose message was flagged (stored so /nospam <userId> works after they leave) */
   triggeredByUserId: number;
+  /**
+   * Telegram file_id of the media attached to the flagged message, if any.
+   * Lets the dashboard render the actual image/video preview in "Ver detalle"
+   * instead of just the "[media:photo]" marker. Null for plain-text spam or
+   * patterns created before v2.0.2.
+   */
+  mediaFileId?: string | null;
   /** When an admin pressed ✅ Correcto on the spam log message, marking the detection as accepted. */
   reviewedAt?: Date | null;
   reviewedById?: number | null;
@@ -28,6 +35,7 @@ const spamPatternSchema = new Schema<ISpamPattern>(
     patternId: { type: String, required: true },
     addedByUserId: { type: Number, required: true },
     triggeredByUserId: { type: Number, required: true },
+    mediaFileId: { type: String, default: null },
     reviewedAt: { type: Date, default: null },
     reviewedById: { type: Number, default: null },
     reviewedByName: { type: String, default: null },

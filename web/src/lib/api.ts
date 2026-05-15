@@ -19,8 +19,10 @@ import type {
   UserListFilter,
   UserRecord,
   UserStats,
+  WhitelistUserEntry,
 } from "../types/api";
 import { clearSession, getToken } from "./auth";
+import { loading } from "./loading";
 
 const BASE = "/api";
 
@@ -44,30 +46,36 @@ async function request<T>(
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  // Ref-counted global loading indicator. See lib/loading.ts.
+  loading.begin();
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
 
-  if (res.status === 401) {
-    clearSession();
-    throw new ApiError(401, "unauthenticated");
-  }
-
-  if (!res.ok) {
-    let code = "request_failed";
-    try {
-      const data = (await res.json()) as { error?: string };
-      if (data.error) code = data.error;
-    } catch {
-      /* ignore */
+    if (res.status === 401) {
+      clearSession();
+      throw new ApiError(401, "unauthenticated");
     }
-    throw new ApiError(res.status, code);
-  }
 
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+    if (!res.ok) {
+      let code = "request_failed";
+      try {
+        const data = (await res.json()) as { error?: string };
+        if (data.error) code = data.error;
+      } catch {
+        /* ignore */
+      }
+      throw new ApiError(res.status, code);
+    }
+
+    if (res.status === 204) return undefined as T;
+    return (await res.json()) as T;
+  } finally {
+    loading.end();
+  }
 }
 
 interface PublicConfig {
@@ -148,12 +156,12 @@ export const api = {
       request<string[]>("POST", `/chats/${chatId}/whitelist/links`, { domain }),
     removeLink: (chatId: number | string, domain: string): Promise<string[]> =>
       request<string[]>("DELETE", `/chats/${chatId}/whitelist/links/${encodeURIComponent(domain)}`),
-    listUsers: (chatId: number | string): Promise<number[]> =>
-      request<number[]>("GET", `/chats/${chatId}/whitelist/users`),
-    addUser: (chatId: number | string, userId: number): Promise<number[]> =>
-      request<number[]>("POST", `/chats/${chatId}/whitelist/users`, { userId }),
-    removeUser: (chatId: number | string, userId: number): Promise<number[]> =>
-      request<number[]>("DELETE", `/chats/${chatId}/whitelist/users/${userId}`),
+    listUsers: (chatId: number | string): Promise<WhitelistUserEntry[]> =>
+      request<WhitelistUserEntry[]>("GET", `/chats/${chatId}/whitelist/users`),
+    addUser: (chatId: number | string, userId: number): Promise<WhitelistUserEntry[]> =>
+      request<WhitelistUserEntry[]>("POST", `/chats/${chatId}/whitelist/users`, { userId }),
+    removeUser: (chatId: number | string, userId: number): Promise<WhitelistUserEntry[]> =>
+      request<WhitelistUserEntry[]>("DELETE", `/chats/${chatId}/whitelist/users/${userId}`),
     // Mixtos: per-user domain allowances
     listCombo: (chatId: number | string): Promise<UserDomainAllowance[]> =>
       request<UserDomainAllowance[]>("GET", `/chats/${chatId}/whitelist/combo`),

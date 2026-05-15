@@ -108,6 +108,23 @@ export function createWhitelistRouter(): Router {
 
   // ─── Spam-user whitelist ────────────────────────────────────────────
 
+  // Hydrate raw userIds → identity DTO so the dashboard can render name + username + ID.
+  // Best-effort: users who've never spoken here have no User row → name/username are null
+  // and the row falls back to "ID xxx" in the UI.
+  async function hydrateWhitelistUsers(chatId: number, userIds: number[]) {
+    return await Promise.all(
+      userIds.map(async (uid) => {
+        const u = await userRepository.findByUserAndChat(uid, chatId).catch(() => null);
+        return {
+          userId: uid,
+          name: u?.name ?? null,
+          username: u?.username ?? null,
+          photoFileId: u?.photoFileId ?? null,
+        };
+      })
+    );
+  }
+
   router.get("/users", requireChatAdmin(), async (req: Request, res: Response) => {
     const chatId = Number(req.params.chatId);
     try {
@@ -116,7 +133,8 @@ export function createWhitelistRouter(): Router {
         res.status(404).json({ error: "chat_not_found" });
         return;
       }
-      res.json(chat.spamUserWhitelist ?? []);
+      const hydrated = await hydrateWhitelistUsers(chatId, chat.spamUserWhitelist ?? []);
+      res.json(hydrated);
     } catch (err) {
       logger.error({ action: "whitelist.users.list", error: String(err), chatId });
       res.status(500).json({ error: "internal_error" });
@@ -150,7 +168,8 @@ export function createWhitelistRouter(): Router {
         target: { id: userId },
         reason: "usuario",
       });
-      res.json(updated.spamUserWhitelist ?? []);
+      const hydrated = await hydrateWhitelistUsers(chatId, updated.spamUserWhitelist ?? []);
+      res.json(hydrated);
     } catch (err) {
       logger.error({ action: "whitelist.users.add", error: String(err), chatId });
       res.status(500).json({ error: "internal_error" });
@@ -184,7 +203,8 @@ export function createWhitelistRouter(): Router {
         target: { id: userId },
         reason: "usuario",
       });
-      res.json(updated.spamUserWhitelist ?? []);
+      const hydrated = await hydrateWhitelistUsers(chatId, updated.spamUserWhitelist ?? []);
+      res.json(hydrated);
     } catch (err) {
       logger.error({ action: "whitelist.users.remove", error: String(err), chatId });
       res.status(500).json({ error: "internal_error" });

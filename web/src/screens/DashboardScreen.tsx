@@ -125,7 +125,34 @@ export function DashboardScreen() {
 
       <div className="yk-scroll yk-pad-nav">
         <div style={{ padding: "4px 16px 16px" }}>
-          <div className="yk-card" style={{ padding: 18, display: "flex", gap: 14, alignItems: "center" }}>
+          <div
+            className="yk-card"
+            style={{ padding: 18, display: "flex", gap: 14, alignItems: "center", position: "relative" }}
+          >
+            {chat.chatId < 0 && (
+              <a
+                href={`https://t.me/c/${String(chat.chatId).replace(/^-100/, "")}/1`}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Abrir chat en Telegram"
+                title="Abrir en Telegram"
+                style={{
+                  position: "absolute",
+                  top: 8,
+                  right: 8,
+                  width: 36,
+                  height: 36,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 12,
+                  color: "var(--brand-700)",
+                  textDecoration: "none",
+                }}
+              >
+                {I.telegram({ size: 18 })}
+              </a>
+            )}
             <ChatAvatar
               chatId={chat.chatId}
               photoFileId={chat.photoFileId}

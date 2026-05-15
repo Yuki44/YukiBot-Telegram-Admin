@@ -1,12 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppBar } from "../components/AppBar";
 import { I } from "../components/Icon";
+import { IdentitySubline } from "../components/IdentitySubline";
+import { ScrollToTopButton } from "../components/ScrollToTopButton";
 import { StatusPills } from "../components/StatusPills";
 import { UserAvatar } from "../components/UserAvatar";
 import { ApiError, api } from "../lib/api";
 import { clearSession } from "../lib/auth";
 import { useChat } from "../lib/useChat";
+import { useScrollRestore } from "../lib/useScrollRestore";
 import type { UserListFilter, UserRecord } from "../types/api";
 
 // Note: a chat-wide "Sincronizar con Telegram" button used to live here, but it
@@ -40,6 +43,15 @@ export function UsersScreen() {
   const [filter, setFilter] = useState<UserListFilter>(() => readFilterParam(searchParams.get("filter")));
   const [q, setQ] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Restore scroll position when navigating back to this list from a user detail
+  // page. Key includes filter+search so each segmented tab keeps its own spot.
+  useScrollRestore(
+    scrollRef,
+    `users:${chatId ?? "_"}:${filter}:${q.trim()}`,
+    users !== null
+  );
 
   function changeFilter(next: UserListFilter): void {
     setFilter(next);
@@ -93,7 +105,7 @@ export function UsersScreen() {
         ))}
       </div>
 
-      <div className="yk-scroll yk-pad-nav">
+      <div ref={scrollRef} className="yk-scroll yk-pad-nav">
         <div style={{ padding: "8px 16px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
           <div className="yk-banner" style={{ margin: 0 }}>
             {I.help({ size: 18 })}
@@ -159,20 +171,8 @@ export function UsersScreen() {
                         )}
                         {u.isAdmin && <span className="yk-chip">Admin</span>}
                       </div>
-                      <div
-                        className="yk-row-sub"
-                        style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}
-                      >
-                        {u.username ? (
-                          <span>@{u.username.replace(/^@/, "")}</span>
-                        ) : (
-                          <span
-                            className="yk-mono"
-                            style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}
-                          >
-                            ID {u.userId}
-                          </span>
-                        )}
+                      <div className="yk-row-sub">
+                        <IdentitySubline username={u.username} userId={u.userId} />
                       </div>
                     </div>
                     {hasIssues && (
@@ -187,6 +187,7 @@ export function UsersScreen() {
           </div>
         )}
       </div>
+      <ScrollToTopButton containerRef={scrollRef} />
     </div>
   );
 }

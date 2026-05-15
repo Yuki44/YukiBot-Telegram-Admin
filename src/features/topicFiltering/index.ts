@@ -19,6 +19,13 @@ export const topicFiltering: Middleware<BotContext> = async (ctx, next) => {
     const topic = await topicRepository.findByChatAndTopic(chatId, threadId);
     if (!topic) return await next();
 
+    // Auto-discovered topics (passive recordSeen or forum_topic_created cache) are
+    // surfaced in the dashboard for selection but not yet authoritative — until the
+    // user explicitly saves rules for the topic, all content types are allowed.
+    // Without this, brand-new forum topics with allowedMsgTypes=[] would nuke every
+    // message before the admin even gets a chance to configure them.
+    if (!topic.isUserConfigured) return await next();
+
     if (topic.adminOnly) {
       logger.info({ action: "topicFilter_adminOnly_delete", chatId, topicId: threadId });
       try {

@@ -33,10 +33,22 @@ export function TopicEditScreen() {
 
   const [topic, setTopic] = useState<Topic | null>(
     isNew
-      ? { chatId: Number(chatId), topicId: 0, name: "", allowedMsgTypes: [], adminOnly: false }
+      ? {
+          chatId: Number(chatId),
+          topicId: 0,
+          name: "",
+          // New topics default to ALL message types allowed — admin disables what they
+          // don't want rather than enabling what they do. Matches the spirit of "give
+          // me a working topic, I'll restrict it later" (issue #3, v2.0.1).
+          allowedMsgTypes: [...ALL_MSG_TYPES],
+          adminOnly: false,
+          isUserConfigured: false,
+        }
       : null
   );
-  const [allowed, setAllowed] = useState<Set<string>>(new Set());
+  const [allowed, setAllowed] = useState<Set<string>>(
+    isNew ? new Set(ALL_MSG_TYPES) : new Set()
+  );
   const [name, setName] = useState("");
   const [topicIdInput, setTopicIdInput] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +62,7 @@ export function TopicEditScreen() {
 
   useEffect(() => {
     if (isNew) {
-      setAllowed(new Set());
+      setAllowed(new Set(ALL_MSG_TYPES));
       setName("");
       setTopicIdInput("");
       return;
@@ -66,7 +78,13 @@ export function TopicEditScreen() {
         }
         setTopic(found);
         setName(found.name);
-        setAllowed(new Set(found.allowedMsgTypes));
+        // Auto-discovered topics (isUserConfigured=false) display with everything
+        // enabled — the stored empty array doesn't reflect intent. Once the user
+        // saves, the backend flips isUserConfigured=true and honours the selection.
+        const seed = found.isUserConfigured
+          ? new Set<string>(found.allowedMsgTypes)
+          : new Set<string>(ALL_MSG_TYPES);
+        setAllowed(seed);
         setAdminOnly(!!found.adminOnly);
       })
       .catch((err) => {

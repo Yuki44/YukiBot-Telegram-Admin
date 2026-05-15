@@ -19,6 +19,17 @@ function describeMedia(msg: NonNullable<CommandContext<BotContext>["message"]>):
   return "[media:other]";
 }
 
+/** Extract the best file_id from a media message (largest photo size, or the media's own file_id). */
+function extractMediaFileId(msg: NonNullable<CommandContext<BotContext>["message"]>): string | null {
+  if (msg.photo && msg.photo.length > 0) return msg.photo[msg.photo.length - 1].file_id;
+  if (msg.video) return msg.video.file_id;
+  if (msg.document) return msg.document.file_id;
+  if (msg.audio) return msg.audio.file_id;
+  if (msg.voice) return msg.voice.file_id;
+  if (msg.sticker) return msg.sticker.file_id;
+  return null;
+}
+
 export async function spamHandler(ctx: CommandContext<BotContext>): Promise<void> {
   try {
     const chatConfig = ctx.chatConfig;
@@ -38,10 +49,12 @@ export async function spamHandler(ctx: CommandContext<BotContext>): Promise<void
     const targetUsername = target.username;
     const adminId = ctx.from!.id;
 
+    const repliedMsg = replied as NonNullable<CommandContext<BotContext>["message"]>;
     const patternText =
       (replied.text ?? replied.caption)
         ? (replied.text ?? replied.caption)!
-        : describeMedia(replied as NonNullable<CommandContext<BotContext>["message"]>);
+        : describeMedia(repliedMsg);
+    const mediaFileId = extractMediaFileId(repliedMsg);
 
     const normalized = normalizeText(patternText);
     const normalizedHash = createHash("sha256").update(normalized).digest("hex");
@@ -92,7 +105,7 @@ export async function spamHandler(ctx: CommandContext<BotContext>): Promise<void
     }
 
     try {
-      await spamPatternRepository.add(chatId, patternText, adminId, target.id);
+      await spamPatternRepository.add(chatId, patternText, adminId, target.id, mediaFileId);
       logger.info({
         action: "spam_cmd_pattern_saved",
         chatId,
