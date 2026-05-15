@@ -4,7 +4,7 @@ interface YukiLogoProps {
 }
 
 export function YukiLogo({ size = 64, radius }: YukiLogoProps) {
-  const r = radius ?? Math.round(size * 0.31);
+  const r = radius ?? Math.round(size * 0.22);
   return (
     <div
       aria-label="YukiBot"
@@ -12,34 +12,24 @@ export function YukiLogo({ size = 64, radius }: YukiLogoProps) {
         width: size,
         height: size,
         borderRadius: r,
-        background: "linear-gradient(140deg, var(--brand-400), var(--brand-600))",
+        background: "var(--ink-900)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        boxShadow: "0 6px 20px oklch(0.55 0.13 175 / 0.35)",
+        boxShadow: "0 6px 20px rgba(28, 26, 23, 0.25)",
         flexShrink: 0,
       }}
     >
       <svg
-        viewBox="0 0 64 64"
-        width={size * 0.62}
-        height={size * 0.62}
-        fill="none"
-        stroke="white"
-        strokeWidth="3.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        viewBox="0 0 512 512"
+        width={size * 0.78}
+        height={size * 0.78}
+        aria-hidden
       >
-        <path d="M32 54 V30" />
         <path
-          d="M32 30 C 22 28, 14 20, 14 12 C 22 12, 30 18, 32 30 Z"
-          fill="rgba(255,255,255,0.35)"
+          fill="var(--ink-100)"
+          d="M 148 112 L 220 112 L 256 204 L 292 112 L 364 112 L 296 252 L 296 380 A 28 28 0 0 1 268 408 L 244 408 A 28 28 0 0 1 216 380 L 216 252 Z"
         />
-        <path
-          d="M32 36 C 42 34, 50 26, 50 18 C 42 18, 34 24, 32 36 Z"
-          fill="rgba(255,255,255,0.55)"
-        />
-        <circle cx="32" cy="48" r="2.4" fill="white" stroke="none" />
       </svg>
     </div>
   );

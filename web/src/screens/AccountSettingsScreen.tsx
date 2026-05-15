@@ -151,7 +151,7 @@ export function AccountSettingsScreen() {
             padding: "8px 16px 24px",
           }}
         >
-          YukiBot v2.0.0 · Hecho con cariño ❤️
+          YukiBot v{__APP_VERSION__} · Hecho con cariño ❤️
         </div>
       </div>
 

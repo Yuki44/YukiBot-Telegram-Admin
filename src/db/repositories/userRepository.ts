@@ -193,6 +193,48 @@ export const userRepository = {
     await User.deleteOne({ userId, chatId });
   },
 
+  /**
+   * Propagate identity-only fields (name/username/photoFileId/photoCheckedAt) across
+   * every chat that already has this userId. Per-chat enforcement state — wasBanned,
+   * isBanned, warnings, isMuted — is deliberately NOT synced (G3): those are chat-scoped.
+   *
+   * Empty/whitespace name and username are dropped so we never overwrite real identity
+   * with a blank value from a stripped-down Telegram update.
+   */
+  async syncIdentityAcrossChats(
+    userId: number,
+    fields: {
+      name?: string | null;
+      username?: string | null;
+      photoFileId?: string | null;
+      photoCheckedAt?: Date;
+    }
+  ): Promise<void> {
+    const setFields: Record<string, unknown> = {};
+    if (typeof fields.name === "string" && fields.name.trim().length > 0) {
+      setFields.name = fields.name.trim();
+    }
+    if (typeof fields.username === "string" && fields.username.trim().length > 0) {
+      setFields.username = fields.username.trim();
+    }
+    if (fields.photoFileId !== undefined) {
+      setFields.photoFileId = fields.photoFileId;
+    }
+    if (fields.photoCheckedAt !== undefined) {
+      setFields.photoCheckedAt = fields.photoCheckedAt;
+    }
+    if (Object.keys(setFields).length === 0) return;
+
+    try {
+      await User.updateMany({ userId }, { $set: setFields });
+    } catch (err) {
+      // Swallow — caller flows shouldn't fail because a cosmetic sync hit a transient DB error.
+      // Logged here instead of at every call site.
+      const { logger } = await import("../../utils/logger");
+      logger.warn({ action: "userRepository.syncIdentityAcrossChats", userId, error: String(err) });
+    }
+  },
+
   async clearLeftDate(userId: number, chatId: number): Promise<void> {
     await User.updateOne({ userId, chatId }, { $unset: { leftWithWarningsAt: "" } });
   },

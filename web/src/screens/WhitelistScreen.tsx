@@ -3,11 +3,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import { AppBar } from "../components/AppBar";
 import { I } from "../components/Icon";
 import { SpamDetectionCard } from "../components/SpamDetectionCard";
+import { UserAvatar } from "../components/UserAvatar";
 import { ApiError, api } from "../lib/api";
 import { clearSession } from "../lib/auth";
 import { useChat } from "../lib/useChat";
 import { avClass, initials } from "../lib/utils";
-import type { SpamDetection, UserDomainAllowance } from "../types/api";
+import type { SpamDetection, UserDomainAllowance, WhitelistUserEntry } from "../types/api";
 
 type Tab = "recent" | "links" | "users" | "combo";
 
@@ -132,7 +133,7 @@ export function WhitelistScreen() {
   const [tab, setTab] = useState<Tab>("recent");
 
   const [links, setLinks] = useState<string[] | null>(null);
-  const [users, setUsers] = useState<number[] | null>(null);
+  const [users, setUsers] = useState<WhitelistUserEntry[] | null>(null);
   const [combo, setCombo] = useState<UserDomainAllowance[] | null>(null);
   const [recent, setRecent] = useState<SpamDetection[] | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
@@ -466,39 +467,77 @@ export function WhitelistScreen() {
                     <div>Añade el primero arriba.</div>
                   </div>
                 ) : (
-                  users.map((uid) => (
-                    <ListRow
-                      key={uid}
-                      icon={I.user({ size: 20 })}
-                      label={
-                        <span
-                          className="yk-mono"
-                          style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                        >
-                          ID {uid}
-                        </span>
-                      }
-                      sub={
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/chats/${chatId}/users/${uid}`)}
-                          style={{
-                            background: "transparent",
-                            border: 0,
-                            color: "var(--brand-700)",
-                            cursor: "pointer",
-                            padding: 0,
-                            fontSize: 12,
-                            fontWeight: 600,
-                          }}
-                        >
-                          Ver perfil →
-                        </button>
-                      }
-                      onRemove={() => removeUser(uid)}
-                      removing={removing === "user:" + uid}
-                    />
-                  ))
+                  users.map((entry) => {
+                    const name = entry.name?.trim() ?? "";
+                    const username = entry.username?.trim() ?? "";
+                    const displayName =
+                      name || (username ? `@${username.replace(/^@/, "")}` : null);
+                    const isRemoving = removing === "user:" + entry.userId;
+                    return (
+                      <div key={entry.userId} className="yk-row" style={{ cursor: "default" }}>
+                        <UserAvatar
+                          name={displayName ?? ""}
+                          photoFileId={entry.photoFileId}
+                        />
+                        <div className="yk-row-body">
+                          <div className="yk-row-title">
+                            {displayName ?? (
+                              <span style={{ color: "var(--ink-500)", fontStyle: "italic" }}>
+                                Sin nombre
+                              </span>
+                            )}
+                          </div>
+                          <div
+                            className="yk-row-sub"
+                            style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}
+                          >
+                            {username && displayName !== `@${username.replace(/^@/, "")}` && (
+                              <span>@{username.replace(/^@/, "")}</span>
+                            )}
+                            <span
+                              className="yk-mono"
+                              style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}
+                            >
+                              ID {entry.userId}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/chats/${chatId}/users/${entry.userId}`)}
+                              style={{
+                                background: "transparent",
+                                border: 0,
+                                color: "var(--brand-700)",
+                                cursor: "pointer",
+                                padding: 0,
+                                fontSize: 12,
+                                fontWeight: 600,
+                              }}
+                            >
+                              Ver perfil →
+                            </button>
+                          </div>
+                        </div>
+                        <div className="yk-row-trail">
+                          <button
+                            type="button"
+                            onClick={() => removeUser(entry.userId)}
+                            disabled={isRemoving}
+                            aria-label="Quitar de la whitelist"
+                            style={{
+                              background: "transparent",
+                              border: 0,
+                              cursor: isRemoving ? "default" : "pointer",
+                              padding: 6,
+                              color: "var(--danger-fg)",
+                              opacity: isRemoving ? 0.4 : 1,
+                            }}
+                          >
+                            {I.trash({ size: 18 })}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>

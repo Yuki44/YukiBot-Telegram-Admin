@@ -2,11 +2,38 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppBar } from "../components/AppBar";
 import { I } from "../components/Icon";
+import { IdentitySubline } from "../components/IdentitySubline";
 import { UserAvatar } from "../components/UserAvatar";
 import { ApiError, api } from "../lib/api";
 import { clearSession, getStoredUser } from "../lib/auth";
 import { useChat } from "../lib/useChat";
 import type { AdminRecord, AdminsResponse } from "../types/api";
+
+/**
+ * Defensive identity resolver — Telegram occasionally returns admins with no
+ * first_name / last_name (anonymous group admins, deleted accounts), which
+ * /setup persists as name="Unknown" + empty username. Render those cases as an
+ * italic fallback instead of a blank row.
+ */
+function adminIdentity(a: AdminRecord): { primary: React.ReactNode; secondary: React.ReactNode } {
+  const name = a.name?.trim();
+  const username = a.username?.trim() || null;
+  const subline = <IdentitySubline username={username} userId={a.userId} />;
+  if (name && name.toLowerCase() !== "unknown") {
+    return { primary: name, secondary: subline };
+  }
+  if (username) {
+    return { primary: `@${username.replace(/^@/, "")}`, secondary: subline };
+  }
+  return {
+    primary: (
+      <span style={{ color: "var(--ink-500)", fontStyle: "italic" }}>
+        Admin sin nombre
+      </span>
+    ),
+    secondary: subline,
+  };
+}
 
 function roleChip(a: AdminRecord) {
   if (a.telegramRole === "owner") {
@@ -171,6 +198,9 @@ export function AdminsScreen() {
                 bot desde ella.
               </div>
               {delegatedAdmin ? (
+                (() => {
+                  const did = adminIdentity(delegatedAdmin);
+                  return (
                 <div
                   style={{
                     padding: 12,
@@ -183,14 +213,14 @@ export function AdminsScreen() {
                   }}
                 >
                   <UserAvatar
-                    name={delegatedAdmin.name}
+                    name={delegatedAdmin.name?.trim() && delegatedAdmin.name.trim().toLowerCase() !== "unknown" ? delegatedAdmin.name : delegatedAdmin.username || ""}
                     photoFileId={delegatedAdmin.photoFileId}
                     size={36}
                   />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>{delegatedAdmin.name}</div>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{did.primary}</div>
                     <div style={{ fontSize: 12, color: "var(--ink-500)" }}>
-                      @{delegatedAdmin.username.replace(/^@/, "")} · actúa como propietario
+                      {did.secondary} · actúa como propietario
                     </div>
                   </div>
                   <button
@@ -211,6 +241,8 @@ export function AdminsScreen() {
                     Revocar
                   </button>
                 </div>
+                  );
+                })()
               ) : (
                 <button
                   type="button"
@@ -249,15 +281,19 @@ export function AdminsScreen() {
                 const isMe = a.userId === me?.userId;
                 const canToggleSelf =
                   isMe && (a.telegramRole === "owner" || me?.isSuperAdmin === true);
+                const id = adminIdentity(a);
                 return (
                   <div key={a.userId} className="yk-row" style={{ cursor: "default" }}>
-                    <UserAvatar name={a.name} photoFileId={a.photoFileId} />
+                    <UserAvatar
+                      name={a.name?.trim() && a.name.trim().toLowerCase() !== "unknown" ? a.name : a.username || ""}
+                      photoFileId={a.photoFileId}
+                    />
                     <div className="yk-row-body">
                       <div
                         className="yk-row-title"
                         style={{ display: "flex", alignItems: "center", gap: 6 }}
                       >
-                        {a.name}
+                        {id.primary}
                         {a.hiddenInAdminList && (
                           <span
                             title="Oculto en la lista de admins"
@@ -268,7 +304,7 @@ export function AdminsScreen() {
                         )}
                       </div>
                       <div className="yk-row-sub">
-                        @{a.username.replace(/^@/, "")}
+                        {id.secondary}
                         {isMe && " · tú"}
                         {a.hiddenInAdminList && " · oculto en la lista del chat"}
                       </div>
@@ -324,7 +360,9 @@ export function AdminsScreen() {
                 Esa cuenta podrá gestionar admins, funciones del bot y cualquier otro ajuste de
                 propietario. Puedes revocar la delegación en cualquier momento.
               </div>
-              {candidates.map((a) => (
+              {candidates.map((a) => {
+                const cid = adminIdentity(a);
+                return (
                 <button
                   key={a.userId}
                   type="button"
@@ -342,14 +380,18 @@ export function AdminsScreen() {
                     opacity: busy ? 0.5 : 1,
                   }}
                 >
-                  <UserAvatar name={a.name} photoFileId={a.photoFileId} />
+                  <UserAvatar
+                    name={a.name?.trim() && a.name.trim().toLowerCase() !== "unknown" ? a.name : a.username || ""}
+                    photoFileId={a.photoFileId}
+                  />
                   <div className="yk-row-body">
-                    <div className="yk-row-title">{a.name}</div>
-                    <div className="yk-row-sub">@{a.username.replace(/^@/, "")}</div>
+                    <div className="yk-row-title">{cid.primary}</div>
+                    <div className="yk-row-sub">{cid.secondary}</div>
                   </div>
                   {I.chevR()}
                 </button>
-              ))}
+              );
+              })}
               <button
                 type="button"
                 className="yk-btn ghost"

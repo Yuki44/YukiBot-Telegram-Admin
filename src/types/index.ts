@@ -111,6 +111,14 @@ export interface ITopic extends Document {
   allowedMsgTypes: string[];
   /** When true, only chat admins may post in this topic — non-admin messages are deleted. */
   adminOnly?: boolean;
+  /**
+   * False = topic was auto-discovered (via forum_topic_created event or passive recordSeen),
+   * the user has never opened it in the dashboard. The filter middleware treats these as
+   * "allow everything" regardless of allowedMsgTypes — required so a brand-new forum topic
+   * doesn't silently nuke every message until someone manually configures it.
+   * True = topic was explicitly saved via the dashboard; allowedMsgTypes is authoritative.
+   */
+  isUserConfigured?: boolean;
 }
 
 export interface IUser extends Document {

@@ -101,6 +101,12 @@ export interface Topic {
   allowedMsgTypes: string[];
   /** When true, only chat admins may post in this topic. */
   adminOnly: boolean;
+  /**
+   * False = topic was auto-discovered (the bot hasn't received an explicit save
+   * for it yet). The dashboard treats these specially in the topic edit screen —
+   * new topics default to "all allowed" until saved.
+   */
+  isUserConfigured?: boolean;
 }
 
 export type UserStatus = "active" | "warned" | "silenced" | "banned";
@@ -112,6 +118,14 @@ export interface UserDomainAllowance {
   name?: string | null;
   username?: string | null;
   domains: string[];
+}
+
+/** Hydrated entry returned by /whitelist/users — userId plus best-effort identity. */
+export interface WhitelistUserEntry {
+  userId: number;
+  name: string | null;
+  username: string | null;
+  photoFileId: string | null;
 }
 
 export type ActivityLogType =
@@ -255,6 +269,8 @@ export interface SpamDetection {
   preview: string;
   fullText: string;
   linkDomain?: string;
+  /** Telegram file_id for media spam — proxied via /api/photos/:fileId. */
+  mediaFileId?: string | null;
   triggeredByUserId: number;
   triggeredByName: string | null;
   triggeredByUsername: string | null;

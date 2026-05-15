@@ -57,6 +57,10 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
         .catch((err) =>
           logger.error({ action: "chatMember_userUpsert", userId, chatId, error: String(err) })
         );
+      void userRepository.syncIdentityAcrossChats(userId, {
+        name: fullName || undefined,
+        username: username ?? null,
+      });
       return;
     }
 

@@ -44,6 +44,7 @@ export function createTopicsRouter(): Router {
             name: t.name,
             allowedMsgTypes: t.allowedMsgTypes,
             adminOnly: t.adminOnly ?? false,
+            isUserConfigured: t.isUserConfigured ?? false,
           }))
           .sort((a, b) => a.topicId - b.topicId)
       );
@@ -101,6 +102,7 @@ export function createTopicsRouter(): Router {
         name: created.name,
         allowedMsgTypes: created.allowedMsgTypes,
         adminOnly: created.adminOnly ?? false,
+        isUserConfigured: created.isUserConfigured ?? true,
       });
     } catch (err) {
       logger.error({ action: "topics.upsert", error: String(err), chatId });
@@ -174,6 +176,7 @@ export function createTopicsRouter(): Router {
           name: updated.name,
           allowedMsgTypes: updated.allowedMsgTypes,
           adminOnly: updated.adminOnly ?? false,
+          isUserConfigured: updated.isUserConfigured ?? true,
         });
       } catch (err) {
         logger.error({ action: "topics.update", error: String(err), chatId, topicId });

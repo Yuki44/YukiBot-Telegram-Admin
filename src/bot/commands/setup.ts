@@ -3,6 +3,7 @@ import { BotContext } from "../../types";
 import { chatRepository } from "../../db/repositories/chatRepository";
 import { adminRepository } from "../../db/repositories/adminRepository";
 import { userRepository } from "../../db/repositories/userRepository";
+import { discoverProfilePhoto } from "../helpers/profilePhoto";
 import { logger } from "../../utils/logger";
 
 export async function setupHandler(ctx: CommandContext<BotContext>) {
@@ -54,7 +55,15 @@ export async function setupHandler(ctx: CommandContext<BotContext>) {
 
     const admins = await ctx.api.getChatAdministrators(chatId);
 
-    for (const admin of admins) {
+    // Filter Telegram's GroupAnonymousBot (id 1087968824) and other bots — they show up in
+    // getChatAdministrators when the chat has "anonymous admins" enabled but they don't
+    // represent a real person and would render as blank rows in the dashboard.
+    const ANON_ADMIN_BOT_ID = 1087968824;
+    const realAdmins = admins.filter(
+      (a) => !a.user.is_bot && a.user.id !== ANON_ADMIN_BOT_ID,
+    );
+
+    for (const admin of realAdmins) {
       const fullName = [admin.user.first_name, admin.user.last_name].filter(Boolean).join(" ");
 
       await adminRepository.upsert({
@@ -68,6 +77,11 @@ export async function setupHandler(ctx: CommandContext<BotContext>) {
 
       // Also populate User collection so @username lookups work
       await userRepository.findOrCreate(admin.user.id, chatId, admin.user.username, admin.user.first_name);
+
+      // Pre-fetch the profile photo so admins who've never messaged in the group
+      // still render an avatar in the dashboard's Admins screen (issue #5).
+      // Fire-and-forget: photo discovery is best-effort and logs failures internally.
+      void discoverProfilePhoto(ctx.api, admin.user.id, chatId);
     }
 
     logger.info({

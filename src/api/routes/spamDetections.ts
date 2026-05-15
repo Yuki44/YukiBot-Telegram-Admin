@@ -23,6 +23,8 @@ interface SpamDetectionDto {
   fullText: string;
   /** Only set for link detections — the domain that "Permitir" promotes to linkWhitelist. */
   linkDomain?: string;
+  /** Telegram file_id for media spam — proxied via /api/photos/:fileId. */
+  mediaFileId?: string | null;
   triggeredByUserId: number;
   triggeredByName: string | null;
   triggeredByUsername: string | null;
@@ -109,6 +111,7 @@ export function createSpamDetectionsRouter(): Router {
           preview: buildPreview(kind, p.text, linkDomain),
           fullText: p.text,
           ...(linkDomain ? { linkDomain } : {}),
+          mediaFileId: p.mediaFileId ?? null,
           triggeredByUserId: p.triggeredByUserId,
           triggeredByName: u?.name ?? null,
           triggeredByUsername: u?.username ?? null,
