@@ -12,15 +12,16 @@
 ## Middleware Order (critical — do not reorder)
 
 ```
-loadChat → trackUser → isAdmin → adminOnlyCommands → feature handlers
+loadChat → trackUser → trackTopic → isAdmin → adminOnlyCommands → feature handlers
 ```
 
 Registered in `src/index.ts`:
 
 ```ts
-bot.use(loadChat);     // loads Chat doc, enforces whitelist
-bot.use(trackUser);    // upserts User doc for every message sender
-bot.use(isAdmin);      // sets ctx.isAdmin (DB + Telegram API fallback)
+bot.use(loadChat);          // loads Chat doc, enforces whitelist
+bot.use(trackUser);         // upserts User doc for every message sender
+bot.use(trackTopic);        // records new/edited forum topics
+bot.use(isAdmin);           // sets ctx.isAdmin (DB + Telegram API fallback)
 bot.use(adminOnlyCommands); // deletes non-admin command messages
 ```
 
@@ -40,7 +41,9 @@ bot.use(adminOnlyCommands); // deletes non-admin command messages
 
 Stored in `Chat.features`. **All default to `false`** (G8).
 
-Toggled via `/togglefeature` (owner only) or MongoDB Compass.
+Toggled via `/togglefeature` (owner only), MongoDB Compass, or the dashboard's Features screen.
+
+Current flags: `topicFiltering`, `autoBan`, `autoWarnSpam`, `promoSpamDetection`, `bannedWordsEnforcement`, `languageDetection` (reserved).
 
 Feature handlers must guard on the flag before acting:
 
@@ -52,9 +55,10 @@ if (!ctx.chatConfig?.features.topicFiltering) return next();
 
 1. Create `src/bot/commands/<name>.ts` — export `<name>Handler`.
 2. Register in `src/index.ts`: `bot.command("<name>", <name>Handler);`
-3. Add the command string to `adminOnlyCommands` protected list (G7).
-4. Bot replies in **Spanish only**.
+3. Add the command string to the `YUKIBOT_COMMANDS` set in `src/bot/middleware/adminOnlyCommands.ts` (G7).
+4. User-facing Spanish strings go into `src/locales/es.json` — do not inline them.
 5. Use `sendAndAutoDelete()` for ephemeral confirmations.
+6. If the command performs a moderation action, call `sendLog()` so it appears in the log channel + dashboard activity log.
 
 ## resolveTarget() — User Resolution
 
