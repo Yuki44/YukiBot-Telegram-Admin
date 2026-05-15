@@ -122,6 +122,7 @@ export async function spamCallbackHandler(ctx: BotContext): Promise<void> {
         target,
         chatId,
         chatName: groupConfig?.name ?? String(chatId),
+        chatType: groupConfig?.type ?? "normal",
       }).catch(() => {});
 
       // 6. Q_AVISO log
@@ -131,6 +132,7 @@ export async function spamCallbackHandler(ctx: BotContext): Promise<void> {
         target,
         chatId,
         chatName: groupConfig?.name ?? String(chatId),
+        chatType: groupConfig?.type ?? "normal",
         warnings: userRecord?.warnings ?? 0,
       }).catch(() => {});
 

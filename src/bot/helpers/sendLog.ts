@@ -1,6 +1,8 @@
 import { Api } from "grammy";
+import { Message } from "grammy/types";
 import { IChat } from "../../types";
 import { esc } from "./html";
+import { forwardToLog } from "./forwardToLog";
 import { logger } from "../../utils/logger";
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -29,17 +31,20 @@ export interface LogPayload {
   target: LogUser;
   chatId: number;
   chatName: string;
+  chatType: "topics" | "normal";
   warnings?: number;
   reason?: string;
   muteUntil?: Date;
   /** Inviter / link creator for ENTRADA_USUARIO */
   inviter?: LogUser;
-  /** Topic context (topics-type chats) */
+  /** Topic context (topics-type chats only) */
   topicId?: number;
   /** Explicit topic name — skips DB lookup when provided */
   topicName?: string;
-  /** Text of the message the admin replied to (only when command was used as a reply) */
-  repliedMessage?: string;
+  /** Specific message ID to link to in the nav line (e.g. the message the command was used on) */
+  refMsgId?: number;
+  /** The original message the admin replied to — forwarded via forwardToLog */
+  repliedMsg?: Message;
 }
 
 // ── Flag mapping ─────────────────────────────────────────────────────
@@ -77,7 +82,6 @@ function userLink(u: LogUser): string {
 }
 
 function chatIdForLink(chatId: number): string {
-  // Telegram private link format: strip -100 prefix
   return String(chatId).replace(/^-100/, "");
 }
 
@@ -112,10 +116,44 @@ function formatDate(d: Date): string {
   return `${day} de ${monthCap} ${year} a las ${hh}:${mm}:${ss}`;
 }
 
+function formatShortDate(d: Date): string {
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
 function hashIds(target: LogUser, actor?: LogUser): string {
   let tags = `#id${target.id}`;
   if (actor && actor.id !== target.id) tags += ` #id${actor.id}`;
   return tags;
+}
+
+/**
+ * Builds the navigation line for a log entry.
+ * - refMsgId present → link to that exact message
+ * - topics + topicId → "ir al tema"
+ * - topics, no topicId (General) → "ir al grupo" at message 1
+ * - normal → "ir al grupo" at a high ID so Telegram lands near latest messages
+ */
+function buildNavLine(
+  chatId: number,
+  chatType: "topics" | "normal",
+  topicId?: number,
+  refMsgId?: number
+): string {
+  const cid = chatIdForLink(chatId);
+  if (refMsgId) {
+    const isTopicContext = chatType === "topics" && topicId;
+    return `• ${isTopicContext ? "Tema" : "Grupo"}: <a href="https://t.me/c/${cid}/${refMsgId}">⬅️ ir al ${isTopicContext ? "tema" : "grupo"}</a>`;
+  }
+  if (chatType === "topics" && topicId) {
+    return `• Tema: ${topicLink(chatId, topicId, "⬅️ ir al tema")}`;
+  }
+  if (chatType === "topics") {
+    return `• Grupo: <a href="https://t.me/c/${cid}/1">⬅️ ir al grupo</a>`;
+  }
+  return `• Grupo: <a href="https://t.me/c/${cid}/999999999">⬅️ ir al grupo</a>`;
 }
 
 // ── Main ─────────────────────────────────────────────────────────────
@@ -135,15 +173,7 @@ export async function sendLog(
     const now = new Date();
     const grupo = `${esc(payload.chatName)} [<code>${payload.chatId}</code>]`;
     const fecha = formatDate(now);
-
-    let topicLine = "";
-    if (payload.topicId) {
-      topicLine = `• Tema: ${topicLink(payload.chatId, payload.topicId, "⬅️ ir al tema")}`;
-    } else {
-      // General topic or normal group — link directly to the chat for quick navigation
-      const cid = chatIdForLink(payload.chatId);
-      topicLine = `• Grupo: <a href="https://t.me/c/${cid}">⬅️ ir al grupo</a>`;
-    }
+    const navLine = buildNavLine(payload.chatId, payload.chatType, payload.topicId, payload.refMsgId);
 
     let lines: string[] = [];
 
@@ -154,9 +184,9 @@ export async function sendLog(
           `• De: ${payload.actor ? userLink(payload.actor) : "Sistema"}`,
           `• A: ${userLink(payload.target)}`,
           `• Grupo: ${grupo}`,
+          navLine,
+          `• Avisos: ${payload.warnings ?? "?"}/3`,
         ];
-        if (topicLine) lines.push(topicLine);
-        lines.push(`• Avisos: ${payload.warnings ?? "?"}/3`);
         if (payload.reason) lines.push(`• Razón: ${esc(payload.reason)}`);
         lines.push(`• Fecha: ${fecha}`);
         lines.push(hashIds(payload.target, payload.actor));
@@ -165,17 +195,17 @@ export async function sendLog(
 
       case "SILENCIO": {
         const until = payload.muteUntil ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-        const untilStr = `${until.getMonth() + 1}/${until.getDate()}/${String(until.getFullYear()).slice(-2)}`;
+        const untilStr = formatShortDate(until);
         lines = [
           `${emoji} #SILENCIO`,
           `• De: ${payload.actor ? userLink(payload.actor) : "Sistema"}`,
           `• A: ${userLink(payload.target)}`,
           `• Grupo: ${grupo}`,
+          navLine,
+          `• Duración: 1 semana hasta el ${untilStr}`,
+          `• Fecha: ${fecha}`,
+          hashIds(payload.target, payload.actor),
         ];
-        if (topicLine) lines.push(topicLine);
-        lines.push(`• Duración: 1 semana hasta el ${untilStr}`);
-        lines.push(`• Fecha: ${fecha}`);
-        lines.push(hashIds(payload.target, payload.actor));
         break;
       }
 
@@ -185,8 +215,8 @@ export async function sendLog(
           `• De: ${payload.actor ? userLink(payload.actor) : "Sistema"}`,
           `• A: ${userLink(payload.target)}`,
           `• Grupo: ${grupo}`,
+          navLine,
         ];
-        if (topicLine) lines.push(topicLine);
         if (payload.reason) lines.push(`• Razón: ${esc(payload.reason)}`);
         lines.push(`• Fecha: ${fecha}`);
         lines.push(hashIds(payload.target, payload.actor));
@@ -198,6 +228,7 @@ export async function sendLog(
           `${emoji} #AUTO_BAN`,
           `• A: ${userLink(payload.target)}`,
           `• Grupo: ${grupo}`,
+          navLine,
           `• Fecha: ${fecha}`,
           hashIds(payload.target),
         ];
@@ -210,6 +241,7 @@ export async function sendLog(
           `• De: ${payload.actor ? userLink(payload.actor) : "Sistema"}`,
           `• A: ${userLink(payload.target)}`,
           `• Grupo: ${grupo}`,
+          navLine,
           `• Fecha: ${fecha}`,
           hashIds(payload.target, payload.actor),
         ];
@@ -222,6 +254,7 @@ export async function sendLog(
           `• De: ${payload.actor ? userLink(payload.actor) : "Sistema"}`,
           `• A: ${userLink(payload.target)}`,
           `• Grupo: ${grupo}`,
+          navLine,
           `• Fecha: ${fecha}`,
           hashIds(payload.target, payload.actor),
         ];
@@ -234,11 +267,11 @@ export async function sendLog(
           `• De: ${payload.actor ? userLink(payload.actor) : "Sistema"}`,
           `• A: ${userLink(payload.target)}`,
           `• Grupo: ${grupo}`,
+          navLine,
+          `• Avisos: ${payload.warnings ?? 0}/3`,
+          `• Fecha: ${fecha}`,
+          hashIds(payload.target, payload.actor),
         ];
-        if (topicLine) lines.push(topicLine);
-        lines.push(`• Avisos: ${payload.warnings ?? 0}/3`);
-        lines.push(`• Fecha: ${fecha}`);
-        lines.push(hashIds(payload.target, payload.actor));
         break;
       }
 
@@ -248,10 +281,10 @@ export async function sendLog(
           `• De: ${payload.actor ? userLink(payload.actor) : "Sistema"}`,
           `• A: ${userLink(payload.target)}`,
           `• Grupo: ${grupo}`,
+          navLine,
+          `• Fecha: ${fecha}`,
+          hashIds(payload.target, payload.actor),
         ];
-        if (topicLine) lines.push(topicLine);
-        lines.push(`• Fecha: ${fecha}`);
-        lines.push(hashIds(payload.target, payload.actor));
         break;
       }
 
@@ -261,6 +294,7 @@ export async function sendLog(
           lines.push(`• Aprobado por: ${userLink(payload.actor)}`);
         }
         lines.push(`• Grupo: ${grupo}`);
+        lines.push(navLine);
         if (payload.inviter) {
           lines.push(`• Enlace de: ${userLink(payload.inviter)}`);
         }
@@ -280,6 +314,7 @@ export async function sendLog(
           `${emoji} #SALIDA_USUARIO`,
           `• De: ${userLink(payload.target)}`,
           `• Grupo: ${grupo}`,
+          navLine,
           `• Fecha: ${fecha}`,
           hashIds(payload.target),
         ];
@@ -290,12 +325,8 @@ export async function sendLog(
     const text = lines.join("\n");
     await api.sendMessage(chatConfig.logsTo, text, { parse_mode: "HTML" });
 
-    if (payload.repliedMessage) {
-      await api.sendMessage(
-        chatConfig.logsTo,
-        `💬 <i>Mensaje original:</i>\n${esc(payload.repliedMessage)}`,
-        { parse_mode: "HTML" }
-      );
+    if (payload.repliedMsg) {
+      await forwardToLog(api, chatConfig.logsTo, payload.repliedMsg);
     }
   } catch (err) {
     logger.error({ action: "sendLog", logAction: payload.action, error: String(err) });

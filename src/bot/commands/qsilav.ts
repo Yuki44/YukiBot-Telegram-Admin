@@ -62,6 +62,7 @@ export async function qsilavHandler(ctx: BotContext): Promise<void> {
         target: { id: target.userId, name: target.name, username: target.username },
         chatId,
         chatName,
+        chatType: ctx.chatConfig.type,
         topicId: ctx.message?.message_thread_id,
       }).catch(() => {});
 
@@ -96,6 +97,7 @@ export async function qsilavHandler(ctx: BotContext): Promise<void> {
         target: { id: target.userId, name: target.name, username: target.username },
         chatId,
         chatName,
+        chatType: ctx.chatConfig.type,
         warnings: user.warnings,
         topicId: ctx.message?.message_thread_id,
       }).catch(() => {});

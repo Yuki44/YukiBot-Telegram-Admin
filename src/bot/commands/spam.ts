@@ -94,6 +94,7 @@ export async function spamHandler(ctx: CommandContext<BotContext>): Promise<void
         logsTo,
         chatId,
         chatName,
+        ctx.chatConfig?.type ?? "normal",
         target.id,
         targetName,
         "manual:/spam",

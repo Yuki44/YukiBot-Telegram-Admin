@@ -39,6 +39,8 @@ export function LoginScreen() {
     let cancelled = false;
 
     window.onTelegramAuth = async (user: TelegramAuthData) => {
+      // eslint-disable-next-line no-console
+      console.info("[login] onTelegramAuth fired", { id: user.id, hasHash: !!user.hash });
       setTgBusy(true);
       setTgError(null);
       try {
@@ -87,29 +89,50 @@ export function LoginScreen() {
         // Public config failure — silently keep Telegram hidden; password still works.
       });
 
+    // Note: we intentionally do NOT delete window.onTelegramAuth on cleanup.
+    // The Telegram widget invokes the global callback asynchronously after the
+    // OAuth popup completes; if we delete it on a re-render or unmount, the
+    // callback never fires when the user authorizes. Leaving the global resident
+    // on the login screen is safe — once the user navigates away, the closure's
+    // navigate() ref is stale but harmless, and a re-mount overwrites it.
     return () => {
       cancelled = true;
-      delete window.onTelegramAuth;
     };
   }, [navigate]);
 
   // Effect 2 — inject the Telegram widget script.
   // Runs AFTER the render triggered by setWidgetUsername(), so widgetRef.current is
   // guaranteed to be a mounted DOM node at this point.
+  //
+  // We use createContextualFragment instead of document.createElement + appendChild
+  // because the Telegram widget script relies on document.currentScript at run-time
+  // to find its parent element for iframe insertion. With the createElement path,
+  // document.currentScript is null inside the loaded script (browsers do not set it
+  // for scripts inserted by other scripts), and the widget renders an empty button
+  // that does nothing on click. Parsing the script via Range.createContextualFragment
+  // keeps the script element associated with the document so the widget can locate
+  // its container and attach its postMessage listener correctly.
   useEffect(() => {
-    if (!widgetUsername || !widgetRef.current) return;
+    const container = widgetRef.current;
+    if (!widgetUsername || !container) return;
     setTgEnabled(true);
-    // Clear any previous children (guards against React strict-mode double-mount in dev).
-    widgetRef.current.replaceChildren();
-    const script = document.createElement("script");
-    script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.async = true;
-    script.setAttribute("data-telegram-login", widgetUsername);
-    script.setAttribute("data-size", "large");
-    script.setAttribute("data-radius", "12");
-    script.setAttribute("data-onauth", "onTelegramAuth(user)");
-    script.setAttribute("data-request-access", "write");
-    widgetRef.current.appendChild(script);
+    container.replaceChildren();
+    const range = document.createRange();
+    range.selectNode(container);
+    const fragment = range.createContextualFragment(
+      `<script src="https://telegram.org/js/telegram-widget.js?22" async ` +
+        `data-telegram-login="${widgetUsername}" data-size="large" data-radius="12" ` +
+        `data-onauth="onTelegramAuth(user)" data-request-access="write"></script>`
+    );
+    container.appendChild(fragment);
+    // eslint-disable-next-line no-console
+    console.info("[login] widget script injected");
+    const probe = window.setTimeout(() => {
+      const hasIframe = !!container.querySelector("iframe");
+      // eslint-disable-next-line no-console
+      console.info(`[login] widget iframe ${hasIframe ? "present" : "NOT present"}`);
+    }, 1500);
+    return () => window.clearTimeout(probe);
   }, [widgetUsername]);
 
   async function submitPassword(e: React.FormEvent) {
@@ -321,16 +344,6 @@ export function LoginScreen() {
                   >
                     {I.telegram({ size: 20 })} Continuar con Telegram
                   </a>
-                  <div
-                    style={{
-                      color: "var(--ink-500)",
-                      fontSize: 12,
-                      textAlign: "center",
-                      marginTop: 8,
-                    }}
-                  >
-                    El login con Telegram solo funciona desde el dominio principal.
-                  </div>
                 </>
               )}
 

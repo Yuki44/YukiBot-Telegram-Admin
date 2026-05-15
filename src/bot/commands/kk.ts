@@ -61,9 +61,8 @@ export async function kkHandler(ctx: BotContext): Promise<void> {
       await sendAndAutoDelete(ctx, t("kick.kicked", { user: mention(target.name, target.username) }), 0);
 
       const actor = buildActor(ctx);
-      const repliedMessage = ctx.message?.reply_to_message
-        ? (ctx.message.reply_to_message.text ?? ctx.message.reply_to_message.caption)
-        : undefined;
+      const repliedMsg = ctx.message?.reply_to_message;
+      const repliedText = repliedMsg ? (repliedMsg.text ?? repliedMsg.caption) : undefined;
 
       sendLog(ctx.api, ctx.chatConfig, {
         action: "KICK",
@@ -71,8 +70,9 @@ export async function kkHandler(ctx: BotContext): Promise<void> {
         target: { id: target.userId, name: target.name, username: target.username },
         chatId,
         chatName: getChatTitle(ctx),
+        chatType: ctx.chatConfig.type,
         topicId: ctx.message?.message_thread_id,
-        repliedMessage,
+        repliedMsg,
       }).catch(() => {});
 
       recordActivity({
@@ -82,7 +82,7 @@ export async function kkHandler(ctx: BotContext): Promise<void> {
         actor,
         target: { id: target.userId, name: target.name, username: target.username },
         topicId: ctx.message?.message_thread_id,
-        messageText: repliedMessage,
+        messageText: repliedText,
       });
     } else {
       await sendAndAutoDelete(ctx, t("errors.kickFailed"), 0);

@@ -1,3 +1,4 @@
+import { Message } from "grammy/types";
 import { BotContext, IChat } from "../../types";
 import { userRepository } from "../../db/repositories/userRepository";
 import { sendLog } from "./sendLog";
@@ -18,8 +19,9 @@ export async function applyWarn(
     chatConfig?: IChat | null;
     chatName?: string;
     topicId?: number;
+    refMsgId?: number;
     actor?: { id: number; name: string; username?: string };
-    repliedMessage?: string;
+    repliedMsg?: Message;
   }
 ): Promise<{ warnMsgId?: number }> {
   try {
@@ -39,10 +41,12 @@ export async function applyWarn(
       target,
       chatId,
       chatName: resolvedChatName,
+      chatType: resolvedChatConfig?.type ?? "normal",
       warnings: user.warnings,
       reason,
       topicId,
-      repliedMessage: options?.repliedMessage,
+      refMsgId: options?.refMsgId,
+      repliedMsg: options?.repliedMsg,
     }).catch(() => {});
 
     recordActivity({
@@ -54,7 +58,7 @@ export async function applyWarn(
       reason,
       topicId,
       warningsAfter: user.warnings,
-      messageText: options?.repliedMessage,
+      messageText: options?.repliedMsg ? (options.repliedMsg.text ?? options.repliedMsg.caption) : undefined,
     });
 
     let warnMsgId: number | undefined;
@@ -78,6 +82,7 @@ export async function applyWarn(
         target,
         chatId,
         chatName: resolvedChatName,
+        chatType: resolvedChatConfig?.type ?? "normal",
         reason: "3 avisos",
         topicId,
       }).catch(() => {});
