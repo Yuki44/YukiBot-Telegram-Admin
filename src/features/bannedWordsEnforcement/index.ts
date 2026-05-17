@@ -72,6 +72,19 @@ export async function bannedWordsEnforcement(ctx: BotContext): Promise<void> {
       topicId: rule.topicId,
     });
 
+    // Dedicated channel log for every banned-word hit (independent of which
+    // enforcement action runs — covers delete-only too). Gated by the chat's
+    // logBannedWords flag inside sendLog, like every other log type.
+    sendLog(ctx.api, chatConfig, {
+      action: "PALABRA_PROHIBIDA",
+      target,
+      chatId,
+      chatName,
+      chatType: chatConfig.type,
+      topicId: threadId,
+      word: rule.word,
+    }).catch(() => {});
+
     // Independent admin notification — runs alongside any enforcement.
     if (ruleActions.flag && chatConfig.logsTo) {
       try {

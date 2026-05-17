@@ -86,6 +86,17 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
             chatName,
             chatType: ctx.chatConfig.type,
           }).catch(() => {});
+          // Mirror into the queryable ActivityLog so the dashboard Registro reflects
+          // kicks done by other admins/bots too — not only YukiBot's own /kk. The
+          // `from !== me` guard means YukiBot command paths (which set from=bot, plus
+          // the isKickInProgress short-circuit) never reach here, so no double entry.
+          recordActivity({
+            chatId,
+            type: "kick",
+            source: "bot",
+            actor,
+            target,
+          });
         }
         return;
       }
@@ -110,6 +121,16 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
           chatName,
           chatType: ctx.chatConfig.type,
         }).catch(() => {});
+        // Mirror into the queryable ActivityLog so the Registro shows bans done by
+        // other admins/bots too. YukiBot's own /bn and 3-strike autoban set
+        // from=bot, so they're excluded here and recorded by their own paths.
+        recordActivity({
+          chatId,
+          type: "ban",
+          source: "bot",
+          actor,
+          target,
+        });
       }
       return;
     }

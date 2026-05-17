@@ -1,9 +1,12 @@
 import { Router, Request, Response } from "express";
+import { Bot } from "grammy";
 import { authenticate } from "../middleware/authenticate";
 import { requireChatAdmin } from "../middleware/requireChatAdmin";
 import { adminRepository } from "../../db/repositories/adminRepository";
 import { chatRepository } from "../../db/repositories/chatRepository";
 import { userRepository } from "../../db/repositories/userRepository";
+import { discoverProfilePhoto, shouldRecheckPhoto } from "../../bot/helpers/profilePhoto";
+import { BotContext } from "../../types";
 import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
 
@@ -30,7 +33,7 @@ interface DelegateBody {
   userId?: number;
 }
 
-export function createAdminsRouter(): Router {
+export function createAdminsRouter(bot: Bot<BotContext>): Router {
   const router = Router({ mergeParams: true });
 
   router.use(authenticate);
@@ -50,8 +53,24 @@ export function createAdminsRouter(): Router {
       const hiddenSet = new Set(chat.hiddenAdminIds ?? []);
 
       // Pull photo file_ids from the User collection so admins get the same avatars
-      // as the rest of the dashboard. Admins who've never messaged here won't have
-      // a User row — they fall back to initials.
+      // as the rest of the dashboard. Admins are users like any other — but one who
+      // has never messaged here won't have a User row yet, and one added after /setup
+      // never had discoverProfilePhoto run. So for any admin whose row is missing or
+      // whose cached photo is stale, discover it now (the weekly recheck guard inside
+      // shouldRecheckPhoto keeps this from hitting the Telegram API on every render).
+      // discoverProfilePhoto upserts a User row, which also means the admin gains a
+      // record so their detail page resolves when clicked from the dashboard.
+      const initialLookups = await Promise.all(
+        records.map((r) => userRepository.findByUserAndChat(r.userId, chatId))
+      );
+      await Promise.all(
+        records.map(async (r, idx) => {
+          const u = initialLookups[idx];
+          if (!u || shouldRecheckPhoto(u)) {
+            await discoverProfilePhoto(bot.api, r.userId, chatId);
+          }
+        })
+      );
       const photoLookups = await Promise.all(
         records.map((r) => userRepository.findByUserAndChat(r.userId, chatId))
       );
@@ -78,7 +97,17 @@ export function createAdminsRouter(): Router {
           if (b.isDelegatedOwner && !a.isDelegatedOwner) return 1;
           return a.name.localeCompare(b.name, "es");
         });
-      const body: AdminsResponse = { admins, delegatedOwnerId };
+
+      // An admin who hid themselves must not appear to other admins. The hidden
+      // user still receives their own row (so the eye state renders and they can
+      // unhide), and super-admins see everyone for support.
+      const viewerId = req.user!.userId;
+      const isSuperAdmin = req.user!.isSuperAdmin === true;
+      const visibleAdmins = admins.filter(
+        (a) => !a.hiddenInAdminList || a.userId === viewerId || isSuperAdmin
+      );
+
+      const body: AdminsResponse = { admins: visibleAdmins, delegatedOwnerId };
       res.json(body);
     } catch (err) {
       logger.error({ action: "admins.list", error: String(err), chatId });

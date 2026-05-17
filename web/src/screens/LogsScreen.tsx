@@ -23,11 +23,12 @@ const FILTERS: FilterDef[] = [
   { id: "todo", label: "Todo", types: [], tone: "" },
   { id: "warn", label: "Avisos", types: ["warn", "unwarn"], tone: "warn" },
   { id: "silence", label: "Silencios", types: ["silence", "unsilence"], tone: "info" },
-  { id: "ban", label: "Bans", types: ["ban", "unban", "autoban", "kick", "pardon"], tone: "danger" },
+  { id: "ban", label: "Bans", types: ["ban", "unban", "autoban", "pardon"], tone: "danger" },
+  { id: "kicks", label: "Kicks", types: ["kick"], tone: "danger" },
   { id: "config", label: "Config", types: ["feature_toggle", "topic_rule_change"], tone: "brand" },
   {
     id: "lists",
-    label: "Listas",
+    label: "Palabras",
     types: [
       "whitelist_add",
       "whitelist_remove",
@@ -36,12 +37,6 @@ const FILTERS: FilterDef[] = [
       "banned_word_add",
       "banned_word_remove",
     ],
-    tone: "brand",
-  },
-  {
-    id: "team",
-    label: "Equipo",
-    types: ["owner_delegate", "owner_revoke"],
     tone: "brand",
   },
 ];
@@ -70,7 +65,7 @@ function metaFor(type: ActivityLogType): TypeMeta {
     case "autoban":
       return { icon: () => I.ban({ size: 14 }), bg: "var(--danger-bg)", fg: "var(--danger-fg)", label: "Auto-ban" };
     case "kick":
-      return { icon: () => I.logout({ size: 14 }), bg: "var(--danger-bg)", fg: "var(--danger-fg)", label: "Expulsión" };
+      return { icon: () => I.logout({ size: 14 }), bg: "var(--danger-bg)", fg: "var(--danger-fg)", label: "Kick" };
     case "pardon":
       return { icon: () => I.check({ size: 14 }), bg: "var(--ok-bg)", fg: "var(--ok-fg)", label: "Perdón" };
     case "feature_toggle":
@@ -119,11 +114,13 @@ function dayKey(ts: string): string {
 
 interface LogRowProps {
   log: ActivityLogEntry;
+  /** Only forum-type chats have temas — hide the tema line for normal groups. */
+  showTopic: boolean;
   onOpenUser?: () => void;
   onUndo?: () => void;
 }
 
-function LogRow({ log, onOpenUser, onUndo }: LogRowProps) {
+function LogRow({ log, showTopic, onOpenUser, onUndo }: LogRowProps) {
   const cfg = metaFor(log.type);
   const target = targetLabel(log);
   const actor = actorLabel(log);
@@ -185,7 +182,7 @@ function LogRow({ log, onOpenUser, onUndo }: LogRowProps) {
           {log.reason && <span>{log.reason}</span>}
           {log.reason && log.warningsAfter !== null && <span> · </span>}
           {log.warningsAfter !== null && <span>ahora {log.warningsAfter}/3</span>}
-          {log.topicId !== null && <span> · tema #{log.topicId}</span>}
+          {showTopic && log.topicId !== null && <span> · tema #{log.topicId}</span>}
         </div>
         <div style={{ marginTop: 2, fontSize: 12, color: "var(--ink-500)" }}>
           por <b style={{ color: "var(--ink-700)" }}>{actor}</b>
@@ -474,6 +471,7 @@ export function LogsScreen() {
                   <LogRow
                     key={log.id}
                     log={log}
+                    showTopic={chat?.type === "topics"}
                     onOpenUser={
                       log.targetId !== null
                         ? () => navigate(`/chats/${chatId}/users/${log.targetId}`)

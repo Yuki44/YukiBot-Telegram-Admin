@@ -43,7 +43,7 @@ function logMeta(type: ActivityLogType): LogTypeMeta {
     case "pardon":
       return { icon: I.check({ size: 14 }), bg: "var(--ok-bg)", fg: "var(--ok-fg)", label: type === "pardon" ? "Perdón" : "Quitar ban" };
     case "kick":
-      return { icon: I.logout({ size: 14 }), bg: "var(--danger-bg)", fg: "var(--danger-fg)", label: "Expulsión" };
+      return { icon: I.logout({ size: 14 }), bg: "var(--danger-bg)", fg: "var(--danger-fg)", label: "Kick" };
     default:
       return { icon: I.log({ size: 14 }), bg: "var(--ink-100)", fg: "var(--ink-700)", label: "Acción" };
   }

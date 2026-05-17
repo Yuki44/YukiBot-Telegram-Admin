@@ -17,7 +17,8 @@ export type LogAction =
   | "Q_SILENCIO"
   | "Q_AVISO"
   | "ENTRADA_USUARIO"
-  | "SALIDA_USUARIO";
+  | "SALIDA_USUARIO"
+  | "PALABRA_PROHIBIDA";
 
 export interface LogUser {
   id: number;
@@ -45,6 +46,8 @@ export interface LogPayload {
   refMsgId?: number;
   /** The original message the admin replied to — forwarded via forwardToLog */
   repliedMsg?: Message;
+  /** The matched banned word (PALABRA_PROHIBIDA only) */
+  word?: string;
 }
 
 // ── Flag mapping ─────────────────────────────────────────────────────
@@ -60,6 +63,7 @@ const FLAG_MAP: Record<LogAction, keyof IChat["logFlags"]> = {
   Q_AVISO: "logUnwarns",
   ENTRADA_USUARIO: "logEntries",
   SALIDA_USUARIO: "logExits",
+  PALABRA_PROHIBIDA: "logBannedWords",
 };
 
 const EMOJI_MAP: Record<LogAction, string> = {
@@ -73,6 +77,7 @@ const EMOJI_MAP: Record<LogAction, string> = {
   Q_AVISO: "✅",
   ENTRADA_USUARIO: "➕",
   SALIDA_USUARIO: "➖",
+  PALABRA_PROHIBIDA: "🆎",
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -314,6 +319,19 @@ export async function sendLog(
           `${emoji} #SALIDA_USUARIO`,
           `• De: ${userLink(payload.target)}`,
           `• Grupo: ${grupo}`,
+          navLine,
+          `• Fecha: ${fecha}`,
+          hashIds(payload.target),
+        ];
+        break;
+      }
+
+      case "PALABRA_PROHIBIDA": {
+        lines = [
+          `${emoji} #PALABRA_PROHIBIDA`,
+          `• De: ${userLink(payload.target)}`,
+          `• Grupo: ${grupo}`,
+          `• Palabra: ${esc(payload.word ?? "")}`,
           navLine,
           `• Fecha: ${fecha}`,
           hashIds(payload.target),

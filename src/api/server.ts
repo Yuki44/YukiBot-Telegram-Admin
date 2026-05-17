@@ -40,7 +40,7 @@ export function createApiServer(bot: Bot<BotContext>): Express {
   app.use("/api/chats/:chatId/whitelist", createWhitelistRouter());
   app.use("/api/chats/:chatId/banned-words", createBannedWordsRouter());
   app.use("/api/chats/:chatId/logs", createActivityLogsRouter(bot));
-  app.use("/api/chats/:chatId/admins", createAdminsRouter());
+  app.use("/api/chats/:chatId/admins", createAdminsRouter(bot));
   app.use("/api/chats/:chatId/spam-detections", createSpamDetectionsRouter());
   app.use("/api/photos", createPhotosRouter(bot));
 

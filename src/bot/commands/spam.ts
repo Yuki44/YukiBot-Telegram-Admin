@@ -2,10 +2,14 @@ import { createHash } from "crypto";
 import { CommandContext } from "grammy";
 import { BotContext } from "../../types";
 import { spamPatternRepository, normalizeText } from "../../db/repositories/spamPatternRepository";
+import { userRepository } from "../../db/repositories/userRepository";
 import { applyWarn } from "../helpers/applyWarn";
 import { silenceUser } from "../helpers/silenceUser";
-import { getChatTitle } from "../helpers/contextHelpers";
+import { sendLog } from "../helpers/sendLog";
+import { buildActor, getChatTitle } from "../helpers/contextHelpers";
 import { sendSpamLog } from "../../features/promoSpamDetection";
+import { SILENCE_DURATION_MS } from "../../config/constants";
+import { recordActivity } from "../../utils/activityLog";
 import { logger } from "../../utils/logger";
 
 /** Describe media type for non-text messages stored as learned patterns */
@@ -58,15 +62,6 @@ export async function spamHandler(ctx: CommandContext<BotContext>): Promise<void
     const normalizedHash = createHash("sha256").update(normalized).digest("hex");
     const patternId = normalizedHash.slice(0, 7);
 
-    // Forward spam message to logs BEFORE deleting
-    if (logsTo) {
-      try {
-        await ctx.api.forwardMessage(logsTo, chatId, replied.message_id);
-      } catch (err) {
-        logger.error({ action: "spam_cmd_forward", chatId, error: String(err) });
-      }
-    }
-
     try {
       await ctx.api.deleteMessage(chatId, replied.message_id);
     } catch (err) {
@@ -81,11 +76,57 @@ export async function spamHandler(ctx: CommandContext<BotContext>): Promise<void
 
     await silenceUser(ctx, target.id, chatId);
 
+    const actor = buildActor(ctx);
+    const muteUntil = new Date(Date.now() + SILENCE_DURATION_MS);
+    const logTarget = { id: target.id, name: targetName, username: targetUsername };
+
+    // Persist mute state so the dashboard's Silenciados tab/count reflects this (G9).
+    try {
+      await userRepository.upsert({
+        userId: target.id,
+        chatId,
+        username: targetUsername,
+        name: targetName,
+        isMuted: true,
+        muteUntil,
+      });
+    } catch (err) {
+      logger.error({ action: "spam_cmd_persist_mute", chatId, userId: target.id, error: String(err) });
+    }
+
+    // Log the silence — was previously missing entirely, so /spam never showed a
+    // silence in the Telegram log channel nor the web Registro.
+    sendLog(ctx.api, chatConfig, {
+      action: "SILENCIO",
+      actor,
+      target: logTarget,
+      chatId,
+      chatName,
+      chatType: chatConfig.type,
+      muteUntil,
+      topicId,
+    }).catch(() => {});
+
+    recordActivity({
+      chatId,
+      type: "silence",
+      source: "bot",
+      actor,
+      target: logTarget,
+      topicId,
+    });
+
+    // Pass the replied (spam) message into applyWarn so it's rendered via
+    // forwardToLog right after the AVISO ("Mensaje original:") instead of as a
+    // detached forwarded bubble before every log, and recorded as messageText
+    // on the web warn entry.
     const { warnMsgId } = await applyWarn(ctx, target.id, chatId, targetName, targetUsername, "por spam", {
       chatConfig,
       chatName,
       topicId,
-      actor: { id: ctx.me.id, name: ctx.me.first_name, username: ctx.me.username },
+      actor,
+      refMsgId: replied.message_id,
+      repliedMsg,
     });
 
     if (logsTo) {

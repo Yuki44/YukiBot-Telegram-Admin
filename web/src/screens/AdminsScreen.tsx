@@ -282,8 +282,22 @@ export function AdminsScreen() {
                 const canToggleSelf =
                   isMe && (a.telegramRole === "owner" || me?.isSuperAdmin === true);
                 const id = adminIdentity(a);
+                const openDetail = () => navigate(`/chats/${chatId}/users/${a.userId}`);
                 return (
-                  <div key={a.userId} className="yk-row" style={{ cursor: "default" }}>
+                  <div
+                    key={a.userId}
+                    className="yk-row"
+                    role="button"
+                    tabIndex={0}
+                    onClick={openDetail}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openDetail();
+                      }
+                    }}
+                    style={{ cursor: "pointer" }}
+                  >
                     <UserAvatar
                       name={a.name?.trim() && a.name.trim().toLowerCase() !== "unknown" ? a.name : a.username || ""}
                       photoFileId={a.photoFileId}
@@ -313,7 +327,10 @@ export function AdminsScreen() {
                       {canToggleSelf && (
                         <button
                           type="button"
-                          onClick={() => toggleVisibility(a.userId, a.hiddenInAdminList)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleVisibility(a.userId, a.hiddenInAdminList);
+                          }}
                           disabled={busy}
                           aria-label={a.hiddenInAdminList ? "Mostrarme" : "Ocultarme"}
                           title={a.hiddenInAdminList ? "Mostrarme en la lista" : "Ocultarme de la lista"}

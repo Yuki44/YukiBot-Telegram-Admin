@@ -35,7 +35,11 @@ export async function applyWarn(
     const actor = options?.actor !== undefined ? options.actor : buildActor(ctx);
     const target = { id: targetUserId, name, username };
 
-    sendLog(ctx.api, resolvedChatConfig, {
+    // Keep a handle: when this warn is the 3rd strike we must let the AVISO log
+    // (including its forwarded "Mensaje original:" message) finish posting before
+    // the BAN log goes out — otherwise the BAN message slips between the
+    // "Mensaje original:" header and the actual forwarded message.
+    const avisoLogP = sendLog(ctx.api, resolvedChatConfig, {
       action: "AVISO",
       actor,
       target,
@@ -75,6 +79,12 @@ export async function applyWarn(
         message_thread_id: topicId,
       });
       warnMsgId = sent.message_id;
+
+      // Wait for the AVISO log + its forwarded original message to fully post
+      // before the BAN log, so the order is AVISO → "Mensaje original:" →
+      // message → BAN (the ban + group notice above already happened, so user
+      // enforcement isn't delayed by this).
+      await avisoLogP;
 
       sendLog(ctx.api, resolvedChatConfig, {
         action: "BAN",
