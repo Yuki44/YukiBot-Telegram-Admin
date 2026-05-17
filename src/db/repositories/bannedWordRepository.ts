@@ -90,6 +90,10 @@ export const bannedWordRepository = {
     });
   },
 
+  async findById(id: string): Promise<IBannedWord | null> {
+    return await BannedWord.findById(id);
+  },
+
   async remove(id: string): Promise<boolean> {
     const result = await BannedWord.deleteOne({ _id: id });
     return result.deletedCount === 1;

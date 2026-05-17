@@ -106,7 +106,7 @@ export function DashboardScreen() {
     );
   }
 
-  const { on, total } = featureCount(chat);
+  const { on } = featureCount(chat);
   const roleLabel =
     chat.role === "super" ? "Super-admin" : chat.role === "owner" ? "Propietario" : "Admin";
   const typeLabel = chat.type === "topics" ? "Con temas" : "Grupo";
@@ -253,7 +253,7 @@ export function DashboardScreen() {
               icon={I.toggle({ size: 20 })}
               iconClass="warm"
               title="Activar/desactivar funciones"
-              sub={`${on} de ${total} activas`}
+              sub={`${on} activas`}
               onClick={() => navigate(`/chats/${chat.chatId}/features`)}
             />
             <NavRow

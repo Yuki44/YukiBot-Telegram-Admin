@@ -41,13 +41,13 @@ const VALID_TYPES: ActivityLogType[] = [
  * without an Undo affordance — either because they're already inverses themselves
  * (unwarn, unban, …), or because the original action has no safe reverse (kick — Telegram
  * doesn't expose re-invite for non-public chats; pardon — record was wiped; topic rule
- * changes — pre-change state isn't snapshotted).
+ * changes — pre-change state isn't snapshotted; autoban — an automatic 3-strike/re-entry
+ * ban is policy enforcement, not a manual action to take back from the log).
  */
 const UNDOABLE: ReadonlySet<ActivityLogType> = new Set([
   "warn",
   "silence",
   "ban",
-  "autoban",
   "feature_toggle",
   "whitelist_add",
   "combo_add",
@@ -190,8 +190,7 @@ export function createActivityLogsRouter(bot: Bot<BotContext>): Router {
           break;
         }
 
-        case "ban":
-        case "autoban": {
+        case "ban": {
           if (log.targetId === undefined || log.targetId === null) {
             res.status(409).json({ error: "no_inverse" });
             return;

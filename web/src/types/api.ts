@@ -181,7 +181,6 @@ const UNDOABLE_TYPES: ReadonlySet<ActivityLogType> = new Set<ActivityLogType>([
   "warn",
   "silence",
   "ban",
-  "autoban",
   "feature_toggle",
   "whitelist_add",
   "combo_add",

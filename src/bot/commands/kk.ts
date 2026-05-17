@@ -64,6 +64,17 @@ export async function kkHandler(ctx: BotContext): Promise<void> {
       const repliedMsg = ctx.message?.reply_to_message;
       const repliedText = repliedMsg ? (repliedMsg.text ?? repliedMsg.caption) : undefined;
 
+      // When /kk is used as a reply, also delete the kicked user's message.
+      // Guarded to the target (already verified non-admin above, so G4 holds —
+      // an admin's message is never deleted even if the reply is to someone else).
+      if (repliedMsg?.message_id && repliedMsg.from?.id === target.userId) {
+        try {
+          await ctx.api.deleteMessage(chatId, repliedMsg.message_id);
+        } catch {
+          /* ignore */
+        }
+      }
+
       sendLog(ctx.api, ctx.chatConfig, {
         action: "KICK",
         actor,

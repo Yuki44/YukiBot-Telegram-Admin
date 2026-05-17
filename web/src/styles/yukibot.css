@@ -452,6 +452,11 @@ body {
 /* Stat card */
 .yk-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 0 16px 16px; }
 .yk-stats:has(> :nth-child(2):last-child) { grid-template-columns: 1fr 1fr; }
+/* Low-res / narrow screens: four cards in one row overflow (the 4th — "Acciones
+   hoy" — clips off-screen). Wrap to a 2×2 grid instead. */
+@media (max-width: 400px) {
+  .yk-stats { grid-template-columns: 1fr 1fr; }
+}
 .yk-stat {
   background: var(--bg-card); border: 1px solid var(--ink-100);
   border-radius: var(--radius); padding: 12px 8px;

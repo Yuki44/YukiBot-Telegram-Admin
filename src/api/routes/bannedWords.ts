@@ -241,6 +241,7 @@ export function createBannedWordsRouter(): Router {
     const chatId = Number(req.params.chatId);
     const id = req.params.id;
     try {
+      const existing = await bannedWordRepository.findById(id);
       const ok = await bannedWordRepository.remove(id);
       if (!ok) {
         res.status(404).json({ error: "not_found" });
@@ -258,7 +259,7 @@ export function createBannedWordsRouter(): Router {
         type: "banned_word_remove",
         source: "panel",
         actor: { id: req.user!.userId, name: req.user!.name, username: req.user!.username },
-        targetRef: id,
+        targetRef: existing?.word ?? id,
       });
       res.status(204).end();
     } catch (err) {
