@@ -28,12 +28,33 @@ const COMBO_ACTIONS: ComboActionMeta[] = [
   { id: "silence", label: "Silenciar 1 semana", desc: "No podrá escribir durante 7 días." },
 ];
 
+/** Map an API error code to a friendly Spanish message for the add/edit sheet. */
+function errorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    switch (err.code) {
+      case "duplicate_word":
+        return "Esa palabra ya está añadida con esa configuración.";
+      case "warn_reason_required":
+        return "El aviso necesita una razón.";
+      case "fuzzy_needs_single_word":
+        return "La detección flexible solo se puede usar con una sola palabra.";
+      case "no_action_selected":
+        return "Elige al menos una acción.";
+      case "invalid_word":
+        return "Escribe la palabra o frase.";
+    }
+  }
+  return err instanceof Error ? err.message : "error";
+}
+
 interface ChipDef {
   label: string;
   tone: "info" | "warn" | "danger" | "ok";
 }
 
 function chipsForWord(w: BannedWord): ChipDef[] {
+  // Legacy rows created before "Expulsar del grupo" was removed still enforce a
+  // kick — surface it so an owner can spot and delete/edit them.
   if (w.kick) return [{ label: "expulsar", tone: "danger" }];
   const chips: ChipDef[] = [];
   if (w.actions.delete) chips.push({ label: "borrar", tone: "warn" });
@@ -43,13 +64,24 @@ function chipsForWord(w: BannedWord): ChipDef[] {
   return chips.length > 0 ? chips : [{ label: w.severity, tone: "warn" }];
 }
 
-function iconToneForWord(w: BannedWord): string {
-  if (w.kick) return "danger";
-  if (w.actions.silence) return "info";
-  return "warm";
+interface IconDef {
+  render: ReactNode;
+  tone: string;
+}
+
+/** Action-aware row icon: trash / mute / triangle, a combo icon for 2+, ban for legacy kick. */
+function iconForWord(w: BannedWord): IconDef {
+  if (w.kick) return { render: I.ban({ size: 20 }), tone: "danger" };
+  const count = Number(w.actions.delete) + Number(w.actions.warn) + Number(w.actions.silence);
+  if (count >= 2) return { render: I.list({ size: 20 }), tone: "warm" };
+  if (w.actions.silence) return { render: I.silence({ size: 20 }), tone: "info" };
+  if (w.actions.warn) return { render: I.alert({ size: 20 }), tone: "warm" };
+  if (w.actions.delete) return { render: I.trash({ size: 20 }), tone: "warm" };
+  return { render: I.word({ size: 20 }), tone: "warm" };
 }
 
 interface AddWordSheetProps {
+  initial?: BannedWord;
   defaultScope: Scope;
   defaultTopicId?: number;
   topics: Topic[];
@@ -59,6 +91,7 @@ interface AddWordSheetProps {
 }
 
 function AddWordSheet({
+  initial,
   defaultScope,
   defaultTopicId,
   topics,
@@ -66,62 +99,72 @@ function AddWordSheet({
   onClose,
   onSubmit,
 }: AddWordSheetProps) {
-  const [word, setWord] = useState("");
-  const [exact, setExact] = useState(false);
-  const [scope, setScope] = useState<Scope>(defaultScope);
-  const [topicId, setTopicId] = useState<number | undefined>(defaultTopicId ?? topics[0]?.topicId);
-  const [combo, setCombo] = useState<ComboState>({ delete: false, warn: true, silence: false });
-  const [kick, setKick] = useState(false);
-  const [warnReason, setWarnReason] = useState("");
+  const isEditing = !!initial;
+  const [word, setWord] = useState(initial?.word ?? "");
+  const [exact, setExact] = useState(initial?.exactMatch ?? false);
+  const [scope, setScope] = useState<Scope>(initial?.scope ?? defaultScope);
+  const [topicId, setTopicId] = useState<number | undefined>(
+    initial?.topicId ?? defaultTopicId ?? topics[0]?.topicId
+  );
+  const [combo, setCombo] = useState<ComboState>(
+    initial
+      ? { delete: initial.actions.delete, warn: initial.actions.warn, silence: initial.actions.silence }
+      : { delete: false, warn: true, silence: false }
+  );
+  const [warnReason, setWarnReason] = useState(initial?.warnReason ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Flexible detection only makes sense for a single token. Disable + force off
+  // the moment the input becomes a phrase.
+  const trimmedWord = word.trim();
+  const canBeFlexible = trimmedWord.length > 0 && !/\s/.test(trimmedWord);
+  useEffect(() => {
+    if (exact && !canBeFlexible) setExact(false);
+  }, [exact, canBeFlexible]);
+
   function toggleCombo(key: keyof ComboState) {
     if (busy) return;
-    setKick(false);
     setCombo((c) => ({ ...c, [key]: !c[key] }));
-  }
-
-  function pickKick() {
-    if (busy) return;
-    setCombo({ delete: false, warn: false, silence: false });
-    setKick(true);
   }
 
   async function submit() {
     if (busy) return;
-    if (word.trim().length < 1) {
+    if (trimmedWord.length < 1) {
       setError("Escribe la palabra o frase.");
+      return;
+    }
+    if (exact && !canBeFlexible) {
+      setError("La detección flexible solo se puede usar con una sola palabra.");
       return;
     }
     if (scope === "topic" && (topicId === undefined || !Number.isFinite(topicId))) {
       setError("Selecciona un tema.");
       return;
     }
-    const anyAction = kick || combo.delete || combo.warn || combo.silence;
-    if (!anyAction) {
+    if (!combo.delete && !combo.warn && !combo.silence) {
       setError("Elige al menos una acción.");
+      return;
+    }
+    if (combo.warn && warnReason.trim().length < 1) {
+      setError("Escribe la razón del aviso.");
       return;
     }
     setBusy(true);
     setError(null);
     try {
       await onSubmit({
-        word: word.trim(),
-        actions: kick ? { delete: false, warn: false, silence: false } : combo,
-        kick,
+        word: trimmedWord,
+        actions: combo,
+        kick: false,
         flag: false,
-        warnReason: combo.warn && warnReason.trim() ? warnReason.trim() : undefined,
+        warnReason: combo.warn ? warnReason.trim() : undefined,
         exactMatch: exact,
         scope,
         topicId: scope === "topic" ? topicId : undefined,
       });
     } catch (err) {
-      if (err instanceof ApiError && err.code === "duplicate_word") {
-        setError("Esa palabra ya está añadida con esa configuración.");
-      } else {
-        setError(err instanceof Error ? err.message : "error");
-      }
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -136,7 +179,9 @@ function AddWordSheet({
       >
         <div className="yk-sheet-handle" />
         <div style={{ padding: "8px 20px 24px" }}>
-          <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 12 }}>Añadir palabra</div>
+          <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 12 }}>
+            {isEditing ? "Editar palabra" : "Añadir palabra"}
+          </div>
 
           <div className="yk-field" style={{ marginBottom: 12 }}>
             <label className="yk-label" htmlFor="bw-word">Palabra o frase</label>
@@ -156,23 +201,29 @@ function AddWordSheet({
               display: "flex",
               alignItems: "center",
               gap: 10,
-              marginBottom: 16,
-              cursor: busy ? "default" : "pointer",
+              marginBottom: canBeFlexible ? 16 : 6,
+              cursor: busy || !canBeFlexible ? "default" : "pointer",
+              opacity: canBeFlexible ? 1 : 0.55,
             }}
           >
             <input
               type="checkbox"
               checked={exact}
               onChange={(e) => setExact(e.target.checked)}
-              disabled={busy}
+              disabled={busy || !canBeFlexible}
             />
             <div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>Coincidencia exacta</div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>Detección flexible</div>
               <div style={{ fontSize: 12, color: "var(--ink-500)" }}>
-                Solo cuando aparezca como palabra completa.
+                También detecta letras y emojis parecidos. Solo para una sola palabra.
               </div>
             </div>
           </label>
+          {!canBeFlexible && trimmedWord.includes(" ") && (
+            <div style={{ fontSize: 12, color: "var(--ink-500)", marginBottom: 16 }}>
+              La detección flexible solo está disponible para una sola palabra.
+            </div>
+          )}
 
           {showTopicChoice && (
             <div className="yk-field" style={{ marginBottom: 16 }}>
@@ -222,18 +273,17 @@ function AddWordSheet({
                       alignItems: "center",
                       gap: 12,
                       padding: 12,
-                      border: `1.5px solid ${checked && !kick ? "var(--brand-400)" : "var(--ink-100)"}`,
-                      background: checked && !kick ? "var(--brand-50)" : "transparent",
+                      border: `1.5px solid ${checked ? "var(--brand-400)" : "var(--ink-100)"}`,
+                      background: checked ? "var(--brand-50)" : "transparent",
                       borderRadius: 14,
                       cursor: busy ? "default" : "pointer",
-                      opacity: kick ? 0.5 : 1,
                     }}
                   >
                     <input
                       type="checkbox"
-                      checked={checked && !kick}
+                      checked={checked}
                       onChange={() => toggleCombo(a.id)}
-                      disabled={busy || kick}
+                      disabled={busy}
                     />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 700 }}>{a.label}</div>
@@ -243,49 +293,22 @@ function AddWordSheet({
                 );
               })}
 
-              {combo.warn && !kick && (
+              {combo.warn && (
                 <div className="yk-field" style={{ marginTop: 4, marginBottom: 4 }}>
                   <label className="yk-label" htmlFor="bw-reason" style={{ fontSize: 13 }}>
-                    Razón del aviso (opcional)
+                    Razón del aviso (obligatorio)
                   </label>
                   <textarea
                     id="bw-reason"
                     className="yk-textarea"
                     rows={2}
-                    placeholder="Se muestra al usuario en el aviso. Si la dejas vacía se usa la palabra."
+                    placeholder="Se muestra al usuario en el aviso."
                     value={warnReason}
                     onChange={(e) => setWarnReason(e.target.value)}
                     disabled={busy}
                   />
                 </div>
               )}
-
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: 12,
-                  border: `1.5px solid ${kick ? "var(--danger-fg)" : "var(--ink-100)"}`,
-                  background: kick ? "var(--danger-bg)" : "transparent",
-                  borderRadius: 14,
-                  cursor: busy ? "default" : "pointer",
-                }}
-              >
-                <input
-                  type="radio"
-                  name="bw-kick"
-                  checked={kick}
-                  onChange={pickKick}
-                  disabled={busy}
-                />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700 }}>Expulsar del grupo</div>
-                  <div style={{ fontSize: 12, color: "var(--ink-500)" }}>
-                    Sustituye a las demás acciones. Puede volver a entrar.
-                  </div>
-                </div>
-              </label>
 
               <div
                 style={{
@@ -339,7 +362,13 @@ function AddWordSheet({
             disabled={busy}
             style={{ marginTop: 12 }}
           >
-            {busy ? "Añadiendo…" : "Añadir palabra"}
+            {busy
+              ? isEditing
+                ? "Guardando…"
+                : "Añadiendo…"
+              : isEditing
+                ? "Guardar"
+                : "Añadir palabra"}
           </button>
           <button
             type="button"
@@ -369,15 +398,18 @@ interface WordRowProps {
   word: BannedWord;
   topicNameById: Map<number, string>;
   removing: boolean;
+  canManage: boolean;
+  onEdit: () => void;
   onRemove: () => void;
   showTopic: boolean;
 }
 
-function WordRow({ word: w, topicNameById, removing, onRemove, showTopic }: WordRowProps) {
+function WordRow({ word: w, topicNameById, removing, canManage, onEdit, onRemove, showTopic }: WordRowProps) {
   const chips = chipsForWord(w);
+  const icon = iconForWord(w);
   return (
     <div className="yk-row" style={{ cursor: "default" }}>
-      <div className={`yk-row-icon ${iconToneForWord(w)}`}>{I.word({ size: 20 })}</div>
+      <div className={`yk-row-icon ${icon.tone}`}>{icon.render}</div>
       <div className="yk-row-body">
         <div
           className="yk-row-title yk-mono"
@@ -392,7 +424,7 @@ function WordRow({ word: w, topicNameById, removing, onRemove, showTopic }: Word
           {w.word}
           {w.exactMatch && (
             <span className="yk-chip" style={{ fontSize: 10 }}>
-              exacta
+              flexible
             </span>
           )}
         </div>
@@ -417,24 +449,42 @@ function WordRow({ word: w, topicNameById, removing, onRemove, showTopic }: Word
           </div>
         )}
       </div>
-      <div className="yk-row-trail">
-        <button
-          type="button"
-          onClick={onRemove}
-          disabled={removing}
-          aria-label="Eliminar"
-          style={{
-            background: "transparent",
-            border: 0,
-            cursor: removing ? "default" : "pointer",
-            padding: 6,
-            color: "var(--danger-fg)",
-            opacity: removing ? 0.4 : 1,
-          }}
-        >
-          {I.trash({ size: 18 })}
-        </button>
-      </div>
+      {canManage && (
+        <div className="yk-row-trail" style={{ display: "flex", gap: 2 }}>
+          <button
+            type="button"
+            onClick={onEdit}
+            disabled={removing}
+            aria-label="Editar"
+            style={{
+              background: "transparent",
+              border: 0,
+              cursor: removing ? "default" : "pointer",
+              padding: 6,
+              color: "var(--ink-500)",
+              opacity: removing ? 0.4 : 1,
+            }}
+          >
+            {I.edit({ size: 18 })}
+          </button>
+          <button
+            type="button"
+            onClick={onRemove}
+            disabled={removing}
+            aria-label="Eliminar"
+            style={{
+              background: "transparent",
+              border: 0,
+              cursor: removing ? "default" : "pointer",
+              padding: 6,
+              color: "var(--danger-fg)",
+              opacity: removing ? 0.4 : 1,
+            }}
+          >
+            {I.trash({ size: 18 })}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -449,10 +499,12 @@ export function BannedWordsScreen() {
   const [scope, setScope] = useState<Scope>("all");
   const [topicId, setTopicId] = useState<number | undefined>();
   const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState<BannedWord | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const isTopicsChat = chat?.type === "topics";
+  const canManage = chat?.role === "owner" || chat?.role === "super";
 
   function handleApiErr(err: unknown) {
     if (err instanceof ApiError && err.status === 401) {
@@ -490,11 +542,17 @@ export function BannedWordsScreen() {
     return w.scope === "topic" && w.topicId === topicId;
   });
 
-  async function addWord(body: BannedWordCreateBody): Promise<void> {
+  async function submitWord(body: BannedWordCreateBody): Promise<void> {
     if (!chatId) return;
-    const created = await api.bannedWords.create(chatId, body);
-    setWords((prev) => (prev ? [...prev, created] : [created]));
-    setShowAdd(false);
+    if (editing) {
+      const updated = await api.bannedWords.update(chatId, editing.id, body);
+      setWords((prev) => prev?.map((w) => (w.id === updated.id ? updated : w)) ?? [updated]);
+      setEditing(null);
+    } else {
+      const created = await api.bannedWords.create(chatId, body);
+      setWords((prev) => (prev ? [...prev, created] : [created]));
+      setShowAdd(false);
+    }
   }
 
   async function removeWord(id: string) {
@@ -517,6 +575,8 @@ export function BannedWordsScreen() {
     ) : (
       <>Solo se aplican dentro del tema seleccionado.</>
     );
+
+  const sheetOpen = showAdd || editing !== null;
 
   return (
     <div className="yk" style={{ minHeight: "100vh" }}>
@@ -595,6 +655,8 @@ export function BannedWordsScreen() {
                 word={w}
                 topicNameById={topicNameById}
                 removing={removing === w.id}
+                canManage={canManage}
+                onEdit={() => setEditing(w)}
                 onRemove={() => removeWord(w.id)}
                 showTopic={scope === "all"}
               />
@@ -603,14 +665,19 @@ export function BannedWordsScreen() {
         </div>
       </div>
 
-      {showAdd && (
+      {sheetOpen && (
         <AddWordSheet
+          key={editing?.id ?? "new"}
+          initial={editing ?? undefined}
           defaultScope={scope}
           defaultTopicId={topicId}
           topics={topics}
           showTopicChoice={isTopicsChat}
-          onClose={() => setShowAdd(false)}
-          onSubmit={addWord}
+          onClose={() => {
+            setShowAdd(false);
+            setEditing(null);
+          }}
+          onSubmit={submitWord}
         />
       )}
     </div>

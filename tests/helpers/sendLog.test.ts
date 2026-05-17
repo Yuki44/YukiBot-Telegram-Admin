@@ -38,6 +38,7 @@ function makeChatConfig(overrides: Partial<IChat> = {}): IChat {
       logUnwarns: true,
       logEntries: true,
       logExits: true,
+      logBannedWords: true,
     },
     features: {},
     ...overrides,
@@ -165,6 +166,42 @@ describe("sendLog", () => {
 
     expect(api.sendMessage.mock.calls[0][1]).toContain("#SILENCIO");
     expect(forwardToLog).toHaveBeenCalledOnce();
+  });
+
+  it("builds the #PALABRA_PROHIBIDA entry with the word and no actor", async () => {
+    const api = makeApi();
+    await sendLog(api as any, makeChatConfig(), {
+      action: "PALABRA_PROHIBIDA",
+      target: { id: 8016403283, name: "Romeeo" },
+      chatId: -1003600946482,
+      chatName: "GAYBCN",
+      chatType: "normal",
+      word: "priv",
+    });
+
+    const text = api.sendMessage.mock.calls[0][1] as string;
+    expect(text).toContain("🆎 #PALABRA_PROHIBIDA");
+    expect(text).toContain("• De: ");
+    expect(text).toContain("• Palabra: priv");
+    expect(text).toContain("#id8016403283");
+    expect(forwardToLog).not.toHaveBeenCalled();
+  });
+
+  it("suppresses #PALABRA_PROHIBIDA when logBannedWords is off", async () => {
+    const api = makeApi();
+    const config = makeChatConfig({
+      logFlags: { ...makeChatConfig().logFlags, logBannedWords: false },
+    } as any);
+    await sendLog(api as any, config, {
+      action: "PALABRA_PROHIBIDA",
+      target: { id: 42, name: "Bad User" },
+      chatId: -1001234,
+      chatName: "Test Group",
+      chatType: "normal",
+      word: "priv",
+    });
+
+    expect(api.sendMessage).not.toHaveBeenCalled();
   });
 
   it("uses HTML parse mode", async () => {

@@ -76,6 +76,7 @@ export interface IChat extends Document {
     logUnwarns: boolean;
     logEntries: boolean;
     logExits: boolean;
+    logBannedWords: boolean;
   };
 }
 

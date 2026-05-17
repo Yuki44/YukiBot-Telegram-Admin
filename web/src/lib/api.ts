@@ -192,6 +192,8 @@ export const api = {
       request<BannedWord[]>("GET", `/chats/${chatId}/banned-words`),
     create: (chatId: number | string, body: BannedWordCreateBody): Promise<BannedWord> =>
       request<BannedWord>("POST", `/chats/${chatId}/banned-words`, body),
+    update: (chatId: number | string, id: string, body: BannedWordCreateBody): Promise<BannedWord> =>
+      request<BannedWord>("PUT", `/chats/${chatId}/banned-words/${id}`, body),
     remove: (chatId: number | string, id: string): Promise<void> =>
       request<void>("DELETE", `/chats/${chatId}/banned-words/${id}`),
   },

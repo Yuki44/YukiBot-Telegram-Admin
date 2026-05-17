@@ -108,6 +108,7 @@ const chatSchema = new Schema<IChat>({
     logUnwarns: { type: Boolean, default: false },
     logEntries: { type: Boolean, default: false },
     logExits: { type: Boolean, default: false },
+    logBannedWords: { type: Boolean, default: false },
   },
 });
 

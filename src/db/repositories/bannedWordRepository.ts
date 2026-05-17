@@ -47,6 +47,49 @@ export const bannedWordRepository = {
     });
   },
 
+  async update(
+    id: string,
+    data: {
+      word: string;
+      actions: { delete: boolean; warn: boolean; silence: boolean };
+      kick: boolean;
+      flag: boolean;
+      warnReason?: string | null;
+      exactMatch: boolean;
+      scope: "all" | "topic";
+      topicId?: number;
+    }
+  ): Promise<IBannedWord | null> {
+    const severity = derivePrimarySeverity({
+      delete: data.actions.delete,
+      warn: data.actions.warn,
+      silence: data.actions.silence,
+      kick: data.kick,
+      flag: data.flag,
+    });
+    const set: Record<string, unknown> = {
+      word: data.word.trim().toLowerCase(),
+      severity,
+      actions: data.actions,
+      kick: data.kick,
+      flag: data.flag,
+      warnReason: data.warnReason ?? null,
+      exactMatch: data.exactMatch,
+      scope: data.scope,
+    };
+    const update: Record<string, unknown> = { $set: set };
+    if (data.scope === "topic") {
+      set.topicId = data.topicId;
+    } else {
+      // Clear any stale topic scoping when switching a rule back to chat-wide.
+      update.$unset = { topicId: "" };
+    }
+    return await BannedWord.findByIdAndUpdate(id, update, {
+      new: true,
+      runValidators: true,
+    });
+  },
+
   async remove(id: string): Promise<boolean> {
     const result = await BannedWord.deleteOne({ _id: id });
     return result.deletedCount === 1;
