@@ -4,8 +4,6 @@ import type { BotContext } from "../../src/types";
 vi.mock("../../src/db/repositories/userRepository", () => ({
   userRepository: {
     findOrCreate: vi.fn(),
-    claimWelcome: vi.fn().mockResolvedValue(true),
-    releaseWelcome: vi.fn().mockResolvedValue(undefined),
     findByUserAndChat: vi.fn(),
     upsert: vi.fn().mockResolvedValue(undefined),
     clearLeftDate: vi.fn().mockResolvedValue(undefined),
@@ -137,7 +135,7 @@ describe("chatMemberHandler — auto-ban under pressure", () => {
     await Promise.all(ids.map((id) => chatMemberHandler(makeCtx(id, api) as never)));
 
     expect(logger.error).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "chatMember_autoReban", chatId: CHAT_ID })
+      expect.objectContaining({ action: "handleUserJoin_autoReban", chatId: CHAT_ID })
     );
     // Every banned user was still attempted — the logic itself never skips one.
     expect(api.banChatMember).toHaveBeenCalledTimes(4);

@@ -25,6 +25,7 @@ import { avisarHandler, elAvisarHandler } from "./bot/commands/avisar";
 import { quitarAvisoHandler } from "./bot/commands/quitaraviso";
 import { avisosHandler } from "./bot/commands/avisos";
 import { chatMemberHandler } from "./bot/handlers/chatMemberHandler";
+import { newChatMembersHandler } from "./bot/handlers/newChatMembersHandler";
 import { mediaForwardHandler } from "./bot/handlers/mediaForwardHandler";
 import { quitarbanHandler } from "./bot/commands/perdonarban";
 import { silHandler } from "./bot/commands/sil";
@@ -103,6 +104,13 @@ bot.command("wludel", wludelHandler);
 bot.command("wlus", wlusHandler);
 
 bot.on("chat_member", chatMemberHandler);
+
+// Second join trigger: the "X joined" service message. Reaches the bot even
+// without admin rights and is the canonical signal for an *added* user, where
+// `chat_member` alone would miss the welcome / auto-ban. Registered before the
+// generic message middleware so a join service message isn't also run through
+// spam/topic filters. handleUserJoin's short-window guard dedups the overlap.
+bot.on("message:new_chat_members", newChatMembersHandler);
 
 // Callback query handler for spam ✅/❌ inline buttons
 bot.on("callback_query", spamCallbackHandler);

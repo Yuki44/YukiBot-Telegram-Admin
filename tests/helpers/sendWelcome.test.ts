@@ -56,6 +56,42 @@ describe("renderWelcome", () => {
     );
     expect(out).toBe("&lt;b&gt;hola&lt;/b&gt; @neo &amp; bienvenido");
   });
+
+  it("supports the current @usuario / @nombreGrupo tokens", () => {
+    const out = renderWelcome(
+      "Bienvenido @usuario a @nombreGrupo",
+      { id: 1, username: "neo", name: "Neo" },
+      "Café <3 & Té"
+    );
+    expect(out).toBe("Bienvenido @neo a Café &lt;3 &amp; Té");
+  });
+
+  it("still supports the legacy <@username> / <chat name> tokens (back-compat)", () => {
+    const out = renderWelcome(
+      "Bienvenido <@username> a <chat name>",
+      { id: 1, username: "neo", name: "Neo" },
+      "Grupo"
+    );
+    expect(out).toBe("Bienvenido @neo a Grupo");
+  });
+
+  it("mixes new and legacy tokens, and falls back to the name with no username", () => {
+    const out = renderWelcome(
+      "@usuario / <@username> en @nombreGrupo / <chat name>",
+      { id: 1, name: "Trinity" },
+      "G"
+    );
+    expect(out).toBe("Trinity / Trinity en G / G");
+  });
+
+  it("does NOT expand a longer word that merely starts with @usuario", () => {
+    const out = renderWelcome(
+      "lista de @usuarios aquí",
+      { id: 1, username: "neo", name: "Neo" },
+      "G"
+    );
+    expect(out).toBe("lista de @usuarios aquí");
+  });
 });
 
 describe("sendWelcome", () => {

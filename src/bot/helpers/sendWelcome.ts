@@ -11,9 +11,13 @@ export interface WelcomeUser {
   name: string;
 }
 
-// The two literal tokens an admin can put in the welcome message. Kept as a
-// capturing group so String.split keeps the delimiters in the result.
-const TOKEN_RE = /(<@username>|<chat name>)/g;
+// The literal tokens an admin can put in the welcome message. The current
+// tokens are `@usuario` / `@nombreGrupo`; the older `<@username>` / `<chat name>`
+// are still accepted so messages saved before the rename keep working. Kept as
+// a capturing group so String.split keeps the delimiters in the result. The
+// `\b` after the @-tokens stops `@usuarios` (and similar) from partially
+// matching — only the bare token, followed by a non-word char or end, expands.
+const TOKEN_RE = /(@usuario\b|@nombreGrupo\b|<@username>|<chat name>)/g;
 
 /**
  * Render the admin-configured template. We split on the tokens *before*
@@ -29,8 +33,8 @@ export function renderWelcome(template: string, user: WelcomeUser, chatTitle: st
   return template
     .split(TOKEN_RE)
     .map((part) => {
-      if (part === "<@username>") return usernameRepl;
-      if (part === "<chat name>") return chatRepl;
+      if (part === "@usuario" || part === "<@username>") return usernameRepl;
+      if (part === "@nombreGrupo" || part === "<chat name>") return chatRepl;
       return esc(part);
     })
     .join("");
