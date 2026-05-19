@@ -51,6 +51,12 @@ const userSchema = new Schema<IUser>({
   photoCheckedAt: {
     type: Date,
   },
+  // Set once when the welcome message is sent to this user. Field is absent
+  // until claimed — the atomic { $exists: false } guard is what makes the
+  // welcome exactly-once under concurrent joins. No default, no TTL.
+  welcomedAt: {
+    type: Date,
+  },
 });
 
 // Compound unique index on userId + chatId

@@ -49,6 +49,10 @@ const chatSchema = new Schema<IChat>({
       type: Boolean,
       default: false,
     },
+    welcomeMessage: {
+      type: Boolean,
+      default: false,
+    },
   },
   linkWhitelist: {
     type: [String],
@@ -109,6 +113,14 @@ const chatSchema = new Schema<IChat>({
     logEntries: { type: Boolean, default: false },
     logExits: { type: Boolean, default: false },
     logBannedWords: { type: Boolean, default: false },
+  },
+  welcome: {
+    message: { type: String, default: "" },
+    button: {
+      enabled: { type: Boolean, default: false },
+      text: { type: String, default: "" },
+      url: { type: String, default: "" },
+    },
   },
 });
 

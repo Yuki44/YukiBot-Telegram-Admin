@@ -244,6 +244,27 @@ export const userRepository = {
     await User.updateOne({ userId, chatId }, { $unset: { leftWithWarningsAt: "" } });
   },
 
+  /**
+   * Atomically claim the "send welcome" right for this user. The filter only matches
+   * a doc that has no `welcomedAt` yet, so under N concurrent joins (and Telegram
+   * update redelivery) exactly one caller's update reports modifiedCount === 1 and
+   * therefore returns true — every other caller gets false and must not send.
+   * Single-document conditional updates are atomic in MongoDB, so no lock is needed.
+   * The caller is expected to have run findOrCreate first, so the doc exists.
+   */
+  async claimWelcome(userId: number, chatId: number): Promise<boolean> {
+    const res = await User.updateOne(
+      { userId, chatId, welcomedAt: { $exists: false } },
+      { $set: { welcomedAt: new Date() } }
+    );
+    return res.modifiedCount === 1;
+  },
+
+  /** Undo a claim so a later join can retry — used when the welcome send fails. */
+  async releaseWelcome(userId: number, chatId: number): Promise<void> {
+    await User.updateOne({ userId, chatId }, { $unset: { welcomedAt: "" } });
+  },
+
   async markBanned(userId: number, chatId: number, username?: string, name?: string): Promise<IUser> {
     const setFields: Record<string, unknown> = { isBanned: true, wasBanned: true };
     if (username) setFields.username = username;

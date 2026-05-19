@@ -20,6 +20,7 @@ import type {
   UserListFilter,
   UserRecord,
   UserStats,
+  WelcomeConfig,
   WhitelistUserEntry,
 } from "../types/api";
 import { clearSession, getToken } from "./auth";
@@ -202,6 +203,12 @@ export const api = {
       ),
     removeComboUser: (chatId: number | string, userId: number): Promise<void> =>
       request<void>("DELETE", `/chats/${chatId}/whitelist/combo/${userId}`),
+  },
+  welcome: {
+    get: (chatId: number | string): Promise<WelcomeConfig> =>
+      request<WelcomeConfig>("GET", `/chats/${chatId}/welcome`),
+    update: (chatId: number | string, body: WelcomeConfig): Promise<WelcomeConfig> =>
+      request<WelcomeConfig>("PUT", `/chats/${chatId}/welcome`, body),
   },
   bannedWords: {
     list: (chatId: number | string): Promise<BannedWord[]> =>

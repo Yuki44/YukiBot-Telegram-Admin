@@ -59,6 +59,7 @@ export const chatRepository = {
       delegatedOwnerId: null,
       forwardsTo: null,
       logsTo: null,
+      welcome: { message: "", button: { enabled: false, text: "", url: "" } },
     };
     for (const [key, def] of Object.entries(topLevelDefaults)) {
       if (existing == null || existing[key] === undefined) $set[key] = def;
@@ -72,6 +73,7 @@ export const chatRepository = {
       "autoWarnSpam",
       "promoSpamDetection",
       "bannedWordsEnforcement",
+      "welcomeMessage",
     ] as const;
     const existingFeatures = existing?.features as Record<string, unknown> | undefined;
     for (const k of featureKeys) {
@@ -113,6 +115,11 @@ export const chatRepository = {
       return await Chat.findOne({ chatId });
     }
     return await Chat.findOneAndUpdate({ chatId }, { $set }, { returnDocument: "after" });
+  },
+
+  /** Replace the whole welcome config block. Validation lives in the API route. */
+  async updateWelcome(chatId: number, welcome: NonNullable<IChat["welcome"]>): Promise<IChat | null> {
+    return await Chat.findOneAndUpdate({ chatId }, { $set: { welcome } }, { returnDocument: "after" });
   },
 
   async addLinkWhitelist(chatId: number, domain: string): Promise<IChat | null> {

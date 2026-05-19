@@ -12,6 +12,7 @@ import { UsersScreen } from "./screens/UsersScreen";
 import { UserDetailScreen } from "./screens/UserDetailScreen";
 import { WhitelistScreen } from "./screens/WhitelistScreen";
 import { BannedWordsScreen } from "./screens/BannedWordsScreen";
+import { WelcomeScreen } from "./screens/WelcomeScreen";
 import { LogsScreen } from "./screens/LogsScreen";
 import { AdminsScreen } from "./screens/AdminsScreen";
 import { MigrationScreen } from "./screens/MigrationScreen";
@@ -94,6 +95,14 @@ export function App() {
           element={
             <ProtectedRoute>
               <BannedWordsScreen />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/chats/:chatId/welcome"
+          element={
+            <ProtectedRoute>
+              <WelcomeScreen />
             </ProtectedRoute>
           }
         />

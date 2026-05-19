@@ -35,7 +35,10 @@ const ALL_FEATURE_KEYS = [
   "features.autoWarnSpam",
   "features.promoSpamDetection",
   "features.bannedWordsEnforcement",
+  "features.welcomeMessage",
 ];
+
+const WELCOME_DEFAULT = { message: "", button: { enabled: false, text: "", url: "" } };
 
 const ALL_LOGFLAG_KEYS = [
   "logFlags.logWarns",
@@ -75,6 +78,7 @@ describe("chatRepository.ensureInitialized", () => {
     expect($set.logsTo).toBeNull();
     for (const k of ALL_FEATURE_KEYS) expect($set[k]).toBe(false);
     for (const k of ALL_LOGFLAG_KEYS) expect($set[k]).toBe(false);
+    expect($set.welcome).toEqual(WELCOME_DEFAULT);
 
     // Telemetry/photo fields are intentionally left to schema `default: undefined`.
     expect($set).not.toHaveProperty("members");
@@ -107,7 +111,9 @@ describe("chatRepository.ensureInitialized", () => {
         autoWarnSpam: false,
         promoSpamDetection: false,
         bannedWordsEnforcement: false,
+        welcomeMessage: false,
       },
+      welcome: { message: "hola", button: { enabled: false, text: "", url: "" } },
       logFlags: {
         logWarns: true,
         logSilences: false,
@@ -171,9 +177,18 @@ describe("chatRepository.ensureInitialized", () => {
 
     const $set = capturedSet();
     expect(Object.keys($set).sort()).toEqual(
-      ["features.bannedWordsEnforcement", "logsTo", "name", "type"].sort()
+      [
+        "features.bannedWordsEnforcement",
+        "features.welcomeMessage",
+        "welcome",
+        "logsTo",
+        "name",
+        "type",
+      ].sort()
     );
     expect($set["features.bannedWordsEnforcement"]).toBe(false);
+    expect($set["features.welcomeMessage"]).toBe(false);
+    expect($set.welcome).toEqual(WELCOME_DEFAULT);
     expect($set.logsTo).toBeNull();
     // Enabled values were NOT re-set.
     expect($set).not.toHaveProperty("whitelist");
@@ -202,6 +217,7 @@ describe("chatRepository.ensureInitialized", () => {
     const $set = capturedSet();
     for (const k of ALL_FEATURE_KEYS) expect($set[k]).toBe(false);
     for (const k of ALL_LOGFLAG_KEYS) expect($set[k]).toBe(false);
+    expect($set.welcome).toEqual(WELCOME_DEFAULT);
     // Existing top-level values left untouched.
     expect($set).not.toHaveProperty("whitelist");
     expect($set).not.toHaveProperty("isActive");

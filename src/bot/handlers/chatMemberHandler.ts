@@ -3,6 +3,7 @@ import { BotContext } from "../../types";
 import { userRepository } from "../../db/repositories/userRepository";
 import { adminRepository } from "../../db/repositories/adminRepository";
 import { sendLog, LogUser } from "../helpers/sendLog";
+import { sendWelcome } from "../helpers/sendWelcome";
 import { isKickInProgress, clearKick } from "../helpers/kickTracker";
 import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
@@ -220,6 +221,33 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
         reason: "wasBanned=true al reentrar",
       });
       return;
+    }
+
+    // --- Welcome message ---
+    // Runs only after the auto-ban block's `return` above, so a re-banned user
+    // is banned, not welcomed. claimWelcome is an atomic per-user guard: under
+    // 200 concurrent joins (or Telegram update redelivery) exactly one caller
+    // wins and sends. Skip entirely when nothing is configured so a later
+    // configured join can still welcome. On send failure we release the claim
+    // so a future join retries (a transient 429 must not permanently suppress
+    // a user's welcome).
+    const welcome = ctx.chatConfig.welcome;
+    if (ctx.chatConfig.features.welcomeMessage && welcome && welcome.message.trim().length > 0) {
+      try {
+        const claimed = await userRepository.claimWelcome(userId, chatId);
+        if (claimed) {
+          const ok = await sendWelcome(
+            ctx.api,
+            chatId,
+            welcome,
+            { id: userId, username, name: name || fullName || String(userId) },
+            chatName
+          );
+          if (!ok) await userRepository.releaseWelcome(userId, chatId);
+        }
+      } catch (err) {
+        logger.error({ action: "chatMember_welcome", userId, chatId, error: String(err) });
+      }
     }
 
     const wasOut = oldStatus === "left" || oldStatus === "kicked";

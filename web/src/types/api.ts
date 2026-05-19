@@ -43,6 +43,16 @@ export interface ChatFeatures {
   autoWarnSpam: boolean;
   promoSpamDetection: boolean;
   bannedWordsEnforcement: boolean;
+  welcomeMessage: boolean;
+}
+
+export interface WelcomeConfig {
+  message: string;
+  button: {
+    enabled: boolean;
+    text: string;
+    url: string;
+  };
 }
 
 export interface ChatDetail extends ChatSummary {

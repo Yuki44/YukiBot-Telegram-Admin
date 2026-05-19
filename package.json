@@ -1,6 +1,6 @@
 {
   "name": "yukibot",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "description": "Telegram group moderation bot",
   "main": "dist/index.js",
   "scripts": {
@@ -35,6 +35,7 @@
   },
   "homepage": "https://github.com/Yuki44/YukiBot-Telegram-Admin#readme",
   "dependencies": {
+    "@grammyjs/auto-retry": "^2.0.2",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.3.1",
