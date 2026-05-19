@@ -282,6 +282,15 @@ export function DashboardScreen() {
               sub="Quién tiene acceso a este chat"
               onClick={() => navigate(`/chats/${chat.chatId}/admins`)}
             />
+            {(chat.role === "owner" || chat.role === "super") && (
+              <NavRow
+                icon={I.copy({ size: 20 })}
+                iconClass="neutral"
+                title="Migrar datos de otro chat"
+                sub="Copiar usuarios, listas y configuración desde un chat antiguo"
+                onClick={() => navigate(`/chats/${chat.chatId}/migrate`)}
+              />
+            )}
           </div>
         </div>
       </div>

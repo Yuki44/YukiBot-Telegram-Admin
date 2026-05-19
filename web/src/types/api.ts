@@ -63,6 +63,17 @@ export interface ChatStats {
   bannedWordsCount: number;
 }
 
+export interface MigrationSummary {
+  sourceChatId: number;
+  destChatId: number;
+  users: number;
+  bannedWords: number;
+  bannedWordsSkipped: number;
+  domainAllowances: number;
+  configCopied: boolean;
+  logsTo: number | null;
+}
+
 export interface AdminRecord {
   userId: number;
   name: string;

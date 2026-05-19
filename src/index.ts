@@ -15,6 +15,7 @@ import { trackTopic } from "./bot/middleware/trackTopic";
 import { topicFiltering } from "./features/topicFiltering";
 import { bannedWordsEnforcement } from "./features/bannedWordsEnforcement";
 import { setupHandler } from "./bot/commands/setup";
+import { migrarHandler } from "./bot/commands/migrar";
 import { addTopicHandler } from "./bot/commands/addTopic";
 import { editTopicHandler } from "./bot/commands/editTopic";
 import { removeTopicHandler } from "./bot/commands/removeTopic";
@@ -64,6 +65,7 @@ bot.use(isAdmin);
 bot.use(adminOnlyCommands);
 
 bot.command("setup", setupHandler);
+bot.command("migrar", migrarHandler);
 bot.command("addtopic", addTopicHandler);
 bot.command("edittopic", editTopicHandler);
 bot.command("removetopic", removeTopicHandler);

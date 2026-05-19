@@ -14,6 +14,7 @@ import { WhitelistScreen } from "./screens/WhitelistScreen";
 import { BannedWordsScreen } from "./screens/BannedWordsScreen";
 import { LogsScreen } from "./screens/LogsScreen";
 import { AdminsScreen } from "./screens/AdminsScreen";
+import { MigrationScreen } from "./screens/MigrationScreen";
 import { AccountSettingsScreen } from "./screens/AccountSettingsScreen";
 import { isAuthenticated } from "./lib/auth";
 
@@ -109,6 +110,14 @@ export function App() {
           element={
             <ProtectedRoute>
               <AdminsScreen />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/chats/:chatId/migrate"
+          element={
+            <ProtectedRoute>
+              <MigrationScreen />
             </ProtectedRoute>
           }
         />

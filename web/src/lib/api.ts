@@ -11,6 +11,7 @@ import type {
   ChatFeatures,
   ChatStats,
   ChatSummary,
+  MigrationSummary,
   SpamDetection,
   SpamDetectionPermitResult,
   TelegramAuthData,
@@ -103,6 +104,21 @@ export const api = {
       request<ChatStats>("GET", `/chats/${chatId}/stats`),
     updateFeatures: (chatId: number | string, partial: Partial<ChatFeatures>): Promise<ChatFeatures> =>
       request<ChatFeatures>("PUT", `/chats/${chatId}/features`, partial),
+  },
+  migration: {
+    // chatId is the DESTINATION (this) chat; sourceChatId is the old chat to copy from.
+    run: (chatId: number | string, sourceChatId: number): Promise<MigrationSummary> =>
+      request<MigrationSummary>("POST", `/chats/${chatId}/migrate`, { sourceChatId }),
+    setSourceActive: (
+      chatId: number | string,
+      sourceChatId: number,
+      active: boolean
+    ): Promise<{ chatId: number; isActive: boolean }> =>
+      request<{ chatId: number; isActive: boolean }>(
+        "POST",
+        `/chats/${chatId}/migrate/source-active`,
+        { sourceChatId, active }
+      ),
   },
   topics: {
     list: (chatId: number | string): Promise<Topic[]> =>

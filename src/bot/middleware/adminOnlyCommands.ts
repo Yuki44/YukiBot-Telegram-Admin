@@ -3,6 +3,7 @@ import { BotContext } from "../../types";
 
 const YUKIBOT_COMMANDS = new Set([
   "setup",
+  "migrar",
   "addtopic",
   "edittopic",
   "removetopic",

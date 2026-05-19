@@ -9,6 +9,7 @@ import { ActivityLog } from "../../db/models/ActivityLog";
 import { BannedWord } from "../../db/models/BannedWord";
 import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
+import { migrateChatData, setChatActive } from "../../services/chatMigration";
 import { BotContext, IChat } from "../../types";
 
 const FEATURE_KEYS: ReadonlyArray<keyof IChat["features"]> = [
@@ -228,6 +229,97 @@ export function createChatsRouter(bot: Bot<BotContext>): Router {
         res.json(updated.features);
       } catch (err) {
         logger.error({ action: "chats.features.update", error: String(err), chatId });
+        res.status(500).json({ error: "internal_error" });
+      }
+    }
+  );
+
+  // Copy moderation state from another chat into this (destination) chat.
+  // Owner-only on the DESTINATION chat. By design no permission is required on
+  // the source chat — the new chat's owner may differ from the old chat's owner
+  // (a closed-chat handover). Nothing in the source chat is ever deleted.
+  router.post(
+    "/:chatId/migrate",
+    requireChatAdmin({ ownerOnly: true }),
+    async (req: Request, res: Response) => {
+      const destChatId = Number(req.params.chatId);
+      const sourceChatId = Number((req.body as { sourceChatId?: unknown })?.sourceChatId);
+
+      if (!Number.isFinite(sourceChatId) || sourceChatId === destChatId) {
+        res.status(400).json({ error: "invalid_source" });
+        return;
+      }
+
+      try {
+        const summary = await migrateChatData(sourceChatId, destChatId, req.user!.userId);
+
+        if (summary.logsTo) {
+          const actor = req.user!.username ? `@${req.user!.username}` : String(req.user!.userId);
+          bot.api
+            .sendMessage(
+              summary.logsTo,
+              `📦 Datos migrados desde el chat ${sourceChatId} a este chat (${destChatId}) por ${actor}.\n` +
+                `• ${summary.users} usuarios\n• ${summary.bannedWords} palabras prohibidas\n` +
+                `• ${summary.domainAllowances} permisos mixtos`
+            )
+            .catch((err) => {
+              logger.warn({
+                action: "chats.migrate.logPost",
+                sourceChatId,
+                destChatId,
+                error: String(err),
+              });
+            });
+        }
+
+        logger.info({
+          action: "chats.migrate",
+          userId: req.user!.userId,
+          ...summary,
+        });
+        res.json(summary);
+      } catch (err) {
+        const msg = String(err);
+        if (msg.includes("source_chat_not_found")) {
+          res.status(404).json({ error: "source_not_found" });
+          return;
+        }
+        if (msg.includes("dest_chat_not_found")) {
+          res.status(404).json({ error: "dest_not_found" });
+          return;
+        }
+        logger.error({ action: "chats.migrate", error: msg, sourceChatId, destChatId });
+        res.status(500).json({ error: "internal_error" });
+      }
+    }
+  );
+
+  // Keep-or-deactivate the old chat after a migration. `active=false` flips the
+  // source chat's isActive so it stops being processed; nothing is deleted.
+  // Auth is still on the destination chat (the requester has no rights on the
+  // source — accepted handover semantics).
+  router.post(
+    "/:chatId/migrate/source-active",
+    requireChatAdmin({ ownerOnly: true }),
+    async (req: Request, res: Response) => {
+      const body = (req.body as { sourceChatId?: unknown; active?: unknown }) ?? {};
+      const sourceChatId = Number(body.sourceChatId);
+      if (!Number.isFinite(sourceChatId) || typeof body.active !== "boolean") {
+        res.status(400).json({ error: "invalid_request" });
+        return;
+      }
+
+      try {
+        await setChatActive(sourceChatId, body.active);
+        logger.info({
+          action: "chats.migrate.sourceActive",
+          userId: req.user!.userId,
+          sourceChatId,
+          active: body.active,
+        });
+        res.json({ chatId: sourceChatId, isActive: body.active });
+      } catch (err) {
+        logger.error({ action: "chats.migrate.sourceActive", error: String(err), sourceChatId });
         res.status(500).json({ error: "internal_error" });
       }
     }

@@ -99,6 +99,15 @@ export const userRepository = {
     return await User.findOne({ username, chatId });
   },
 
+  /**
+   * Every user in a chat, unbounded and unsorted — used by chat migration to
+   * copy the full roster. (`listByChatId` caps at 1000 and runs a sort/aggregation
+   * pipeline, so it is unsuitable for a complete copy.)
+   */
+  async findAllByChatId(chatId: number): Promise<IUser[]> {
+    return await User.find({ chatId });
+  },
+
   async upsert(user: Partial<IUser>): Promise<IUser> {
     if (!user.userId || !user.chatId) {
       throw new Error("userId and chatId are required for upsert");
