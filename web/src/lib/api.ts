@@ -11,6 +11,7 @@ import type {
   ChatFeatures,
   ChatStats,
   ChatSummary,
+  MigrationSummary,
   SpamDetection,
   SpamDetectionPermitResult,
   TelegramAuthData,
@@ -19,6 +20,7 @@ import type {
   UserListFilter,
   UserRecord,
   UserStats,
+  WelcomeConfig,
   WhitelistUserEntry,
 } from "../types/api";
 import { clearSession, getToken } from "./auth";
@@ -104,6 +106,21 @@ export const api = {
     updateFeatures: (chatId: number | string, partial: Partial<ChatFeatures>): Promise<ChatFeatures> =>
       request<ChatFeatures>("PUT", `/chats/${chatId}/features`, partial),
   },
+  migration: {
+    // chatId is the DESTINATION (this) chat; sourceChatId is the old chat to copy from.
+    run: (chatId: number | string, sourceChatId: number): Promise<MigrationSummary> =>
+      request<MigrationSummary>("POST", `/chats/${chatId}/migrate`, { sourceChatId }),
+    setSourceActive: (
+      chatId: number | string,
+      sourceChatId: number,
+      active: boolean
+    ): Promise<{ chatId: number; isActive: boolean }> =>
+      request<{ chatId: number; isActive: boolean }>(
+        "POST",
+        `/chats/${chatId}/migrate/source-active`,
+        { sourceChatId, active }
+      ),
+  },
   topics: {
     list: (chatId: number | string): Promise<Topic[]> =>
       request<Topic[]>("GET", `/chats/${chatId}/topics`),
@@ -186,6 +203,12 @@ export const api = {
       ),
     removeComboUser: (chatId: number | string, userId: number): Promise<void> =>
       request<void>("DELETE", `/chats/${chatId}/whitelist/combo/${userId}`),
+  },
+  welcome: {
+    get: (chatId: number | string): Promise<WelcomeConfig> =>
+      request<WelcomeConfig>("GET", `/chats/${chatId}/welcome`),
+    update: (chatId: number | string, body: WelcomeConfig): Promise<WelcomeConfig> =>
+      request<WelcomeConfig>("PUT", `/chats/${chatId}/welcome`, body),
   },
   bannedWords: {
     list: (chatId: number | string): Promise<BannedWord[]> =>

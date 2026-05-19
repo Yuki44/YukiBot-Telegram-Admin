@@ -38,6 +38,8 @@ export interface IChat extends Document {
     promoSpamDetection: boolean;
     /** When true, messages matching configured BannedWord rules trigger enforcement (warn/delete/silence/kick). */
     bannedWordsEnforcement?: boolean;
+    /** When true, each user is greeted once (per chat) with the configured `welcome` message on join. */
+    welcomeMessage?: boolean;
   };
   /** Domains/URLs exempt from link spam detection (e.g. "example.com") */
   linkWhitelist: string[];
@@ -65,6 +67,19 @@ export interface IChat extends Document {
   delegatedOwnerId?: number | null;
   forwardsTo?: number;
   logsTo?: number;
+  /**
+   * Admin-configured greeting sent once per user when `features.welcomeMessage` is on.
+   * `message` supports the literal tokens `<@username>` (user mention) and
+   * `<chat name>` (chat title). Optional inline URL button when `button.enabled`.
+   */
+  welcome?: {
+    message: string;
+    button: {
+      enabled: boolean;
+      text: string;
+      url: string;
+    };
+  };
   logFlags: {
     logWarns: boolean;
     logSilences: boolean;
@@ -142,6 +157,8 @@ export interface IUser extends Document {
    */
   photoFileId?: string | null;
   photoCheckedAt?: Date;
+  /** Set once when the welcome message has been sent to this user (per chat). */
+  welcomedAt?: Date;
 }
 
 /**

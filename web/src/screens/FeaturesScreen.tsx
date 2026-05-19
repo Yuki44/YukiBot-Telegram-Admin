@@ -45,6 +45,11 @@ const FEATURE_META: FeatureMeta[] = [
     desc: "Cuando alguien escriba una palabra de la lista, se aplica la acción configurada (aviso, borrar, silenciar o expulsar).",
   },
   {
+    id: "welcomeMessage",
+    name: "Mensaje de bienvenida",
+    desc: "Saluda automáticamente a quien entra al grupo. Configura el mensaje y el botón en su pantalla.",
+  },
+  {
     id: "languageDetection",
     name: "Detección de idioma",
     desc: "Avisará si se habla fuera del idioma del grupo.",

@@ -276,12 +276,28 @@ export function DashboardScreen() {
               onClick={() => navigate(`/chats/${chat.chatId}/banned-words`)}
             />
             <NavRow
+              icon={I.bell({ size: 20 })}
+              iconClass="info"
+              title="Mensaje de bienvenida"
+              sub={chat.features.welcomeMessage ? "Activado" : "Desactivado"}
+              onClick={() => navigate(`/chats/${chat.chatId}/welcome`)}
+            />
+            <NavRow
               icon={I.users({ size: 20 })}
               iconClass="neutral"
               title="Equipo de admins"
               sub="Quién tiene acceso a este chat"
               onClick={() => navigate(`/chats/${chat.chatId}/admins`)}
             />
+            {(chat.role === "owner" || chat.role === "super") && (
+              <NavRow
+                icon={I.copy({ size: 20 })}
+                iconClass="neutral"
+                title="Migrar datos de otro chat"
+                sub="Copiar usuarios, listas y configuración desde un chat antiguo"
+                onClick={() => navigate(`/chats/${chat.chatId}/migrate`)}
+              />
+            )}
           </div>
         </div>
       </div>

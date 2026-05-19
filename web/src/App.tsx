@@ -12,8 +12,10 @@ import { UsersScreen } from "./screens/UsersScreen";
 import { UserDetailScreen } from "./screens/UserDetailScreen";
 import { WhitelistScreen } from "./screens/WhitelistScreen";
 import { BannedWordsScreen } from "./screens/BannedWordsScreen";
+import { WelcomeScreen } from "./screens/WelcomeScreen";
 import { LogsScreen } from "./screens/LogsScreen";
 import { AdminsScreen } from "./screens/AdminsScreen";
+import { MigrationScreen } from "./screens/MigrationScreen";
 import { AccountSettingsScreen } from "./screens/AccountSettingsScreen";
 import { isAuthenticated } from "./lib/auth";
 
@@ -97,6 +99,14 @@ export function App() {
           }
         />
         <Route
+          path="/chats/:chatId/welcome"
+          element={
+            <ProtectedRoute>
+              <WelcomeScreen />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/chats/:chatId/logs"
           element={
             <ProtectedRoute>
@@ -109,6 +119,14 @@ export function App() {
           element={
             <ProtectedRoute>
               <AdminsScreen />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/chats/:chatId/migrate"
+          element={
+            <ProtectedRoute>
+              <MigrationScreen />
             </ProtectedRoute>
           }
         />

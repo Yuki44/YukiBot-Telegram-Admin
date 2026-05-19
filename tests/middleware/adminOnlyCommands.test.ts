@@ -51,7 +51,7 @@ describe("adminOnlyCommands", () => {
 
   it("handles all registered YukiBot commands", async () => {
     const commands = [
-      "setup", "addtopic", "edittopic", "removetopic", "togglefeature",
+      "setup", "migrar", "addtopic", "edittopic", "removetopic", "togglefeature",
       "av", "elav", "qav", "avs", "qban", "sil", "elsil", "silav",
       "elsilav", "qsil", "qsilav", "com", "kk", "bn",
     ];

@@ -5,6 +5,7 @@ import { adminRepository } from "../../db/repositories/adminRepository";
 import { userRepository } from "../../db/repositories/userRepository";
 import { discoverProfilePhoto } from "../helpers/profilePhoto";
 import { logger } from "../../utils/logger";
+import { t } from "../../locales/i18n";
 
 export async function setupHandler(ctx: CommandContext<BotContext>) {
   try {
@@ -24,34 +25,10 @@ export async function setupHandler(ctx: CommandContext<BotContext>) {
 
     const chatTitle = "title" in chat && chat.title ? chat.title : "Unknown";
 
-    const features =
-      chatType === "topics"
-        ? {
-            languageDetection: false,
-            spamDetection: false,
-            topicFiltering: false,
-            commands: false,
-            autoBan: false,
-            autoWarnSpam: false,
-            promoSpamDetection: false,
-          }
-        : {
-            languageDetection: false,
-            spamDetection: false,
-            commands: false,
-            autoBan: false,
-            autoWarnSpam: false,
-            promoSpamDetection: false,
-          };
-
-    await chatRepository.upsert({
-      chatId,
-      name: chatTitle,
-      type: chatType,
-      isActive: true,
-      whitelist: false,
-      features,
-    });
+    // Idempotent: first run initializes every field (all off except isActive);
+    // re-runs only re-sync name/type and backfill fields that are still missing,
+    // never resetting an owner-enabled feature/whitelist.
+    await chatRepository.ensureInitialized(chatId, { name: chatTitle, type: chatType });
 
     const admins = await ctx.api.getChatAdministrators(chatId);
 
@@ -92,13 +69,11 @@ export async function setupHandler(ctx: CommandContext<BotContext>) {
     });
 
     if (chatType === "topics") {
-      await ctx.reply(
-        "Chat initialized. Now use /addtopic <topicId> <allowedTypes> to register topics.\n" +
-          "Example: /addtopic 12283 photo,video",
-        { message_thread_id: ctx.message?.message_thread_id }
-      );
+      await ctx.reply(t("setup.initializedTopics"), {
+        message_thread_id: ctx.message?.message_thread_id,
+      });
     } else {
-      await ctx.reply("Chat initialized successfully.", {
+      await ctx.reply(t("setup.initialized"), {
         message_thread_id: ctx.message?.message_thread_id,
       });
     }
@@ -110,7 +85,7 @@ export async function setupHandler(ctx: CommandContext<BotContext>) {
       chatId: ctx.chat?.id,
       error: String(error),
     });
-    await ctx.reply("Setup failed, check logs.", {
+    await ctx.reply(t("setup.failed"), {
       message_thread_id: ctx.message?.message_thread_id,
     });
   }

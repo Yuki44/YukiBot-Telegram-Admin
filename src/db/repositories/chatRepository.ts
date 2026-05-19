@@ -31,6 +31,76 @@ export const chatRepository = {
     );
   },
 
+  /**
+   * Idempotent initialization for /setup. `name` and `type` are re-synced from
+   * Telegram on every run; every other field is fill-missing-only — an owner who
+   * has enabled a feature, turned on whitelist, etc. never has it reset by a
+   * second /setup. Also backfills fields added after a chat was first set up
+   * (e.g. `features.bannedWordsEnforcement`).
+   *
+   * The existing doc is read with `.lean()` on purpose: a hydrated Mongoose doc
+   * applies schema defaults in memory, so a genuinely-missing field would read as
+   * its default and never be detected as absent. `.lean()` reflects exactly what
+   * is stored, so the backfill diff is accurate.
+   */
+  async ensureInitialized(chatId: number, meta: { name: string; type: "topics" | "normal" }): Promise<IChat> {
+    const existing = (await Chat.findOne({ chatId }).lean()) as Record<string, unknown> | null;
+
+    // Always re-synced from Telegram (decision: name/type reflect live chat state).
+    const $set: Record<string, unknown> = { name: meta.name, type: meta.type };
+
+    // Defaults mirror src/db/models/Chat.ts. Everything off except isActive.
+    const topLevelDefaults: Record<string, unknown> = {
+      isActive: true,
+      whitelist: false,
+      linkWhitelist: [],
+      spamUserWhitelist: [],
+      hiddenAdminIds: [],
+      delegatedOwnerId: null,
+      forwardsTo: null,
+      logsTo: null,
+      welcome: { message: "", button: { enabled: false, text: "", url: "" } },
+    };
+    for (const [key, def] of Object.entries(topLevelDefaults)) {
+      if (existing == null || existing[key] === undefined) $set[key] = def;
+    }
+
+    // Canonical feature keys (mirrors FEATURE_KEYS in src/api/routes/chats.ts).
+    const featureKeys = [
+      "languageDetection",
+      "topicFiltering",
+      "autoBan",
+      "autoWarnSpam",
+      "promoSpamDetection",
+      "bannedWordsEnforcement",
+      "welcomeMessage",
+    ] as const;
+    const existingFeatures = existing?.features as Record<string, unknown> | undefined;
+    for (const k of featureKeys) {
+      if (existing == null || existingFeatures?.[k] === undefined) $set[`features.${k}`] = false;
+    }
+
+    const logFlagKeys = [
+      "logWarns",
+      "logSilences",
+      "logBans",
+      "logAutoRebans",
+      "logKicks",
+      "logQBans",
+      "logUnsilences",
+      "logUnwarns",
+      "logEntries",
+      "logExits",
+      "logBannedWords",
+    ] as const;
+    const existingLogFlags = existing?.logFlags as Record<string, unknown> | undefined;
+    for (const k of logFlagKeys) {
+      if (existing == null || existingLogFlags?.[k] === undefined) $set[`logFlags.${k}`] = false;
+    }
+
+    return await Chat.findOneAndUpdate({ chatId }, { $set }, { upsert: true, returnDocument: "after" });
+  },
+
   async updateFeatures(chatId: number, features: IChat["features"]): Promise<IChat | null> {
     return await Chat.findOneAndUpdate({ chatId }, { $set: { features } }, { returnDocument: "after" });
   },
@@ -45,6 +115,11 @@ export const chatRepository = {
       return await Chat.findOne({ chatId });
     }
     return await Chat.findOneAndUpdate({ chatId }, { $set }, { returnDocument: "after" });
+  },
+
+  /** Replace the whole welcome config block. Validation lives in the API route. */
+  async updateWelcome(chatId: number, welcome: NonNullable<IChat["welcome"]>): Promise<IChat | null> {
+    return await Chat.findOneAndUpdate({ chatId }, { $set: { welcome } }, { returnDocument: "after" });
   },
 
   async addLinkWhitelist(chatId: number, domain: string): Promise<IChat | null> {

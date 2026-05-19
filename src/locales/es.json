@@ -77,7 +77,24 @@
     "addtopic": "/addtopic — Añadir un tema al filtro de tópicos.",
     "edittopic": "/edittopic — Editar un tema existente.",
     "removetopic": "/removetopic — Eliminar un tema del filtro.",
-    "togglefeature": "/togglefeature [función] — Activar o desactivar una función del bot."
+    "togglefeature": "/togglefeature [función] — Activar o desactivar una función del bot.",
+    "migrar": "/migrar <idOrigen> — Copiar usuarios, listas, palabras prohibidas y configuración de otro chat a este (solo owner)."
+  },
+  "setup": {
+    "initialized": "✅ Chat inicializado correctamente.",
+    "initializedTopics": "✅ Chat inicializado. Ahora usa /addtopic <topicId> <tipos> para registrar temas.\nEjemplo: /addtopic 12283 photo,video",
+    "failed": "⚠️ Falló la inicialización, revisa los registros."
+  },
+  "migration": {
+    "notOwner": "❌ Solo el propietario de este chat puede migrar datos.",
+    "specifySource": "⚠️ Especifica el ID del chat de origen. Uso: /migrar <idOrigen>",
+    "sameChat": "⚠️ El chat de origen no puede ser este mismo chat.",
+    "sourceNotFound": "❌ No se encontró el chat de origen ({chatId}).",
+    "destNotSetup": "❌ Este chat aún no está inicializado. Ejecuta /setup primero.",
+    "success": "✅ Migración completada.\n• {users} usuarios\n• {words} palabras prohibidas\n• {mixtos} permisos mixtos\n• Configuración copiada.",
+    "failed": "⚠️ La migración falló, revisa los registros.",
+    "logPost": "📦 Datos migrados desde el chat {sourceChatId} a este chat ({destChatId}) por {actor}.\n• {users} usuarios\n• {words} palabras prohibidas\n• {mixtos} permisos mixtos",
+    "logPostFailed": "⚠️ La migración desde el chat {sourceChatId} a {destChatId} falló. Revisa los registros."
   }
 }
 

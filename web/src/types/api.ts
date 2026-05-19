@@ -43,6 +43,16 @@ export interface ChatFeatures {
   autoWarnSpam: boolean;
   promoSpamDetection: boolean;
   bannedWordsEnforcement: boolean;
+  welcomeMessage: boolean;
+}
+
+export interface WelcomeConfig {
+  message: string;
+  button: {
+    enabled: boolean;
+    text: string;
+    url: string;
+  };
 }
 
 export interface ChatDetail extends ChatSummary {
@@ -61,6 +71,17 @@ export interface ChatStats {
   bannedCount: number;
   actionsToday: number;
   bannedWordsCount: number;
+}
+
+export interface MigrationSummary {
+  sourceChatId: number;
+  destChatId: number;
+  users: number;
+  bannedWords: number;
+  bannedWordsSkipped: number;
+  domainAllowances: number;
+  configCopied: boolean;
+  logsTo: number | null;
 }
 
 export interface AdminRecord {

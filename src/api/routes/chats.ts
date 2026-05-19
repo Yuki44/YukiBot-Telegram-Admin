@@ -9,6 +9,8 @@ import { ActivityLog } from "../../db/models/ActivityLog";
 import { BannedWord } from "../../db/models/BannedWord";
 import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
+import { migrateChatData, setChatActive } from "../../services/chatMigration";
+import { normalizeHttpUrl } from "../../utils/url";
 import { BotContext, IChat } from "../../types";
 
 const FEATURE_KEYS: ReadonlyArray<keyof IChat["features"]> = [
@@ -18,7 +20,15 @@ const FEATURE_KEYS: ReadonlyArray<keyof IChat["features"]> = [
   "autoWarnSpam",
   "promoSpamDetection",
   "bannedWordsEnforcement",
+  "welcomeMessage",
 ];
+
+const WELCOME_MAX_LEN = 1024;
+
+const EMPTY_WELCOME: NonNullable<IChat["welcome"]> = {
+  message: "",
+  button: { enabled: false, text: "", url: "" },
+};
 
 interface ChatSummaryDto {
   chatId: number;
@@ -228,6 +238,208 @@ export function createChatsRouter(bot: Bot<BotContext>): Router {
         res.json(updated.features);
       } catch (err) {
         logger.error({ action: "chats.features.update", error: String(err), chatId });
+        res.status(500).json({ error: "internal_error" });
+      }
+    }
+  );
+
+  // Welcome message config. GET is readable by any chat admin; PUT is
+  // owner-only (same gate as feature toggles). The on/off switch itself lives
+  // in `features.welcomeMessage` (handled by PUT /:chatId/features) — this
+  // endpoint only manages the content.
+  router.get("/:chatId/welcome", requireChatAdmin(), async (req: Request, res: Response) => {
+    const chatId = Number(req.params.chatId);
+    try {
+      const chat = await chatRepository.findByChatId(chatId);
+      if (!chat) {
+        res.status(404).json({ error: "chat_not_found" });
+        return;
+      }
+      const w = chat.welcome;
+      res.json(
+        w
+          ? {
+              message: w.message ?? "",
+              button: {
+                enabled: !!w.button?.enabled,
+                text: w.button?.text ?? "",
+                url: w.button?.url ?? "",
+              },
+            }
+          : EMPTY_WELCOME
+      );
+    } catch (err) {
+      logger.error({ action: "chats.welcome.get", error: String(err), chatId });
+      res.status(500).json({ error: "internal_error" });
+    }
+  });
+
+  router.put(
+    "/:chatId/welcome",
+    requireChatAdmin({ ownerOnly: true }),
+    async (req: Request, res: Response) => {
+      const chatId = Number(req.params.chatId);
+      const body = (req.body ?? {}) as Record<string, unknown>;
+
+      if (typeof body.message !== "string") {
+        res.status(400).json({ error: "invalid_message" });
+        return;
+      }
+      const message = body.message;
+      if (message.length > WELCOME_MAX_LEN) {
+        res.status(400).json({ error: "message_too_long" });
+        return;
+      }
+
+      const button = body.button;
+      if (typeof button !== "object" || button === null) {
+        res.status(400).json({ error: "invalid_button" });
+        return;
+      }
+      const b = button as Record<string, unknown>;
+      if (typeof b.enabled !== "boolean") {
+        res.status(400).json({ error: "invalid_button" });
+        return;
+      }
+      // text/url may be absent (default "") but, if present, must be strings —
+      // we persist them even when disabled so toggling back on restores them.
+      const text = b.text === undefined ? "" : b.text;
+      const rawUrl = b.url === undefined ? "" : b.url;
+      if (typeof text !== "string" || typeof rawUrl !== "string") {
+        res.status(400).json({ error: "invalid_button" });
+        return;
+      }
+      // When the button is on we normalize the link (a bare "t.me/x" becomes
+      // "https://t.me/x") so the admin never has to type the scheme. When it's
+      // off we keep whatever was typed so toggling back on restores it.
+      let url = rawUrl;
+      if (b.enabled) {
+        if (text.trim().length === 0) {
+          res.status(400).json({ error: "button_text_required" });
+          return;
+        }
+        const normalizedUrl = normalizeHttpUrl(rawUrl);
+        if (!normalizedUrl) {
+          res.status(400).json({ error: "invalid_button_url" });
+          return;
+        }
+        url = normalizedUrl;
+      }
+
+      const normalized: NonNullable<IChat["welcome"]> = {
+        message,
+        button: { enabled: b.enabled, text, url },
+      };
+
+      try {
+        const updated = await chatRepository.updateWelcome(chatId, normalized);
+        if (!updated) {
+          res.status(404).json({ error: "chat_not_found" });
+          return;
+        }
+        logger.info({ action: "chats.welcome.update", chatId, userId: req.user!.userId });
+        recordActivity({
+          chatId,
+          type: "feature_toggle",
+          source: "panel",
+          actor: { id: req.user!.userId, name: req.user!.name, username: req.user!.username },
+          targetRef: "welcome",
+          reason: "configuración actualizada",
+        });
+        res.json(normalized);
+      } catch (err) {
+        logger.error({ action: "chats.welcome.update", error: String(err), chatId });
+        res.status(500).json({ error: "internal_error" });
+      }
+    }
+  );
+
+  // Copy moderation state from another chat into this (destination) chat.
+  // Owner-only on the DESTINATION chat. By design no permission is required on
+  // the source chat — the new chat's owner may differ from the old chat's owner
+  // (a closed-chat handover). Nothing in the source chat is ever deleted.
+  router.post(
+    "/:chatId/migrate",
+    requireChatAdmin({ ownerOnly: true }),
+    async (req: Request, res: Response) => {
+      const destChatId = Number(req.params.chatId);
+      const sourceChatId = Number((req.body as { sourceChatId?: unknown })?.sourceChatId);
+
+      if (!Number.isFinite(sourceChatId) || sourceChatId === destChatId) {
+        res.status(400).json({ error: "invalid_source" });
+        return;
+      }
+
+      try {
+        const summary = await migrateChatData(sourceChatId, destChatId, req.user!.userId);
+
+        if (summary.logsTo) {
+          const actor = req.user!.username ? `@${req.user!.username}` : String(req.user!.userId);
+          bot.api
+            .sendMessage(
+              summary.logsTo,
+              `📦 Datos migrados desde el chat ${sourceChatId} a este chat (${destChatId}) por ${actor}.\n` +
+                `• ${summary.users} usuarios\n• ${summary.bannedWords} palabras prohibidas\n` +
+                `• ${summary.domainAllowances} permisos mixtos`
+            )
+            .catch((err) => {
+              logger.warn({
+                action: "chats.migrate.logPost",
+                sourceChatId,
+                destChatId,
+                error: String(err),
+              });
+            });
+        }
+
+        logger.info({
+          action: "chats.migrate",
+          userId: req.user!.userId,
+          ...summary,
+        });
+        res.json(summary);
+      } catch (err) {
+        const msg = String(err);
+        if (msg.includes("source_chat_not_found")) {
+          res.status(404).json({ error: "source_not_found" });
+          return;
+        }
+        if (msg.includes("dest_chat_not_found")) {
+          res.status(404).json({ error: "dest_not_found" });
+          return;
+        }
+        logger.error({ action: "chats.migrate", error: msg, sourceChatId, destChatId });
+        res.status(500).json({ error: "internal_error" });
+      }
+    }
+  );
+
+  // Keep-or-deactivate the old chat after a migration. `active=false` flips the
+  // source chat's isActive so it stops being processed; nothing is deleted.
+  // Auth is still on the destination chat (the requester has no rights on the
+  // source — accepted handover semantics).
+  router.post(
+    "/:chatId/migrate/source-active",
+    requireChatAdmin({ ownerOnly: true }),
+    async (req: Request, res: Response) => {
+      const body = (req.body as { sourceChatId?: unknown; active?: unknown }) ?? {};
+      const sourceChatId = Number(body.sourceChatId);
+      if (!Number.isFinite(sourceChatId) || typeof body.active !== "boolean") {
+        res.status(400).json({ error: "invalid_request" });
+        return;
+      }
+
+      try {
+        await setChatActive(sourceChatId, body.active);
+        logger.info({
+          action: "chats.migrate.sourceActive",
+          userId: req.user!.userId,
+          sourceChatId,
+          active: body.active,
+        });
+        res.json({ chatId: sourceChatId, isActive: body.active });
+      } catch (err) {
+        logger.error({ action: "chats.migrate.sourceActive", error: String(err), sourceChatId });
         res.status(500).json({ error: "internal_error" });
       }
     }
