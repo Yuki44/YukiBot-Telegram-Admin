@@ -157,8 +157,6 @@ export interface IUser extends Document {
    */
   photoFileId?: string | null;
   photoCheckedAt?: Date;
-  /** Set once when the welcome message has been sent to this user (per chat). */
-  welcomedAt?: Date;
 }
 
 /**

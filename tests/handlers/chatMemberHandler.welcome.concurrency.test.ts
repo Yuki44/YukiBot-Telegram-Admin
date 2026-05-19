@@ -4,8 +4,6 @@ import type { BotContext } from "../../src/types";
 vi.mock("../../src/db/repositories/userRepository", () => ({
   userRepository: {
     findOrCreate: vi.fn(),
-    claimWelcome: vi.fn(),
-    releaseWelcome: vi.fn().mockResolvedValue(undefined),
     findByUserAndChat: vi.fn(),
     upsert: vi.fn().mockResolvedValue(undefined),
     clearLeftDate: vi.fn().mockResolvedValue(undefined),
@@ -29,6 +27,7 @@ vi.mock("../../src/utils/activityLog", () => ({ recordActivity: vi.fn() }));
 import { chatMemberHandler } from "../../src/bot/handlers/chatMemberHandler";
 import { userRepository } from "../../src/db/repositories/userRepository";
 import { sendWelcome } from "../../src/bot/helpers/sendWelcome";
+import { resetWelcomeTracker } from "../../src/bot/helpers/welcomeTracker";
 
 const CHAT_ID = -100123;
 
@@ -46,27 +45,19 @@ function makeCtx(userId: number): BotContext {
       type: "normal",
       logsTo: null,
       features: { autoBan: false, welcomeMessage: true },
-      welcome: { message: "Hola <@username>", button: { enabled: false, text: "", url: "" } },
+      welcome: { message: "Hola @usuario", button: { enabled: false, text: "", url: "" } },
     },
     api: { banChatMember: vi.fn().mockResolvedValue(true), sendMessage: vi.fn().mockResolvedValue(undefined) },
   } as unknown as BotContext;
 }
 
-describe("chatMemberHandler — welcome concurrency (exactly-once per user)", () => {
+describe("chatMemberHandler — welcome concurrency (one greeting per entry)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetWelcomeTracker();
     vi.mocked(userRepository.findOrCreate).mockImplementation(
       async (userId: number) => ({ userId, chatId: CHAT_ID, wasBanned: false }) as never
     );
-    // Atomic single-winner claim: synchronous check-add (no await before the
-    // mutation) mirrors the real DB { $exists:false } guard.
-    const claimed = new Set<string>();
-    vi.mocked(userRepository.claimWelcome).mockImplementation(async (userId: number, chatId: number) => {
-      const k = `${userId}:${chatId}`;
-      if (claimed.has(k)) return false;
-      claimed.add(k);
-      return true;
-    });
   });
 
   it("200 distinct users joining at once → 200 welcomes, once each", async () => {
@@ -77,7 +68,6 @@ describe("chatMemberHandler — welcome concurrency (exactly-once per user)", ()
     expect(sendWelcome).toHaveBeenCalledTimes(200);
     const greeted = new Set(vi.mocked(sendWelcome).mock.calls.map((c) => (c[3] as { id: number }).id));
     expect(greeted.size).toBe(200);
-    expect(userRepository.releaseWelcome).not.toHaveBeenCalled();
   });
 
   it("200 redelivered updates for the SAME user → exactly one welcome", async () => {
@@ -86,6 +76,5 @@ describe("chatMemberHandler — welcome concurrency (exactly-once per user)", ()
     );
 
     expect(sendWelcome).toHaveBeenCalledTimes(1);
-    expect(userRepository.releaseWelcome).not.toHaveBeenCalled();
   });
 });

@@ -3,7 +3,8 @@ import { BotContext } from "../../types";
 import { userRepository } from "../../db/repositories/userRepository";
 import { adminRepository } from "../../db/repositories/adminRepository";
 import { sendLog, LogUser } from "../helpers/sendLog";
-import { sendWelcome } from "../helpers/sendWelcome";
+import { handleUserJoin } from "../helpers/handleJoin";
+import { clearRecentWelcome } from "../helpers/welcomeTracker";
 import { isKickInProgress, clearKick } from "../helpers/kickTracker";
 import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
@@ -67,6 +68,9 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
 
     // --- Banned / Kicked ---
     if (status === "kicked") {
+      // User is out — drop the welcome guard so a later re-entry greets again
+      // without waiting out the dedup window.
+      clearRecentWelcome(chatId, userId);
       if (isKickInProgress(chatId, userId)) return;
 
       const from = ctx.chatMember.from;
@@ -138,6 +142,8 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
 
     // --- Left ---
     if (status === "left") {
+      // User is out — drop the welcome guard so a re-entry greets again.
+      clearRecentWelcome(chatId, userId);
       if (oldStatus === "kicked") {
         clearKick(chatId, userId);
         return;
@@ -184,71 +190,17 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
     }
 
     // --- Joined ---
-    let record;
-    try {
-      record = await userRepository.findOrCreate(userId, chatId, username, name);
-    } catch (err) {
-      logger.error({ action: "chatMember_findOrCreate", userId, chatId, error: String(err) });
-      return;
-    }
-
-    if (record.leftWithWarningsAt && !record.wasBanned) {
-      userRepository
-        .clearLeftDate(userId, chatId)
-        .catch((err) => logger.error({ action: "chatMember_clearLeft", userId, chatId, error: String(err) }));
-    }
-
-    if (ctx.chatConfig.features.autoBan && record.wasBanned) {
-      try {
-        await ctx.api.banChatMember(chatId, userId);
-        await ctx.api.sendMessage(chatId, `🚫 @${username ?? userId} baneado.`);
-      } catch (err) {
-        logger.error({ action: "chatMember_autoReban", userId, chatId, error: String(err) });
-      }
-      sendLog(ctx.api, ctx.chatConfig, {
-        action: "AUTO_BAN",
-        target,
-        chatId,
-        chatName,
-        chatType: ctx.chatConfig.type,
-      }).catch(() => {});
-      recordActivity({
-        chatId,
-        type: "autoban",
-        source: "auto",
-        actor: { id: ctx.me.id, name: "YukiBot" },
-        target: { id: userId, name: target.name, username: target.username },
-        reason: "wasBanned=true al reentrar",
-      });
-      return;
-    }
-
-    // --- Welcome message ---
-    // Runs only after the auto-ban block's `return` above, so a re-banned user
-    // is banned, not welcomed. claimWelcome is an atomic per-user guard: under
-    // 200 concurrent joins (or Telegram update redelivery) exactly one caller
-    // wins and sends. Skip entirely when nothing is configured so a later
-    // configured join can still welcome. On send failure we release the claim
-    // so a future join retries (a transient 429 must not permanently suppress
-    // a user's welcome).
-    const welcome = ctx.chatConfig.welcome;
-    if (ctx.chatConfig.features.welcomeMessage && welcome && welcome.message.trim().length > 0) {
-      try {
-        const claimed = await userRepository.claimWelcome(userId, chatId);
-        if (claimed) {
-          const ok = await sendWelcome(
-            ctx.api,
-            chatId,
-            welcome,
-            { id: userId, username, name: name || fullName || String(userId) },
-            chatName
-          );
-          if (!ok) await userRepository.releaseWelcome(userId, chatId);
-        }
-      } catch (err) {
-        logger.error({ action: "chatMember_welcome", userId, chatId, error: String(err) });
-      }
-    }
+    // Shared with the new_chat_members service-message handler: a re-banned
+    // user is banned (autoBan), otherwise greeted once. Returning early on
+    // auto-ban keeps the existing behavior (no ENTRADA log for a re-banned
+    // user) and on findOrCreate failure (already logged inside the helper).
+    const outcome = await handleUserJoin(ctx.api, ctx.chatConfig, ctx.me.id, chatId, chatName, {
+      id: userId,
+      username,
+      name,
+      fullName,
+    });
+    if (!outcome.ok || outcome.autobanned) return;
 
     const wasOut = oldStatus === "left" || oldStatus === "kicked";
     if (wasOut) {
