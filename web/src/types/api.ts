@@ -196,12 +196,12 @@ export interface ActivityLogEntry {
 
 /**
  * Types the dashboard's Undo button can reverse. Keep in sync with the server's UNDOABLE
- * set in `src/api/routes/activityLogs.ts`.
+ * set in `src/api/routes/activityLogs.ts`. `ban` is excluded on purpose — un-banning is a
+ * deliberate action on the user's screen, not a one-slide undo in the activity feed.
  */
 const UNDOABLE_TYPES: ReadonlySet<ActivityLogType> = new Set<ActivityLogType>([
   "warn",
   "silence",
-  "ban",
   "feature_toggle",
   "whitelist_add",
   "combo_add",

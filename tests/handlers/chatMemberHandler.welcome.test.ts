@@ -76,7 +76,8 @@ function makeCtx(
     },
     api: {
       banChatMember: vi.fn().mockResolvedValue(true),
-      sendMessage: vi.fn().mockResolvedValue(undefined),
+      sendMessage: vi.fn().mockResolvedValue({ message_id: 1 }),
+      deleteMessage: vi.fn().mockResolvedValue(true),
     },
   } as unknown as BotContext;
 }

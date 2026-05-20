@@ -10,7 +10,8 @@ import { bannedWordRepository } from "../../db/repositories/bannedWordRepository
 import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
 import { ActivityLogType, BotContext, IActivityLog } from "../../types";
-import { ActorInfo, unbanUserViaApi, unsilenceUserViaApi } from "../services/userActions";
+import { ActorInfo, unsilenceUserViaApi } from "../services/userActions";
+import { sendLog, LogUser } from "../../bot/helpers/sendLog";
 import { userRepository } from "../../db/repositories/userRepository";
 
 const VALID_TYPES: ActivityLogType[] = [
@@ -43,11 +44,14 @@ const VALID_TYPES: ActivityLogType[] = [
  * doesn't expose re-invite for non-public chats; pardon — record was wiped; topic rule
  * changes — pre-change state isn't snapshotted; autoban — an automatic 3-strike/re-entry
  * ban is policy enforcement, not a manual action to take back from the log).
+ *
+ * `ban` is intentionally NOT undoable from the log: lifting a ban is a deliberate
+ * decision that belongs on the user's screen ("Quitar el ban"), not a one-slide undo
+ * buried in the activity feed.
  */
 const UNDOABLE: ReadonlySet<ActivityLogType> = new Set([
   "warn",
   "silence",
-  "ban",
   "feature_toggle",
   "whitelist_add",
   "combo_add",
@@ -164,6 +168,30 @@ export function createActivityLogsRouter(bot: Bot<BotContext>): Router {
             res.status(404).json({ error: "user_not_found" });
             return;
           }
+          // Mirror the reversal to the log channel so #Q_AVISO sits alongside
+          // the original #AVISO (gated by logFlags.logUnwarns, like silence's
+          // undo already does via unsilenceUserViaApi).
+          const chat = await chatRepository.findByChatId(chatId);
+          if (chat) {
+            const undoActor: LogUser = {
+              id: actorInfo.userId,
+              name: actorInfo.name ?? actorInfo.username ?? String(actorInfo.userId),
+              username: actorInfo.username,
+            };
+            sendLog(bot.api, chat, {
+              action: "Q_AVISO",
+              actor: undoActor,
+              target: {
+                id: updated.userId,
+                name: updated.name ?? updated.username ?? String(updated.userId),
+                username: updated.username,
+              },
+              chatId,
+              chatName: chat.name,
+              chatType: chat.type,
+              warnings: updated.warnings,
+            }).catch(() => {});
+          }
           recordActivity({
             chatId,
             type: "unwarn",
@@ -187,20 +215,6 @@ export function createActivityLogsRouter(bot: Bot<BotContext>): Router {
             return;
           }
           await unsilenceUserViaApi(bot.api, chat, log.targetId, actorInfo);
-          break;
-        }
-
-        case "ban": {
-          if (log.targetId === undefined || log.targetId === null) {
-            res.status(409).json({ error: "no_inverse" });
-            return;
-          }
-          const chat = await chatRepository.findByChatId(chatId);
-          if (!chat) {
-            res.status(404).json({ error: "chat_not_found" });
-            return;
-          }
-          await unbanUserViaApi(bot.api, chat, log.targetId, actorInfo);
           break;
         }
 

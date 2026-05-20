@@ -3,9 +3,10 @@ import { IChat } from "../../types";
 import { userRepository } from "../../db/repositories/userRepository";
 import { sendLog, LogUser } from "./sendLog";
 import { sendWelcome } from "./sendWelcome";
-import { claimRecentWelcome, clearRecentWelcome } from "./welcomeTracker";
+import { claimRecentWelcome, clearRecentWelcome, claimRecentAutoban } from "./welcomeTracker";
 import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
+import { t } from "../../locales/i18n";
 
 export interface JoinUser {
   id: number;
@@ -37,10 +38,11 @@ export interface JoinOutcome {
  *
  * Relying on `chat_member` alone meant neither welcome nor auto-ban fired for
  * the added-user case (and not at all when the bot lacked admin). Running the
- * same logic from both triggers closes that gap. The short-window
- * `claimRecentWelcome` guard makes the overlap safe — a single entry yields one
- * greeting even when both updates arrive — while still greeting the user again
- * on any later re-entry. Re-banning an already-banned user is harmless.
+ * same logic from both triggers closes that gap. Two short-window guards make
+ * the overlap safe — `claimRecentWelcome` for the greeting and
+ * `claimRecentAutoban` for the re-ban — so a single entry yields exactly one
+ * greeting OR one auto-ban (announce + log) even when both updates arrive,
+ * while a genuine later re-entry is handled afresh.
  */
 export async function handleUserJoin(
   api: Api,
@@ -71,27 +73,36 @@ export async function handleUserJoin(
   }
 
   if (chatConfig.features.autoBan && record.wasBanned) {
-    try {
-      await api.banChatMember(chatId, userId);
-      await api.sendMessage(chatId, `🚫 @${username ?? userId} baneado.`);
-    } catch (err) {
-      logger.error({ action: "handleUserJoin_autoReban", userId, chatId, error: String(err) });
+    // A single re-entry arrives on both `chat_member` and `new_chat_members`
+    // (and Telegram may redeliver) — claimRecentAutoban collapses them so the
+    // ban is announced and logged exactly once. The losing trigger still
+    // returns autobanned:true so the ENTRADA_USUARIO log stays suppressed.
+    if (claimRecentAutoban(chatId, userId)) {
+      try {
+        await api.banChatMember(chatId, userId);
+        // Show the ban notice, then delete it right away: a ban announcement
+        // must never linger in the group (the #AUTO_BAN log keeps the record).
+        const sent = await api.sendMessage(chatId, t("ban.autoBanned", { user: username ?? String(userId) }));
+        await api.deleteMessage(chatId, sent.message_id).catch(() => {});
+      } catch (err) {
+        logger.error({ action: "handleUserJoin_autoReban", userId, chatId, error: String(err) });
+      }
+      sendLog(api, chatConfig, {
+        action: "AUTO_BAN",
+        target,
+        chatId,
+        chatName,
+        chatType: chatConfig.type,
+      }).catch(() => {});
+      recordActivity({
+        chatId,
+        type: "autoban",
+        source: "auto",
+        actor: { id: meId, name: "YukiBot" },
+        target: { id: userId, name: target.name, username: target.username },
+        reason: "wasBanned=true al reentrar",
+      });
     }
-    sendLog(api, chatConfig, {
-      action: "AUTO_BAN",
-      target,
-      chatId,
-      chatName,
-      chatType: chatConfig.type,
-    }).catch(() => {});
-    recordActivity({
-      chatId,
-      type: "autoban",
-      source: "auto",
-      actor: { id: meId, name: "YukiBot" },
-      target: { id: userId, name: target.name, username: target.username },
-      reason: "wasBanned=true al reentrar",
-    });
     return { ok: true, autobanned: true };
   }
 

@@ -14,6 +14,10 @@ import { logger } from "../../utils/logger";
  * ENTRADA_USUARIO log here — that
  * stays solely on the `chat_member` path (which carries inviter/invite-link
  * detail) to avoid a duplicate entry.
+ *
+ * It also deletes Telegram's own join service message ("X joined the group",
+ * "Y added X", "X joined via invite link … approved by Z"): once YukiBot posts
+ * its own welcome, that line is pure noise.
  */
 export async function newChatMembersHandler(
   ctx: Filter<BotContext, "message:new_chat_members">
@@ -35,6 +39,11 @@ export async function newChatMembersHandler(
         fullName: [u.first_name, u.last_name].filter(Boolean).join(" "),
       });
     }
+
+    // Drop Telegram's "X joined / was added / joined via invite link" service
+    // message — it is noise next to YukiBot's own welcome. Best-effort: needs
+    // the "Delete messages" admin right, so a failure is silently ignored.
+    await ctx.deleteMessage().catch(() => {});
   } catch (err) {
     logger.error({ action: "newChatMembersHandler", error: String(err) });
   }

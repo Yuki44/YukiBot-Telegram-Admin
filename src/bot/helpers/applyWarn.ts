@@ -69,16 +69,25 @@ export async function applyWarn(
 
     if (user.warnings >= MAX_WARNINGS) {
       let banMsg = t("warnings.autoBan", { user: dn, max: MAX_WARNINGS, reason: esc(reason) });
+      let banFailed = false;
       try {
         await ctx.api.banChatMember(chatId, targetUserId);
       } catch {
+        banFailed = true;
         banMsg += `\n${t("errors.banExecFailed")}`;
       }
       const sent = await ctx.api.sendMessage(chatId, banMsg, {
         parse_mode: "HTML",
         message_thread_id: topicId,
       });
-      warnMsgId = sent.message_id;
+      if (banFailed) {
+        // Enforcement failed — keep the notice visible so an admin sees the
+        // "ban manually" instruction. A clean ban auto-deletes below: a ban
+        // announcement must never linger in the group.
+        warnMsgId = sent.message_id;
+      } else {
+        await ctx.api.deleteMessage(chatId, sent.message_id).catch(() => {});
+      }
 
       // Wait for the AVISO log + its forwarded original message to fully post
       // before the BAN log, so the order is AVISO → "Mensaje original:" →

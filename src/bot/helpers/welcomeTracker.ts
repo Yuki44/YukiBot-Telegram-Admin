@@ -43,7 +43,34 @@ export function clearRecentWelcome(chatId: number, userId: number): void {
   recent.delete(key(chatId, userId));
 }
 
+/**
+ * Separate guard for the auto-ban path. A re-banned user's single re-entry
+ * also arrives on both `chat_member` and `new_chat_members` (plus possible
+ * redelivery), and without this guard each trigger would ban, announce, and
+ * log the same auto-ban — the duplicate "baneado" notice and double #AUTO_BAN
+ * log entry users reported.
+ *
+ * It is deliberately NOT the welcome guard: `chatMemberHandler` clears the
+ * welcome guard the instant it sees the user leave/kick, and the auto-ban
+ * itself produces exactly such a `kicked` update — that would re-open the
+ * window and let the second trigger ban again. A returning banned user is
+ * rejected by Telegram anyway, so a plain time window that nothing clears
+ * early is both sufficient and correct.
+ */
+const recentAutoban = new Set<string>();
+
+/** Returns true for the first auto-ban caller within the TTL window. */
+export function claimRecentAutoban(chatId: number, userId: number): boolean {
+  const k = key(chatId, userId);
+  if (recentAutoban.has(k)) return false;
+  recentAutoban.add(k);
+  const t = setTimeout(() => recentAutoban.delete(k), WELCOME_DEDUP_TTL_MS);
+  t.unref?.();
+  return true;
+}
+
 /** Test-only: wipe all state between cases. */
 export function resetWelcomeTracker(): void {
   recent.clear();
+  recentAutoban.clear();
 }
