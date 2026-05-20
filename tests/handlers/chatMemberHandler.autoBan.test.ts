@@ -28,6 +28,7 @@ import { userRepository } from "../../src/db/repositories/userRepository";
 import { sendWelcome } from "../../src/bot/helpers/sendWelcome";
 import { recordActivity } from "../../src/utils/activityLog";
 import { logger } from "../../src/utils/logger";
+import { resetWelcomeTracker } from "../../src/bot/helpers/welcomeTracker";
 
 const CHAT_ID = -100123;
 
@@ -59,12 +60,16 @@ function makeCtx(
 function freshApi() {
   return {
     banChatMember: vi.fn().mockResolvedValue(true),
-    sendMessage: vi.fn().mockResolvedValue(undefined),
+    sendMessage: vi.fn().mockResolvedValue({ message_id: 1 }),
+    deleteMessage: vi.fn().mockResolvedValue(true),
   };
 }
 
 describe("chatMemberHandler — auto-ban under pressure", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetWelcomeTracker();
+  });
 
   function bannedSet(ids: Set<number>) {
     vi.mocked(userRepository.findOrCreate).mockImplementation(
@@ -85,6 +90,19 @@ describe("chatMemberHandler — auto-ban under pressure", () => {
       expect.objectContaining({ type: "autoban", chatId: CHAT_ID })
     );
     expect(sendWelcome).not.toHaveBeenCalled();
+  });
+
+  it("redelivered join updates for the same banned user → bans + logs exactly once", async () => {
+    bannedSet(new Set([7]));
+    const api = freshApi();
+
+    // Simulates the chat_member + new_chat_members overlap (and any redelivery)
+    // for a single re-entry: the auto-ban must fire only once.
+    await chatMemberHandler(makeCtx(7, api) as never);
+    await chatMemberHandler(makeCtx(7, api) as never);
+
+    expect(api.banChatMember).toHaveBeenCalledTimes(1);
+    expect(recordActivity).toHaveBeenCalledTimes(1);
   });
 
   it("does not ban when the autoBan feature is off, even if wasBanned", async () => {

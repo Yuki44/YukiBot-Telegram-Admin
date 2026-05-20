@@ -11,6 +11,8 @@ See [AGENTS.md](AGENTS.md) for full architecture, entities, and commands.
 - Never delete messages from admins (G4)
 - No hardcoded IDs outside of `.env` or config (G2)
 - `wasBanned` must NEVER revert to `false` (G3)
+- Ban / auto-ban / silence notices are printed then **immediately deleted** — never left visible in the group (G5)
+- Never re-implement what the bot already does — reuse `sendLog`, `recordActivity`, `applyWarn`, `handleUserJoin`, … (G14)
 - All DB calls wrapped in try/catch (G9)
 - All new features default to `false` (G8)
 - New commands must be added to the `adminOnlyCommands` set (G7)

@@ -40,9 +40,11 @@ function makeCtx(
     chat: { id: CHAT_ID, type: "supergroup", title: "Test Group" },
     me: { id: 999 },
     chatConfig,
+    deleteMessage: vi.fn().mockResolvedValue(true),
     api: {
       banChatMember: vi.fn().mockResolvedValue(true),
-      sendMessage: vi.fn().mockResolvedValue(undefined),
+      sendMessage: vi.fn().mockResolvedValue({ message_id: 1 }),
+      deleteMessage: vi.fn().mockResolvedValue(true),
     },
   } as unknown as BotContext;
 }
@@ -71,6 +73,13 @@ describe("newChatMembersHandler", () => {
       { id: 7, username: "neo", name: "Neo" },
       "Test Group"
     );
+  });
+
+  it("deletes Telegram's join service message (noise next to the welcome)", async () => {
+    const ctx = makeCtx([{ id: 7, is_bot: false, first_name: "Neo", username: "neo" }]);
+    await newChatMembersHandler(ctx as never);
+
+    expect((ctx as unknown as { deleteMessage: ReturnType<typeof vi.fn> }).deleteMessage).toHaveBeenCalledTimes(1);
   });
 
   it("skips bots, including YukiBot itself being added", async () => {

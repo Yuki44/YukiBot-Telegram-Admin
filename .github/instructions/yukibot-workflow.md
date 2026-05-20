@@ -89,11 +89,37 @@ await applyWarn(ctx, target.userId, chatId, target.name, target.username, reason
 
 ## sendAndAutoDelete() — Ephemeral Messages
 
-Send + auto-delete after delay. Use for all confirmations in group chats.
+Send + auto-delete after delay. Use for **all** confirmations in group chats.
 
 ```ts
 await sendAndAutoDelete(ctx, "✅ Hecho.", 1000);
 ```
+
+**Ban / auto-ban / silence notices are ephemeral (G5).** They are shown then
+**immediately deleted** — the group must never be left with a lingering
+"baneado" / "silenciado" line. The permanent record is the log channel
+(`sendLog`) + dashboard activity log (`recordActivity`). Only the warn `1/3`
+and `2/3` notices may stay visible. When there is no `ctx` (e.g. inside
+`handleUserJoin`), send via `api.sendMessage` and delete with
+`api.deleteMessage` straight after.
+
+## Reuse, Don't Duplicate (G14)
+
+Before adding any moderation side-effect, check whether the bot already does
+it and call the existing helper instead of writing a parallel implementation:
+
+| Need | Reuse |
+| ---- | ----- |
+| Post to the log channel | `sendLog()` |
+| Record a dashboard activity entry | `recordActivity()` |
+| Apply a warning (1/3 → 3/3 auto-ban) | `applyWarn()` |
+| Greet / auto-ban a joining user | `handleUserJoin()` |
+| Silence flow | `executeSilence()` |
+
+The web panel performs moderation through `src/api/services/userActions.ts`,
+which calls these same helpers — it never re-implements a bot flow. A second
+copy drifts out of sync and produces duplicates (e.g. two #AUTO_BAN log
+entries for one join).
 
 ## silenceUser() / unsilenceUser()
 
