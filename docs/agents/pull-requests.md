@@ -10,13 +10,13 @@
 
 3–4 hyphenated words max. Lowercase.
 
-| Type      | Use when…                     |
-| --------- | ----------------------------- |
-| `feature` | New feature or command        |
-| `bugfix`  | Bug fix                       |
-| `refactor`| Restructuring existing code   |
-| `docs`    | Documentation only            |
-| `chore`   | Tooling, deps, CI, config     |
+| Type       | Use when…                   |
+| ---------- | --------------------------- |
+| `feature`  | New feature or command      |
+| `bugfix`   | Bug fix                     |
+| `refactor` | Restructuring existing code |
+| `docs`     | Documentation only          |
+| `chore`    | Tooling, deps, CI, config   |
 
 Examples: `feature/sync-admins-command`, `bugfix/whitelist-bypass-fix`, `docs/update-agents-md`
 
@@ -27,6 +27,7 @@ TYPE - #PR_NUMBER - Short description of the change
 ```
 
 Examples:
+
 - `Feature - #42 - Add /syncadmins command`
 - `Bugfix - #15 - Fix whitelist bypass on setup`
 
@@ -61,14 +62,48 @@ Every PR must include **Changes** and **How to test** sections:
 - [ ] All DB calls in try/catch (G9)
 - [ ] Errors logged with `action` tags, not sent to group chat (G10)
 - [ ] New user-facing strings live in `src/locales/es.json` (no inlined Spanish)
-- [ ] `npm run lint`, `npm run format:check`, `npm test`, and `npm run build` all succeed (G13)
+- [ ] `npm run lint`, `npm run format:check`, `npm test`, and `npm run build` all succeed locally (G13)
 - [ ] If the SPA changed: `npm run install:web` ran cleanly and the build produced `web/dist`
+- [ ] **Branch is up to date with `main` — no merge conflicts** (see below)
+- [ ] **CI is green on the PR's latest commit on GitHub** (see below)
+
+## Remote Verification (do not merge until both pass)
+
+A green local run is not the same as a green PR. Before requesting / approving merge:
+
+### 1. No merge conflicts with `main`
+
+```bash
+git fetch origin main
+git merge --no-commit --no-ff origin/main   # dry-run; abort with `git merge --abort`
+```
+
+If conflicts surface, resolve them on the branch (rebase or merge — match the branch's
+prior style) and push. The GitHub PR view must show **"This branch has no conflicts
+with the base branch"** before merge.
+
+### 2. CI run on the PR's latest commit succeeded
+
+CI runs against the pushed HEAD, not the local working tree — a passing `npm test`
+locally proves nothing if you forgot to push, or if a Node-version / platform-specific
+failure only shows up in Actions.
+
+```bash
+gh pr checks                       # status of every check on this PR
+gh pr view --json statusCheckRollup # full rollup including in-progress
+```
+
+All required checks must be `SUCCESS` (or skipped — never `FAILURE` / `PENDING`) on
+the latest commit. If a check is flaky, re-run via `gh run rerun <run-id>` rather than
+merging through it.
 
 ## Merge Rules
 
 - All PRs merge into `main` (triggers Railway auto-deploy).
 - Squash merge preferred for clean history.
 - Delete branch after merge.
+- **Never merge a PR with conflicts or red/pending CI** — Railway auto-deploys from
+  `main` and a broken main is a production outage.
 
 ## Safety Rules 🛑
 

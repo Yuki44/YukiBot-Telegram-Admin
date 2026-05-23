@@ -71,8 +71,10 @@ function makeCtx(
       type: "normal",
       logsTo: null,
       features: { autoBan: opts.autoBan ?? false, welcomeMessage: opts.welcomeMessage ?? true },
-      welcome:
-        opts.welcome ?? { message: "Hola @usuario a @nombreGrupo", button: { enabled: false, text: "", url: "" } },
+      welcome: opts.welcome ?? {
+        message: "Hola @usuario a @nombreGrupo",
+        button: { enabled: false, text: "", url: "" },
+      },
     },
     api: {
       banChatMember: vi.fn().mockResolvedValue(true),
@@ -182,6 +184,25 @@ describe("chatMemberHandler — welcome", () => {
       resetWelcomeTracker();
       vi.mocked(userRepository.findByUserAndChat).mockResolvedValue(null as never);
       const ctx = makeCtx({ status, oldStatus: "member" });
+      await chatMemberHandler(ctx as never);
+      expect(sendWelcome).not.toHaveBeenCalled();
+    }
+  });
+
+  it("does NOT welcome on in-chat status changes (e.g. /sil, /elsilav muting a member)", async () => {
+    // restrictChatMember (used by silenceUser) fires a chat_member update with
+    // oldStatus=member, newStatus=restricted. Before the fix, the handler fell
+    // through to the join branch and replayed the welcome every time an admin
+    // silenced a user. Regression: greet only on a real left/kicked → in transition.
+    for (const [oldStatus, status] of [
+      ["member", "restricted"],
+      ["restricted", "member"],
+      ["administrator", "member"], // demotion to plain member
+      ["member", "member"], // redelivery / no-op
+    ]) {
+      vi.clearAllMocks();
+      resetWelcomeTracker();
+      const ctx = makeCtx({ oldStatus, status });
       await chatMemberHandler(ctx as never);
       expect(sendWelcome).not.toHaveBeenCalled();
     }
