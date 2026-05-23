@@ -71,8 +71,10 @@ function makeCtx(
       type: "normal",
       logsTo: null,
       features: { autoBan: opts.autoBan ?? false, welcomeMessage: opts.welcomeMessage ?? true },
-      welcome:
-        opts.welcome ?? { message: "Hola @usuario a @nombreGrupo", button: { enabled: false, text: "", url: "" } },
+      welcome: opts.welcome ?? {
+        message: "Hola @usuario a @nombreGrupo",
+        button: { enabled: false, text: "", url: "" },
+      },
     },
     api: {
       banChatMember: vi.fn().mockResolvedValue(true),
