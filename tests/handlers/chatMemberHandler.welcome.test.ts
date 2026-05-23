@@ -187,6 +187,25 @@ describe("chatMemberHandler — welcome", () => {
     }
   });
 
+  it("does NOT welcome on in-chat status changes (e.g. /sil, /elsilav muting a member)", async () => {
+    // restrictChatMember (used by silenceUser) fires a chat_member update with
+    // oldStatus=member, newStatus=restricted. Before the fix, the handler fell
+    // through to the join branch and replayed the welcome every time an admin
+    // silenced a user. Regression: greet only on a real left/kicked → in transition.
+    for (const [oldStatus, status] of [
+      ["member", "restricted"],
+      ["restricted", "member"],
+      ["administrator", "member"], // demotion to plain member
+      ["member", "member"], // redelivery / no-op
+    ]) {
+      vi.clearAllMocks();
+      resetWelcomeTracker();
+      const ctx = makeCtx({ oldStatus, status });
+      await chatMemberHandler(ctx as never);
+      expect(sendWelcome).not.toHaveBeenCalled();
+    }
+  });
+
   it("falls back to the first name when the user has no username", async () => {
     const ctx = makeCtx({ user: { id: 7, is_bot: false, first_name: "Trinity" } });
     await chatMemberHandler(ctx as never);
