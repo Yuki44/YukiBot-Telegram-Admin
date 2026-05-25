@@ -56,6 +56,30 @@ export function createUsersRouter(bot: Bot<BotContext>): Router {
 
   router.use(authenticate);
 
+  // Cleanup: collapse duplicate (userId, chatId) docs into a single merged record.
+  // Owner-only; merges state (max warnings, union reasons, OR ban flags) and
+  // deletes the loser docs. Safe to run repeatedly.
+  router.post(
+    "/deduplicate",
+    requireChatAdmin({ ownerOnly: true }),
+    async (req: Request, res: Response) => {
+      const chatId = Number(req.params.chatId);
+      try {
+        const result = await userRepository.deduplicateForChat(chatId);
+        logger.info({
+          action: "users.deduplicate",
+          chatId,
+          userId: req.user!.userId,
+          ...result,
+        });
+        res.json(result);
+      } catch (err) {
+        logger.error({ action: "users.deduplicate", error: String(err), chatId });
+        res.status(500).json({ error: "internal_error" });
+      }
+    }
+  );
+
   router.get("/", requireChatAdmin(), async (req: Request, res: Response) => {
     const chatId = Number(req.params.chatId);
     const filterRaw = (req.query.filter as string) ?? "all";

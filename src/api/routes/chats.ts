@@ -9,7 +9,7 @@ import { ActivityLog } from "../../db/models/ActivityLog";
 import { BannedWord } from "../../db/models/BannedWord";
 import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
-import { migrateChatData, setChatActive } from "../../services/chatMigration";
+import { migrateChatData, setChatActive, MigrationOptions } from "../../services/chatMigration";
 import { normalizeHttpUrl } from "../../utils/url";
 import { BotContext, IChat } from "../../types";
 
@@ -363,15 +363,50 @@ export function createChatsRouter(bot: Bot<BotContext>): Router {
     requireChatAdmin({ ownerOnly: true }),
     async (req: Request, res: Response) => {
       const destChatId = Number(req.params.chatId);
-      const sourceChatId = Number((req.body as { sourceChatId?: unknown })?.sourceChatId);
+      const body = (req.body as {
+        sourceChatId?: unknown;
+        selection?: {
+          chatConfig?: unknown;
+          users?: unknown;
+          bannedWords?: unknown;
+          domainAllowances?: unknown;
+          usersMode?: unknown;
+        };
+      }) ?? {};
+      const sourceChatId = Number(body.sourceChatId);
 
       if (!Number.isFinite(sourceChatId) || sourceChatId === destChatId) {
         res.status(400).json({ error: "invalid_source" });
         return;
       }
 
+      let options: MigrationOptions | undefined;
+      if (body.selection) {
+        const sel = body.selection;
+        const chatConfig = sel.chatConfig === true;
+        const users = sel.users === true;
+        const bannedWords = sel.bannedWords === true;
+        const domainAllowances = sel.domainAllowances === true;
+        if (!chatConfig && !users && !bannedWords && !domainAllowances) {
+          res.status(400).json({ error: "nothing_selected" });
+          return;
+        }
+        const usersMode: MigrationOptions["usersMode"] =
+          sel.usersMode === "bansOnly" ? "bansOnly" : "all";
+        options = {
+          chatConfig,
+          users,
+          bannedWords,
+          domainAllowances,
+          usersMode,
+          // Web flow merges with existing dest users (max warnings, union reasons,
+          // OR ban flags) — never decreases existing state, never duplicates rows.
+          userExistingBehavior: "merge",
+        };
+      }
+
       try {
-        const summary = await migrateChatData(sourceChatId, destChatId, req.user!.userId);
+        const summary = await migrateChatData(sourceChatId, destChatId, req.user!.userId, options);
 
         if (summary.logsTo) {
           const actor = req.user!.username ? `@${req.user!.username}` : String(req.user!.userId);

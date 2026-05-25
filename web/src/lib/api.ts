@@ -11,6 +11,8 @@ import type {
   ChatFeatures,
   ChatStats,
   ChatSummary,
+  DeduplicateResult,
+  MigrationSelection,
   MigrationSummary,
   SpamDetection,
   SpamDetectionPermitResult,
@@ -108,8 +110,12 @@ export const api = {
   },
   migration: {
     // chatId is the DESTINATION (this) chat; sourceChatId is the old chat to copy from.
-    run: (chatId: number | string, sourceChatId: number): Promise<MigrationSummary> =>
-      request<MigrationSummary>("POST", `/chats/${chatId}/migrate`, { sourceChatId }),
+    run: (
+      chatId: number | string,
+      sourceChatId: number,
+      selection?: MigrationSelection
+    ): Promise<MigrationSummary> =>
+      request<MigrationSummary>("POST", `/chats/${chatId}/migrate`, { sourceChatId, selection }),
     setSourceActive: (
       chatId: number | string,
       sourceChatId: number,
@@ -165,6 +171,8 @@ export const api = {
       request<void>("POST", `/chats/${chatId}/users/${userId}/pardon`),
     refresh: (chatId: number | string, userId: number): Promise<UserRecord> =>
       request<UserRecord>("POST", `/chats/${chatId}/users/${userId}/refresh`),
+    deduplicate: (chatId: number | string): Promise<DeduplicateResult> =>
+      request<DeduplicateResult>("POST", `/chats/${chatId}/users/deduplicate`),
   },
   whitelist: {
     listLinks: (chatId: number | string): Promise<string[]> =>
