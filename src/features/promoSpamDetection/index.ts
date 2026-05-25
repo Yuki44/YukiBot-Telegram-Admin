@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { InlineKeyboard } from "grammy";
+import { InlineKeyboard, NextFunction } from "grammy";
 import { BotContext } from "../../types";
 import { adminRepository } from "../../db/repositories/adminRepository";
 import { spamPatternRepository, normalizeText } from "../../db/repositories/spamPatternRepository";
@@ -117,29 +117,29 @@ export async function sendSpamLog(
 
 // ── Main handler ─────────────────────────────────────────────────────
 
-export async function promoSpamDetection(ctx: BotContext): Promise<void> {
+export async function promoSpamDetection(ctx: BotContext, next: NextFunction): Promise<void> {
   try {
     const chatConfig = ctx.chatConfig;
-    if (!chatConfig) return;
-    if (!chatConfig.features.promoSpamDetection) return;
-    if (!chatConfig.logsTo) return;
+    if (!chatConfig) return await next();
+    if (!chatConfig.features.promoSpamDetection) return await next();
+    if (!chatConfig.logsTo) return await next();
 
     const msg = ctx.message;
-    if (!msg) return;
+    if (!msg) return await next();
 
     const sender = msg.from;
-    if (!sender || sender.is_bot) return;
+    if (!sender || sender.is_bot) return await next();
 
     // Admin bypass (G4)
-    if (ctx.isAdmin) return;
+    if (ctx.isAdmin) return await next();
 
     // Per-chat user whitelist
     const spamUserWhitelist: number[] = chatConfig.spamUserWhitelist ?? [];
-    if (spamUserWhitelist.includes(sender.id)) return;
+    if (spamUserWhitelist.includes(sender.id)) return await next();
 
     // Double-check admin status in DB
     try {
-      if (await adminRepository.isChatAdmin(sender.id, msg.chat.id)) return;
+      if (await adminRepository.isChatAdmin(sender.id, msg.chat.id)) return await next();
     } catch {
       /* continue */
     }
@@ -186,7 +186,7 @@ export async function promoSpamDetection(ctx: BotContext): Promise<void> {
     ]);
 
     const flagged = linkResult.flagged || patternResult.matched;
-    if (!flagged) return;
+    if (!flagged) return await next();
 
     const detectionReason = linkResult.flagged ? linkResult.reason : patternResult.tag;
 

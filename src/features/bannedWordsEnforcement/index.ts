@@ -1,3 +1,4 @@
+import { NextFunction } from "grammy";
 import { BotContext } from "../../types";
 import { adminRepository } from "../../db/repositories/adminRepository";
 import { applyWarn } from "../../bot/helpers/applyWarn";
@@ -16,41 +17,49 @@ import { findMatchingRule } from "./matcher";
  * matched rule's severity. Skips admins (G4) and users on `spamUserWhitelist`.
  * Gated behind `features.bannedWordsEnforcement` (G8 — defaults to false).
  */
-export async function bannedWordsEnforcement(ctx: BotContext): Promise<void> {
+export async function bannedWordsEnforcement(ctx: BotContext, next: NextFunction): Promise<void> {
   try {
     const chatConfig = ctx.chatConfig;
-    if (!chatConfig) return;
-    if (!chatConfig.features.bannedWordsEnforcement) return;
+    if (!chatConfig) return await next();
+    if (!chatConfig.features.bannedWordsEnforcement) return await next();
 
-    if (ctx.isAdmin) return;
+    if (ctx.isAdmin) return await next();
 
     const msg = ctx.message;
-    if (!msg) return;
+    if (!msg) return await next();
 
     const sender = msg.from;
-    if (!sender || sender.is_bot) return;
+    if (!sender || sender.is_bot) return await next();
 
     const text = msg.text ?? msg.caption ?? "";
-    if (!text) return;
+    if (!text) return await next();
 
     const chatId = msg.chat.id;
     const threadId = msg.message_thread_id;
 
     // Re-check admin status against the DB — same belt-and-braces pattern as promoSpamDetection
     try {
-      if (await adminRepository.isChatAdmin(sender.id, chatId)) return;
+      if (await adminRepository.isChatAdmin(sender.id, chatId)) return await next();
     } catch {
       /* continue */
     }
 
     const spamUserWhitelist: number[] = chatConfig.spamUserWhitelist ?? [];
-    if (spamUserWhitelist.includes(sender.id)) return;
+    if (spamUserWhitelist.includes(sender.id)) return await next();
 
-    const rules = await getActiveRules(chatId);
-    if (rules.length === 0) return;
+    // Wrap the DB read so a transient failure doesn't kill the chain — downstream
+    // spam detection still gets a shot at the message.
+    let rules: Awaited<ReturnType<typeof getActiveRules>>;
+    try {
+      rules = await getActiveRules(chatId);
+    } catch (err) {
+      logger.error({ action: "bannedWordsEnforcement_getActiveRules", chatId, error: String(err) });
+      return await next();
+    }
+    if (rules.length === 0) return await next();
 
     const rule = findMatchingRule(rules, text, threadId);
-    if (!rule) return;
+    if (!rule) return await next();
 
     const senderName = [sender.first_name, sender.last_name].filter(Boolean).join(" ") || "Usuario";
     const senderUsername = sender.username;
@@ -167,6 +176,7 @@ export async function bannedWordsEnforcement(ctx: BotContext): Promise<void> {
       const ok = await silenceUser(ctx, sender.id, chatId);
       if (ok) {
         const muteUntil = new Date(Date.now() + SILENCE_DURATION_S * 1000);
+        // AVISO above already forwards the original (when warn fires); skip here to avoid duplicate Mensaje original
         sendLog(ctx.api, chatConfig, {
           action: "SILENCIO",
           actor: botActor,
@@ -177,7 +187,7 @@ export async function bannedWordsEnforcement(ctx: BotContext): Promise<void> {
           topicId: threadId,
           muteUntil,
           reason,
-          repliedMsg: msg,
+          repliedMsg: ruleActions.warn ? undefined : msg,
         }).catch(() => {});
         recordActivity({
           chatId,
