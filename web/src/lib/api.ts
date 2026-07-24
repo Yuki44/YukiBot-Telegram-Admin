@@ -107,6 +107,15 @@ export const api = {
       request<ChatStats>("GET", `/chats/${chatId}/stats`),
     updateFeatures: (chatId: number | string, partial: Partial<ChatFeatures>): Promise<ChatFeatures> =>
       request<ChatFeatures>("PUT", `/chats/${chatId}/features`, partial),
+    updateNotify: (
+      chatId: number | string,
+      partial: { notifyChatId?: number | null; notifySpam?: boolean }
+    ): Promise<{ notifyChatId: number | null; notifyFlags: { notifySpam: boolean } }> =>
+      request<{ notifyChatId: number | null; notifyFlags: { notifySpam: boolean } }>(
+        "PUT",
+        `/chats/${chatId}/notify`,
+        partial
+      ),
   },
   migration: {
     // chatId is the DESTINATION (this) chat; sourceChatId is the old chat to copy from.

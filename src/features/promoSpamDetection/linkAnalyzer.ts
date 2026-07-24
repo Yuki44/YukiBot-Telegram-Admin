@@ -20,12 +20,62 @@ const SHORTENER_HOSTNAMES = new Set([
   "tiny.cc",
 ]);
 
-function extractHostname(url: string): string | null {
+/**
+ * TLDs that never double as ordinary Spanish/English words (unlike .es/.no/.si/.me/.la/.ke).
+ * A bare, scheme-less "word.word" match is only high-confidence when its TLD is on this list.
+ */
+const CONFIDENT_BARE_TLDS = new Set([
+  "com",
+  "net",
+  "org",
+  "info",
+  "biz",
+  "name",
+  "mobi",
+  "pro",
+  "xyz",
+  "top",
+  "click",
+  "link",
+  "shop",
+  "site",
+  "online",
+  "store",
+  "club",
+  "vip",
+  "win",
+  "pw",
+  "icu",
+  "cyou",
+  "buzz",
+  "cam",
+  "rest",
+  "sbs",
+  "cfd",
+  "monster",
+  "work",
+  "fun",
+  "live",
+  "app",
+  "dev",
+]);
+
+function extractHostname(url: string): { hostname: string; hadWww: boolean } | null {
   try {
-    return new URL(url).hostname.replace(/^www\./, "");
+    const raw = new URL(url).hostname;
+    const hadWww = /^www\./i.test(raw);
+    return { hostname: raw.replace(/^www\./i, ""), hadWww };
   } catch {
     return null;
   }
+}
+
+/** 3+ labels or a confident TLD — rarely produced by a missing-space typo. */
+function isConfidentBareMatch(hostname: string): boolean {
+  const labels = hostname.split(".").filter(Boolean);
+  if (labels.length >= 3) return true;
+  const tld = (labels[labels.length - 1] ?? "").toLowerCase();
+  return CONFIDENT_BARE_TLDS.has(tld);
 }
 
 function isTelegramHostname(hostname: string): boolean {
@@ -84,6 +134,8 @@ function extractUrl(entity: Entity, messageText: string): string {
 export interface LinkAnalysisResult {
   flagged: boolean;
   reason: string;
+  /** "low" = bare unconfirmed-TLD match (likely a missing-space typo) — caller should not auto-punish. */
+  confidence: "high" | "low";
 }
 
 /**
@@ -94,7 +146,8 @@ export interface LinkAnalysisResult {
  *  - Forwarded channel/group messages
  *  - All t.me/ links (channels, groups, invite links, videochats, profiles — all)
  *  - Known URL shortener hostnames
- *  - Any external URL not in linkWhitelist (no exceptions by default)
+ *  - Any external URL not in linkWhitelist — "low" confidence when it's a bare
+ *    two-label match with an unconfirmed TLD (see CONFIDENT_BARE_TLDS)
  *
  * @param entities            Message entities from ctx.message.entities / caption_entities
  * @param messageText         Raw message text (needed to extract 'url' entity values)
@@ -113,7 +166,7 @@ export function analyzeLinks(
 ): LinkAnalysisResult {
   // Forwarded channel/group messages are always spam
   if (isForwardedFromChannel) {
-    return { flagged: true, reason: "mensaje_reenviado_de_canal" };
+    return { flagged: true, reason: "mensaje_reenviado_de_canal", confidence: "high" };
   }
 
   for (const entity of entities) {
@@ -125,22 +178,26 @@ export function analyzeLinks(
     // Ensure the URL has a protocol so new URL() can parse it
     const normalizedUrl = url.startsWith("http") ? url : `https://${url}`;
 
-    const hostname = extractHostname(normalizedUrl);
-    if (!hostname) continue;
+    const extracted = extractHostname(normalizedUrl);
+    if (!extracted) continue;
+    const { hostname, hadWww } = extracted;
 
     if (isTelegramHostname(hostname)) {
       if (isSelfChatLink(normalizedUrl, selfChatId, selfChatUsername)) continue;
-      return { flagged: true, reason: "enlace_de_telegram" };
+      return { flagged: true, reason: "enlace_de_telegram", confidence: "high" };
     }
 
     if (isUrlShortener(hostname)) {
-      return { flagged: true, reason: `acortador_url:${hostname}` };
+      return { flagged: true, reason: `acortador_url:${hostname}`, confidence: "high" };
     }
 
     if (!isWhitelisted(hostname, linkWhitelist)) {
-      return { flagged: true, reason: `enlace_externo:${hostname}` };
+      const hasScheme = /^https?:\/\//i.test(url);
+      const confidence: "high" | "low" =
+        hasScheme || hadWww || isConfidentBareMatch(hostname) ? "high" : "low";
+      return { flagged: true, reason: `enlace_externo:${hostname}`, confidence };
     }
   }
 
-  return { flagged: false, reason: "" };
+  return { flagged: false, reason: "", confidence: "high" };
 }

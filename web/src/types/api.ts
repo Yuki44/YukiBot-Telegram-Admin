@@ -63,6 +63,9 @@ export interface ChatDetail extends ChatSummary {
   forwardsTo?: number | null;
   logsTo?: number | null;
   delegatedOwnerId?: number | null;
+  /** Personal chat that gets pinged on confirmed spam actions (see notifySpamAdmin). */
+  notifyChatId?: number | null;
+  notifyFlags?: { notifySpam: boolean };
 }
 
 export interface ChatStats {

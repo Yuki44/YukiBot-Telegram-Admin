@@ -4,7 +4,7 @@ import { unsilenceUser } from "../helpers/unsilenceUser";
 import { userRepository } from "../../db/repositories/userRepository";
 import { sendAndAutoDelete } from "../helpers/sendAndAutoDelete";
 import { sendLog } from "../helpers/sendLog";
-import { displayName, mention } from "../helpers/html";
+import { displayName, mentionHtml } from "../helpers/html";
 import { parseArgs, buildActor, getChatTitle } from "../helpers/contextHelpers";
 import { AUTO_DELETE_SHORT_MS, MAX_WARNINGS } from "../../config/constants";
 import { t } from "../../locales/i18n";
@@ -52,7 +52,7 @@ export async function qsilavHandler(ctx: BotContext): Promise<void> {
       feedbackPromises.push(
         sendAndAutoDelete(
           ctx,
-          t("silence.unsilenced", { user: mention(target.name, target.username) }),
+          t("silence.unsilenced", { user: mentionHtml(target.userId, target.name, target.username) }),
           AUTO_DELETE_SHORT_MS
         )
       );

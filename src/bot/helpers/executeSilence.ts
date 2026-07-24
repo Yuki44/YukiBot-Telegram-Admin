@@ -11,7 +11,7 @@ import { sendAndAutoDelete } from "./sendAndAutoDelete";
 import { sendLog } from "./sendLog";
 import { applyWarn } from "./applyWarn";
 import { deleteLastMessage } from "./lastMessageTracker";
-import { mention } from "./html";
+import { mentionHtml } from "./html";
 import { parseArgs, buildActor, getChatTitle } from "./contextHelpers";
 import { SILENCE_DURATION_MS, AUTO_DELETE_SHORT_MS } from "../../config/constants";
 import { t } from "../../locales/i18n";
@@ -151,7 +151,7 @@ export async function executeSilence(ctx: BotContext, options: SilenceOptions): 
       }
       await sendAndAutoDelete(
         ctx,
-        t("silence.silenced", { user: mention(target.name, target.username) }),
+        t("silence.silenced", { user: mentionHtml(target.userId, target.name, target.username) }),
         AUTO_DELETE_SHORT_MS
       );
 

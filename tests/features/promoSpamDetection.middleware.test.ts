@@ -98,7 +98,9 @@ describe("promoSpamDetection — middleware chain", () => {
   it("calls next() when feature flag is off", async () => {
     const next = vi.fn().mockResolvedValue(undefined);
     await promoSpamDetection(
-      makeCtx({ chatConfig: makeChatConfig({ features: { promoSpamDetection: false } as IChat["features"] }) }),
+      makeCtx({
+        chatConfig: makeChatConfig({ features: { promoSpamDetection: false } as IChat["features"] }),
+      }),
       next
     );
     expect(next).toHaveBeenCalledOnce();
@@ -122,10 +124,7 @@ describe("promoSpamDetection — middleware chain", () => {
 
   it("calls next() for whitelisted user", async () => {
     const next = vi.fn().mockResolvedValue(undefined);
-    await promoSpamDetection(
-      makeCtx({ chatConfig: makeChatConfig({ spamUserWhitelist: [99] }) }),
-      next
-    );
+    await promoSpamDetection(makeCtx({ chatConfig: makeChatConfig({ spamUserWhitelist: [99] }) }), next);
     expect(next).toHaveBeenCalledOnce();
     expect(applyWarn).not.toHaveBeenCalled();
   });
@@ -140,7 +139,10 @@ describe("promoSpamDetection — middleware chain", () => {
   });
 
   it("does NOT call next() when message is flagged (action path terminates)", async () => {
-    (analyzeLinks as ReturnType<typeof vi.fn>).mockReturnValue({ flagged: true, reason: "enlace_sospechoso" });
+    (analyzeLinks as ReturnType<typeof vi.fn>).mockReturnValue({
+      flagged: true,
+      reason: "enlace_sospechoso",
+    });
     const next = vi.fn().mockResolvedValue(undefined);
     await promoSpamDetection(makeCtx(), next);
     expect(next).not.toHaveBeenCalled();
@@ -176,5 +178,109 @@ describe("promoSpamDetection — middleware chain", () => {
     (ctx.message!.from as { is_bot: boolean }).is_bot = true;
     await promoSpamDetection(ctx, next);
     expect(next).toHaveBeenCalledOnce();
+  });
+
+  describe("low-confidence link matches (missing-space typos)", () => {
+    it("leaves the message/user untouched, logs unconfirmed, and still calls next()", async () => {
+      (analyzeLinks as ReturnType<typeof vi.fn>).mockReturnValue({
+        flagged: true,
+        reason: "enlace_sospechoso",
+        confidence: "low",
+      });
+      const next = vi.fn().mockResolvedValue(undefined);
+      const ctx = makeCtx();
+
+      await promoSpamDetection(ctx, next);
+
+      expect(next).toHaveBeenCalledOnce();
+      expect(ctx.api.deleteMessage).not.toHaveBeenCalled();
+      expect(silenceUser).not.toHaveBeenCalled();
+      expect(applyWarn).not.toHaveBeenCalled();
+      expect(forwardToLog).toHaveBeenCalledTimes(1);
+
+      const sendMessageCall = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(sendMessageCall[1]).toContain("sin confirmar");
+      const keyboard = (sendMessageCall[2] as { reply_markup: { inline_keyboard: { text: string }[][] } })
+        .reply_markup.inline_keyboard;
+      expect(keyboard[0][0].text).toContain("Aplicar sanción");
+    });
+
+    it("a pattern match stays high-confidence even if the link analyzer reports low", async () => {
+      (analyzeLinks as ReturnType<typeof vi.fn>).mockReturnValue({
+        flagged: true,
+        reason: "enlace_sospechoso",
+        confidence: "low",
+      });
+      (matchesSpamPattern as ReturnType<typeof vi.fn>).mockReturnValue({ matched: true, tag: "pattern_x" });
+      const next = vi.fn().mockResolvedValue(undefined);
+
+      await promoSpamDetection(makeCtx(), next);
+
+      expect(next).not.toHaveBeenCalled();
+      expect(silenceUser).toHaveBeenCalled();
+      expect(applyWarn).toHaveBeenCalled();
+    });
+  });
+
+  describe("notifySpamAdmin (personal admin notification)", () => {
+    it("pings notifyChatId when auto-punishing a high-confidence match", async () => {
+      (analyzeLinks as ReturnType<typeof vi.fn>).mockReturnValue({
+        flagged: true,
+        reason: "enlace_sospechoso",
+        confidence: "high",
+      });
+      const next = vi.fn().mockResolvedValue(undefined);
+      const ctx = makeCtx({
+        chatConfig: makeChatConfig({ notifyChatId: -1003617654911, notifyFlags: { notifySpam: true } }),
+      });
+
+      await promoSpamDetection(ctx, next);
+
+      expect(ctx.api.sendMessage).toHaveBeenCalledWith(
+        -1003617654911,
+        expect.stringContaining("He avisado a"),
+        expect.objectContaining({ parse_mode: "HTML" })
+      );
+      // The mention must always be clickable — a tg://user?id= link, not bare text —
+      // even when the sender has no public @username (see makeCtx's default sender).
+      const msg = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls.find(
+        (c) => c[0] === -1003617654911
+      )![1] as string;
+      expect(msg).toContain('<a href="tg://user?id=99">');
+    });
+
+    it("does not ping when notifySpam is off, even with notifyChatId set", async () => {
+      (analyzeLinks as ReturnType<typeof vi.fn>).mockReturnValue({
+        flagged: true,
+        reason: "enlace_sospechoso",
+        confidence: "high",
+      });
+      const next = vi.fn().mockResolvedValue(undefined);
+      const ctx = makeCtx({
+        chatConfig: makeChatConfig({ notifyChatId: -1003617654911, notifyFlags: { notifySpam: false } }),
+      });
+
+      await promoSpamDetection(ctx, next);
+
+      const calls = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+      expect(calls.some((c) => c[0] === -1003617654911)).toBe(false);
+    });
+
+    it("is not invoked for low-confidence (unconfirmed) matches", async () => {
+      (analyzeLinks as ReturnType<typeof vi.fn>).mockReturnValue({
+        flagged: true,
+        reason: "enlace_sospechoso",
+        confidence: "low",
+      });
+      const next = vi.fn().mockResolvedValue(undefined);
+      const ctx = makeCtx({
+        chatConfig: makeChatConfig({ notifyChatId: -1003617654911, notifyFlags: { notifySpam: true } }),
+      });
+
+      await promoSpamDetection(ctx, next);
+
+      const calls = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+      expect(calls.some((c) => c[0] === -1003617654911)).toBe(false);
+    });
   });
 });

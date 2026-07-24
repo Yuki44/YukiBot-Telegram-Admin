@@ -67,6 +67,8 @@ export interface IChat extends Document {
   delegatedOwnerId?: number | null;
   forwardsTo?: number;
   logsTo?: number;
+  /** Personal notification chat for custom Yuki pings (e.g. promoSpamDetection auto-warns). */
+  notifyChatId?: number | null;
   /**
    * Admin-configured greeting sent once per user when `features.welcomeMessage` is on.
    * `message` supports the literal tokens `<@username>` (user mention) and
@@ -92,6 +94,10 @@ export interface IChat extends Document {
     logEntries: boolean;
     logExits: boolean;
     logBannedWords: boolean;
+  };
+  /** Per-notification-type toggles for the `notifyChatId` destination (mirrors `logFlags`). */
+  notifyFlags?: {
+    notifySpam: boolean;
   };
 }
 

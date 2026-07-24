@@ -4,7 +4,7 @@ import { adminRepository } from "../../db/repositories/adminRepository";
 import { userRepository } from "../../db/repositories/userRepository";
 import { sendAndAutoDelete } from "../helpers/sendAndAutoDelete";
 import { sendLog } from "../helpers/sendLog";
-import { mention } from "../helpers/html";
+import { mentionHtml } from "../helpers/html";
 import { parseArgs, buildActor, getChatTitle } from "../helpers/contextHelpers";
 import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
@@ -63,7 +63,11 @@ export async function bnHandler(ctx: BotContext): Promise<void> {
     }
 
     if (success) {
-      await sendAndAutoDelete(ctx, t("ban.banned", { user: mention(target.name, target.username) }), 0);
+      await sendAndAutoDelete(
+        ctx,
+        t("ban.banned", { user: mentionHtml(target.userId, target.name, target.username) }),
+        0
+      );
 
       const actor = buildActor(ctx);
       const repliedMsg = ctx.message?.reply_to_message;

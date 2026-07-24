@@ -65,6 +65,11 @@ export function FeaturesScreen() {
   const [error, setError] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState<FeatureKey | null>(null);
 
+  const [notifySpam, setNotifySpam] = useState(false);
+  const [notifyChatIdInput, setNotifyChatIdInput] = useState("");
+  const [notifySaving, setNotifySaving] = useState(false);
+  const [notifyError, setNotifyError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!chatId) return;
     api.chats
@@ -72,6 +77,8 @@ export function FeaturesScreen() {
       .then((c) => {
         setChat(c);
         setFeatures(c.features);
+        setNotifySpam(!!c.notifyFlags?.notifySpam);
+        setNotifyChatIdInput(c.notifyChatId != null ? String(c.notifyChatId) : "");
       })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) {
@@ -102,6 +109,56 @@ export function FeaturesScreen() {
       }
     } finally {
       setSavingKey(null);
+    }
+  }
+
+  async function toggleNotifySpam() {
+    if (!chatId || notifySaving) return;
+    const next = !notifySpam;
+    const previous = notifySpam;
+    setNotifySpam(next);
+    setNotifySaving(true);
+    setNotifyError(null);
+    try {
+      await api.chats.updateNotify(chatId, { notifySpam: next });
+    } catch (err) {
+      setNotifySpam(previous);
+      setNotifyError(
+        err instanceof ApiError && err.status === 403
+          ? "Solo el propietario puede cambiar esto."
+          : err instanceof Error
+            ? err.message
+            : "error"
+      );
+    } finally {
+      setNotifySaving(false);
+    }
+  }
+
+  async function saveNotifyChatId(e: React.FormEvent) {
+    e.preventDefault();
+    if (!chatId || notifySaving) return;
+    const trimmed = notifyChatIdInput.trim();
+    const parsed = trimmed === "" ? null : Number(trimmed);
+    if (parsed !== null && !Number.isInteger(parsed)) {
+      setNotifyError("El ID de chat debe ser un número entero.");
+      return;
+    }
+    setNotifySaving(true);
+    setNotifyError(null);
+    try {
+      const updated = await api.chats.updateNotify(chatId, { notifyChatId: parsed });
+      setNotifyChatIdInput(updated.notifyChatId != null ? String(updated.notifyChatId) : "");
+    } catch (err) {
+      setNotifyError(
+        err instanceof ApiError && err.status === 403
+          ? "Solo el propietario puede cambiar esto."
+          : err instanceof Error
+            ? err.message
+            : "error"
+      );
+    } finally {
+      setNotifySaving(false);
     }
   }
 
@@ -164,6 +221,67 @@ export function FeaturesScreen() {
                   </div>
                 );
               })
+            )}
+          </div>
+        </div>
+
+        <div className="yk-section">
+          <div className="yk-card">
+            <div className="yk-row" style={{ cursor: "pointer" }} onClick={toggleNotifySpam}>
+              <div className="yk-row-body">
+                <div
+                  className="yk-row-title"
+                  style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}
+                >
+                  Notificación personal de spam
+                  {notifySaving && <span className="yk-chip">Guardando…</span>}
+                </div>
+                <div className="yk-row-sub" style={{ whiteSpace: "normal" }}>
+                  Además del registro en el canal de logs, avisa en un chat aparte cada vez que se
+                  aplica una sanción por spam (automática o confirmada manualmente).
+                </div>
+              </div>
+              <div className={`yk-switch ${notifySpam ? "on" : ""}`} />
+            </div>
+
+            <form
+              onSubmit={saveNotifyChatId}
+              style={{ padding: "12px 16px", display: "flex", gap: 8 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <input
+                className="yk-input"
+                inputMode="numeric"
+                value={notifyChatIdInput}
+                onChange={(e) => setNotifyChatIdInput(e.target.value)}
+                placeholder="ID del chat destino (p. ej. -1001234567890)"
+                disabled={notifySaving}
+                style={{ flex: 1 }}
+              />
+              <button
+                type="submit"
+                className="yk-btn"
+                disabled={notifySaving}
+                style={{ width: "auto", padding: "12px 18px" }}
+              >
+                Guardar
+              </button>
+            </form>
+
+            {notifyError && (
+              <div
+                role="alert"
+                style={{
+                  margin: "0 16px 12px",
+                  background: "var(--danger-bg)",
+                  color: "var(--danger-fg)",
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  fontSize: 12,
+                }}
+              >
+                {notifyError}
+              </div>
             )}
           </div>
         </div>

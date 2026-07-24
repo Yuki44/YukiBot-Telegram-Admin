@@ -168,3 +168,53 @@ describe("analyzeLinks — external URLs (all flagged unless whitelisted)", () =
     expect(r.flagged).toBe(true);
   });
 });
+
+describe("analyzeLinks — confidence tiering (missing-space typo false positives)", () => {
+  it.each([
+    ["listo.no", "Ya estás listo.no?"],
+    ["vale.ke", "Vale.ke esperar tanto"],
+    ["ciudad.bcn", "Ciudad.bcn tiene mucha gente"],
+    ["esto.la", "Si esto.la ves bien te aviso"],
+    ["quien.me", "Quien.me lo explica otra vez"],
+  ])("flags %s as low confidence (bare, unconfirmed TLD)", (url) => {
+    const r = analyzeLinks([urlEntity(url)], url, false, []);
+    expect(r.flagged).toBe(true);
+    expect(r.confidence).toBe("low");
+  });
+
+  it("keeps high confidence for a bare domain with a confident TLD (e.g. .com)", () => {
+    const url = "spam-shop.xyz";
+    const r = analyzeLinks([urlEntity(url)], url, false, []);
+    expect(r.flagged).toBe(true);
+    expect(r.confidence).toBe("high");
+  });
+
+  it("keeps high confidence when the TLD is unconfirmed but a scheme is present", () => {
+    const url = "https://algo.me";
+    const r = analyzeLinks([urlEntity(url)], url, false, []);
+    expect(r.flagged).toBe(true);
+    expect(r.confidence).toBe("high");
+  });
+
+  it("keeps high confidence for a www.-prefixed unconfirmed-TLD domain", () => {
+    const url = "www.algo.me";
+    const r = analyzeLinks([urlEntity(url)], url, false, []);
+    expect(r.flagged).toBe(true);
+    expect(r.confidence).toBe("high");
+  });
+
+  it("keeps high confidence for a 3-label unconfirmed-TLD domain", () => {
+    const url = "sub.algo.me";
+    const r = analyzeLinks([urlEntity(url)], url, false, []);
+    expect(r.flagged).toBe(true);
+    expect(r.confidence).toBe("high");
+  });
+
+  it("Telegram links and shorteners stay high confidence regardless of TLD", () => {
+    const tgUrl = "https://t.me/mychannel";
+    expect(analyzeLinks([urlEntity(tgUrl)], tgUrl, false, []).confidence).toBe("high");
+
+    const shortUrl = "https://bit.ly/3xYz";
+    expect(analyzeLinks([urlEntity(shortUrl)], shortUrl, false, []).confidence).toBe("high");
+  });
+});

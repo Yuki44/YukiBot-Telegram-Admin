@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { esc, displayName, mention } from "../../src/bot/helpers/html";
+import { esc, displayName, mention, mentionHtml } from "../../src/bot/helpers/html";
 
 describe("esc", () => {
   it("escapes ampersands", () => {
@@ -7,9 +7,7 @@ describe("esc", () => {
   });
 
   it("escapes angle brackets", () => {
-    expect(esc("<script>alert('xss')</script>")).toBe(
-      "&lt;script&gt;alert('xss')&lt;/script&gt;"
-    );
+    expect(esc("<script>alert('xss')</script>")).toBe("&lt;script&gt;alert('xss')&lt;/script&gt;");
   });
 
   it("handles multiple special chars in one string", () => {
@@ -35,9 +33,7 @@ describe("displayName", () => {
   });
 
   it("escapes HTML in name and username", () => {
-    expect(displayName("<b>Bold</b>", "u&ser")).toBe(
-      "&lt;b&gt;Bold&lt;/b&gt; (@u&amp;ser)"
-    );
+    expect(displayName("<b>Bold</b>", "u&ser")).toBe("&lt;b&gt;Bold&lt;/b&gt; (@u&amp;ser)");
   });
 });
 
@@ -51,3 +47,12 @@ describe("mention", () => {
   });
 });
 
+describe("mentionHtml", () => {
+  it("wraps @username in a tg://user?id= link when available", () => {
+    expect(mentionHtml(42, "John", "johndoe")).toBe('<a href="tg://user?id=42">@johndoe</a>');
+  });
+
+  it("falls back to the escaped name, still wrapped in a clickable link, without a username", () => {
+    expect(mentionHtml(42, "<b>John</b>")).toBe('<a href="tg://user?id=42">&lt;b&gt;John&lt;/b&gt;</a>');
+  });
+});

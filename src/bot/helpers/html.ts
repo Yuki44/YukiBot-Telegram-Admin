@@ -17,3 +17,13 @@ export function displayName(name: string, username?: string): string {
 export function mention(name: string, username?: string): string {
   return username ? `@${username}` : name;
 }
+
+/**
+ * Always-clickable mention: wraps the display text in a `tg://user?id=` link so it
+ * opens the user's profile even when they have no public @username (plain `@username`
+ * text only auto-links when Telegram can resolve a username — a bare name never does).
+ */
+export function mentionHtml(id: number, name: string, username?: string): string {
+  const label = username ? `@${username}` : esc(name);
+  return `<a href="tg://user?id=${id}">${label}</a>`;
+}
