@@ -422,16 +422,17 @@ export function createChatsRouter(bot: Bot<BotContext>): Router {
     requireChatAdmin({ ownerOnly: true }),
     async (req: Request, res: Response) => {
       const destChatId = Number(req.params.chatId);
-      const body = (req.body as {
-        sourceChatId?: unknown;
-        selection?: {
-          chatConfig?: unknown;
-          users?: unknown;
-          bannedWords?: unknown;
-          domainAllowances?: unknown;
-          usersMode?: unknown;
-        };
-      }) ?? {};
+      const body =
+        (req.body as {
+          sourceChatId?: unknown;
+          selection?: {
+            chatConfig?: unknown;
+            users?: unknown;
+            bannedWords?: unknown;
+            domainAllowances?: unknown;
+            usersMode?: unknown;
+          };
+        }) ?? {};
       const sourceChatId = Number(body.sourceChatId);
 
       if (!Number.isFinite(sourceChatId) || sourceChatId === destChatId) {
@@ -450,8 +451,7 @@ export function createChatsRouter(bot: Bot<BotContext>): Router {
           res.status(400).json({ error: "nothing_selected" });
           return;
         }
-        const usersMode: MigrationOptions["usersMode"] =
-          sel.usersMode === "bansOnly" ? "bansOnly" : "all";
+        const usersMode: MigrationOptions["usersMode"] = sel.usersMode === "bansOnly" ? "bansOnly" : "all";
         options = {
           chatConfig,
           users,

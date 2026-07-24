@@ -145,9 +145,7 @@ export const userRepository = {
         return String(curr._id) > String(best._id) ? curr : best;
       });
 
-      const mergedReasons = Array.from(
-        new Set(docs.flatMap((d) => d.warningReasons ?? []))
-      );
+      const mergedReasons = Array.from(new Set(docs.flatMap((d) => d.warningReasons ?? [])));
       const mergedWarnings = Math.max(...docs.map((d) => d.warnings ?? 0));
       const mergedIsBanned = docs.some((d) => d.isBanned === true);
       const mergedWasBanned = docs.some((d) => d.wasBanned === true) || mergedIsBanned;
@@ -170,9 +168,7 @@ export const userRepository = {
       );
       merged++;
 
-      const toDelete = docs
-        .filter((d) => String(d._id) !== String(winner._id))
-        .map((d) => d._id);
+      const toDelete = docs.filter((d) => String(d._id) !== String(winner._id)).map((d) => d._id);
       if (toDelete.length > 0) {
         const res = await User.deleteMany({ _id: { $in: toDelete } });
         removed += res.deletedCount ?? toDelete.length;
