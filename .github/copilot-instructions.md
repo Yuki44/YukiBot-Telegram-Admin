@@ -47,6 +47,10 @@ All code, variable names, and logs are in **English**. User-facing bot strings i
 - User-facing Spanish strings live in `src/locales/es.json` — do not inline them
 - Bot polling can be skipped locally with `BOT_ENABLED=false` while keeping the API + dashboard up
 
+## Skills
+
+Reusable agent procedures live under `.agents/skills/` (single canonical copy, shared with Claude Code and other agents — no duplication). See [AGENTS.md#skills](../AGENTS.md#skills-agentsskills) for the full index; read a skill's `SKILL.md` when its trigger matches the task at hand.
+
 ## Further Reading
 
 See [AGENTS.md](../AGENTS.md) for full project context and topic file index.

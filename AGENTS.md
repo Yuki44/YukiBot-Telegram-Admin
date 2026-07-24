@@ -195,6 +195,22 @@ Registered in `src/index.ts` and protected by `adminOnlyCommands` (G7). Only the
 | `bannedWordsEnforcement` | Enforce `BannedWord` rules (delete/warn/silence/kick)                                     |
 | `languageDetection`      | Reserved for future AI-powered language detection                                         |
 
+## Skills (`.agents/skills/`)
+
+Reusable agent procedures, installed once as a single canonical copy — **no per-agent duplication**. Regardless of which tool is driving (Claude Code, Copilot CLI, …), read the linked `SKILL.md` when its trigger matches the current task.
+
+| Skill                      | Path                                                | When to use                                                                     |
+| -------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `setup-matt-pocock-skills` | `.agents/skills/setup-matt-pocock-skills/SKILL.md`  | One-time config (issue tracker, triage labels, domain docs) — run before others |
+| `tdd`                      | `.agents/skills/tdd/SKILL.md`                       | Building a feature or fixing a bug test-first (red-green-refactor)              |
+| `code-review`              | `.agents/skills/code-review/SKILL.md`               | Reviewing a diff/PR/branch against coding standards + the originating spec      |
+| `codebase-design`          | `.agents/skills/codebase-design/SKILL.md`           | Designing/improving a module's interface, finding "deepening" opportunities     |
+| `grill-me`                 | `.agents/skills/grill-me/SKILL.md`                  | Interviewing the user to sharpen a plan/design before implementing             |
+| `handoff`                  | `.agents/skills/handoff/SKILL.md`                   | Compacting the current session into a handoff doc for another agent            |
+| `wayfinder`                | `.agents/skills/wayfinder/SKILL.md`                 | Planning multi-session work as a shared map of decision tickets                |
+| `writing-great-skills`     | `.agents/skills/writing-great-skills/SKILL.md`      | Reference for writing/editing skills predictably                               |
+| `caveman`                  | `.agents/skills/caveman/SKILL.md`                   | Terse/compressed responses on request ("caveman mode", `/caveman`)             |
+
 ## Topic Files
 
 | File                                                                                     | Scope                                                   |
