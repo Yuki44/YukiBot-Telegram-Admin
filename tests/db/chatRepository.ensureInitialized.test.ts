@@ -76,8 +76,10 @@ describe("chatRepository.ensureInitialized", () => {
     expect($set.delegatedOwnerId).toBeNull();
     expect($set.forwardsTo).toBeNull();
     expect($set.logsTo).toBeNull();
+    expect($set.notifyChatId).toBeNull();
     for (const k of ALL_FEATURE_KEYS) expect($set[k]).toBe(false);
     for (const k of ALL_LOGFLAG_KEYS) expect($set[k]).toBe(false);
+    expect($set["notifyFlags.notifySpam"]).toBe(false);
     expect($set.welcome).toEqual(WELCOME_DEFAULT);
 
     // Telemetry/photo fields are intentionally left to schema `default: undefined`.
@@ -104,6 +106,7 @@ describe("chatRepository.ensureInitialized", () => {
       delegatedOwnerId: 7,
       forwardsTo: -100,
       logsTo: -200,
+      notifyChatId: -300,
       features: {
         languageDetection: false,
         topicFiltering: true,
@@ -127,6 +130,7 @@ describe("chatRepository.ensureInitialized", () => {
         logExits: false,
         logBannedWords: false,
       },
+      notifyFlags: { notifySpam: true },
     });
 
     await chatRepository.ensureInitialized(1, META);
@@ -149,6 +153,7 @@ describe("chatRepository.ensureInitialized", () => {
       hiddenAdminIds: [],
       delegatedOwnerId: null,
       forwardsTo: null,
+      notifyChatId: -300,
       // logsTo missing → must be backfilled
       features: {
         languageDetection: false,
@@ -171,6 +176,7 @@ describe("chatRepository.ensureInitialized", () => {
         logExits: false,
         logBannedWords: false,
       },
+      notifyFlags: { notifySpam: true },
     });
 
     await chatRepository.ensureInitialized(1, META);
@@ -217,6 +223,8 @@ describe("chatRepository.ensureInitialized", () => {
     const $set = capturedSet();
     for (const k of ALL_FEATURE_KEYS) expect($set[k]).toBe(false);
     for (const k of ALL_LOGFLAG_KEYS) expect($set[k]).toBe(false);
+    expect($set.notifyChatId).toBeNull();
+    expect($set["notifyFlags.notifySpam"]).toBe(false);
     expect($set.welcome).toEqual(WELCOME_DEFAULT);
     // Existing top-level values left untouched.
     expect($set).not.toHaveProperty("whitelist");

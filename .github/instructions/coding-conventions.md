@@ -92,6 +92,15 @@ try {
 - JSDoc on exported functions only when the name + signature aren't self-explanatory.
 - TODO comments must include context: `// TODO(#issue): reason`.
 
+## Testing Philosophy
+
+Quality over quantity. For a given feature or bug fix, prefer **4–5 well-chosen tests** over a large permutation sweep:
+
+- Cover the happy path once.
+- Cover the important edge cases (boundary values, empty/null input, the failure mode the bug report described) — not every combination of inputs.
+- Skip redundant tests that exercise the same code path with trivially different data.
+- If you're tempted to write a 6th+ test for the same unit, ask whether it's testing a genuinely distinct behavior or just padding coverage.
+
 ## CI Requirements
 
 Every code change must pass all CI steps before being considered complete:

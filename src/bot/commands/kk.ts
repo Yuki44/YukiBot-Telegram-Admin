@@ -4,7 +4,7 @@ import { adminRepository } from "../../db/repositories/adminRepository";
 import { sendAndAutoDelete } from "../helpers/sendAndAutoDelete";
 import { sendLog } from "../helpers/sendLog";
 import { markKickInProgress } from "../helpers/kickTracker";
-import { mention } from "../helpers/html";
+import { mentionHtml } from "../helpers/html";
 import { parseArgs, buildActor, getChatTitle } from "../helpers/contextHelpers";
 import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
@@ -58,7 +58,11 @@ export async function kkHandler(ctx: BotContext): Promise<void> {
     }
 
     if (success) {
-      await sendAndAutoDelete(ctx, t("kick.kicked", { user: mention(target.name, target.username) }), 0);
+      await sendAndAutoDelete(
+        ctx,
+        t("kick.kicked", { user: mentionHtml(target.userId, target.name, target.username) }),
+        0
+      );
 
       const actor = buildActor(ctx);
       const repliedMsg = ctx.message?.reply_to_message;

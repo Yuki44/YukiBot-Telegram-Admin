@@ -63,6 +63,9 @@ export interface ChatDetail extends ChatSummary {
   forwardsTo?: number | null;
   logsTo?: number | null;
   delegatedOwnerId?: number | null;
+  /** Personal chat that gets pinged on confirmed spam actions (see notifySpamAdmin). */
+  notifyChatId?: number | null;
+  notifyFlags?: { notifySpam: boolean };
 }
 
 export interface ChatStats {
@@ -77,11 +80,27 @@ export interface MigrationSummary {
   sourceChatId: number;
   destChatId: number;
   users: number;
+  usersMerged: number;
+  usersSkipped: number;
   bannedWords: number;
   bannedWordsSkipped: number;
   domainAllowances: number;
   configCopied: boolean;
   logsTo: number | null;
+}
+
+export interface MigrationSelection {
+  chatConfig: boolean;
+  users: boolean;
+  bannedWords: boolean;
+  domainAllowances: boolean;
+  usersMode: "all" | "bansOnly";
+}
+
+export interface DeduplicateResult {
+  duplicateGroups: number;
+  removed: number;
+  merged: number;
 }
 
 export interface AdminRecord {

@@ -1,4 +1,4 @@
-import { PipelineStage } from "mongoose";
+import { PipelineStage, Types } from "mongoose";
 import { User } from "../models/User";
 import { IUser } from "../../types";
 import { MAX_WARNINGS } from "../../config/constants";
@@ -106,6 +106,84 @@ export const userRepository = {
    */
   async findAllByChatId(chatId: number): Promise<IUser[]> {
     return await User.find({ chatId });
+  },
+
+  /**
+   * Collapse duplicate (userId, chatId) docs into a single record per user. The
+   * unique compound index should prevent dupes from being created, but if the
+   * index is missing on a deployed DB or was created post-hoc, dupes can survive.
+   *
+   * Per duplicate group we MERGE state into the winner (max warnings, union
+   * reasons, OR(isBanned), OR(wasBanned)) and delete the rest. G3 is preserved
+   * since wasBanned can only stay true.
+   */
+  async deduplicateForChat(chatId: number): Promise<{
+    duplicateGroups: number;
+    removed: number;
+    merged: number;
+  }> {
+    const groups = await User.aggregate<{ _id: number; ids: Types.ObjectId[]; count: number }>([
+      { $match: { chatId } },
+      { $group: { _id: "$userId", ids: { $push: "$_id" }, count: { $sum: 1 } } },
+      { $match: { count: { $gt: 1 } } },
+    ]);
+
+    let removed = 0;
+    let merged = 0;
+    for (const g of groups) {
+      const docs = await User.find({ _id: { $in: g.ids } });
+      if (docs.length < 2) continue;
+
+      // Winner: highest warnings, then banned status, then newest ObjectId.
+      const winner = docs.reduce((best, curr) => {
+        const bw = best.warnings ?? 0;
+        const cw = curr.warnings ?? 0;
+        if (cw !== bw) return cw > bw ? curr : best;
+        const bb = best.isBanned === true ? 1 : 0;
+        const cb = curr.isBanned === true ? 1 : 0;
+        if (cb !== bb) return cb > bb ? curr : best;
+        return String(curr._id) > String(best._id) ? curr : best;
+      });
+
+      const mergedReasons = Array.from(new Set(docs.flatMap((d) => d.warningReasons ?? [])));
+      const mergedWarnings = Math.max(...docs.map((d) => d.warnings ?? 0));
+      const mergedIsBanned = docs.some((d) => d.isBanned === true);
+      const mergedWasBanned = docs.some((d) => d.wasBanned === true) || mergedIsBanned;
+      // Prefer a non-empty username/name; fall back to winner's.
+      const mergedUsername = docs.find((d) => d.username)?.username ?? winner.username;
+      const mergedName = docs.find((d) => d.name)?.name ?? winner.name;
+
+      await User.updateOne(
+        { _id: winner._id },
+        {
+          $set: {
+            warnings: mergedWarnings,
+            warningReasons: mergedReasons,
+            isBanned: mergedIsBanned,
+            wasBanned: mergedWasBanned,
+            ...(mergedUsername ? { username: mergedUsername } : {}),
+            ...(mergedName ? { name: mergedName } : {}),
+          },
+        }
+      );
+      merged++;
+
+      const toDelete = docs.filter((d) => String(d._id) !== String(winner._id)).map((d) => d._id);
+      if (toDelete.length > 0) {
+        const res = await User.deleteMany({ _id: { $in: toDelete } });
+        removed += res.deletedCount ?? toDelete.length;
+      }
+    }
+
+    // Best-effort: make sure the unique index is in place so this can't happen
+    // again. syncIndexes is a no-op when indexes already match the schema.
+    try {
+      await User.syncIndexes();
+    } catch {
+      // syncIndexes can fail if dupes still exist (shouldn't here, but be safe).
+    }
+
+    return { duplicateGroups: groups.length, removed, merged };
   },
 
   async upsert(user: Partial<IUser>): Promise<IUser> {

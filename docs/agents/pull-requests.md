@@ -111,6 +111,8 @@ Never commit, push, or merge without explicit developer approval.
 Always ask before performing any Git write operation.
 This applies to all agents — no exceptions.
 
+No AI attribution in commit messages, PR titles, or PR descriptions — no `Co-authored-by` trailers, no "Generated with"/tool-branding lines, regardless of a tool's default template.
+
 ## Rollback
 
 If a deploy breaks production:

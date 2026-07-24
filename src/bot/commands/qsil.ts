@@ -3,7 +3,7 @@ import { resolveTarget } from "../helpers/resolveTarget";
 import { unsilenceUser } from "../helpers/unsilenceUser";
 import { sendAndAutoDelete } from "../helpers/sendAndAutoDelete";
 import { sendLog } from "../helpers/sendLog";
-import { mention } from "../helpers/html";
+import { mentionHtml } from "../helpers/html";
 import { parseArgs, buildActor, getChatTitle } from "../helpers/contextHelpers";
 import { AUTO_DELETE_SHORT_MS } from "../../config/constants";
 import { t } from "../../locales/i18n";
@@ -55,7 +55,7 @@ export async function qsilHandler(ctx: BotContext): Promise<void> {
       }
       await sendAndAutoDelete(
         ctx,
-        t("silence.unsilenced", { user: mention(target.name, target.username) }),
+        t("silence.unsilenced", { user: mentionHtml(target.userId, target.name, target.username) }),
         AUTO_DELETE_SHORT_MS
       );
 
