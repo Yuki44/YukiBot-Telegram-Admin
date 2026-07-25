@@ -157,9 +157,9 @@ export function WelcomeScreen() {
           <div>
             Se envía una sola vez a cada usuario que entra (si la función está activada en
             Funciones). Escribe estos códigos tal cual y el bot los rellena solo:{" "}
-            <code>&lt;@username&gt;</code> = el usuario que entra (su @usuario o, si no
-            tiene, su nombre); <code>&lt;chat name&gt;</code> = el nombre de este grupo. No
-            escribas el usuario ni el nombre del grupo a mano.
+            <code>@usuario</code> = el usuario que entra (su @usuario o, si no tiene, su
+            nombre); <code>@nombreGrupo</code> = el nombre de este grupo. No escribas el
+            usuario ni el nombre del grupo a mano.
           </div>
         </div>
 
@@ -189,7 +189,7 @@ export function WelcomeScreen() {
                     id="wl-msg"
                     className="yk-textarea"
                     rows={5}
-                    placeholder="Bienvenido <@username> a <chat name>…"
+                    placeholder="Bienvenido @usuario a @nombreGrupo…"
                     value={message}
                     onChange={(e) => dirty(setMessage)(e.target.value)}
                     disabled={disabled}

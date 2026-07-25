@@ -101,6 +101,11 @@ const chatSchema = new Schema<IChat>({
     required: false,
     default: null,
   },
+  notifyChatId: {
+    type: Number,
+    required: false,
+    default: null,
+  },
   logFlags: {
     logWarns: { type: Boolean, default: false },
     logSilences: { type: Boolean, default: false },
@@ -113,6 +118,9 @@ const chatSchema = new Schema<IChat>({
     logEntries: { type: Boolean, default: false },
     logExits: { type: Boolean, default: false },
     logBannedWords: { type: Boolean, default: false },
+  },
+  notifyFlags: {
+    notifySpam: { type: Boolean, default: false },
   },
   welcome: {
     message: { type: String, default: "" },

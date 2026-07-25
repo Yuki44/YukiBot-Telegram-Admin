@@ -1,13 +1,16 @@
 import { BotContext } from "../../types";
-import { parseCallbackData } from "../../features/promoSpamDetection";
+import { parseCallbackData, notifySpamAdmin } from "../../features/promoSpamDetection";
 import { userRepository } from "../../db/repositories/userRepository";
 import { chatRepository } from "../../db/repositories/chatRepository";
 import { spamPatternRepository } from "../../db/repositories/spamPatternRepository";
 import { sendLog } from "../helpers/sendLog";
 import { unsilenceUser } from "../helpers/unsilenceUser";
+import { silenceUser } from "../helpers/silenceUser";
+import { applyWarn } from "../helpers/applyWarn";
 import { recordActivity } from "../../utils/activityLog";
 import { t } from "../../locales/i18n";
 import { logger } from "../../utils/logger";
+import { SILENCE_DURATION_MS } from "../../config/constants";
 
 export async function spamCallbackHandler(ctx: BotContext): Promise<void> {
   try {
@@ -19,7 +22,7 @@ export async function spamCallbackHandler(ctx: BotContext): Promise<void> {
     const parsed = parseCallbackData(data);
     if (!parsed) return;
 
-    const { verdict, chatId, userId, warnMsgId } = parsed;
+    const { verdict, chatId, userId, warnMsgId, messageId, topicId } = parsed;
 
     // Helper: append a plain-text line to the original log message keeping all existing entities
     const originalMsg = ctx.callbackQuery.message!;
@@ -144,6 +147,65 @@ export async function spamCallbackHandler(ctx: BotContext): Promise<void> {
       await appendToLog(summary);
 
       logger.info({ action: "spamCallback_revert", chatId, userId, warnMsgId });
+    } else if (verdict === "apply") {
+      // Full parity with the automatic high-confidence flow: delete + silence + warn,
+      // triggered manually because the original detection was low-confidence (bare,
+      // unconfirmed-TLD link) and the message/user were left untouched until now.
+      if (messageId) {
+        try {
+          await ctx.api.deleteMessage(chatId, messageId);
+        } catch {
+          /* message may already be gone */
+        }
+      }
+
+      let groupConfig = null;
+      try {
+        groupConfig = await chatRepository.findByChatId(chatId);
+      } catch {
+        /* silent */
+      }
+
+      let targetUser: { name?: string; username?: string } = {};
+      try {
+        const u = await userRepository.findByUserAndChat(userId, chatId);
+        targetUser = { name: u?.name, username: u?.username };
+      } catch {
+        /* silent */
+      }
+      const targetName = targetUser.name ?? String(userId);
+      const targetUsername = targetUser.username;
+
+      await silenceUser(ctx, userId, chatId);
+
+      const actor = { id: ctx.me.id, name: ctx.me.first_name, username: ctx.me.username };
+      const chatName = groupConfig?.name ?? String(chatId);
+      const muteUntil = new Date(Date.now() + SILENCE_DURATION_MS);
+
+      sendLog(ctx.api, groupConfig, {
+        action: "SILENCIO",
+        actor,
+        target: { id: userId, name: targetName, username: targetUsername },
+        chatId,
+        chatName,
+        chatType: groupConfig?.type ?? "normal",
+        topicId,
+        refMsgId: messageId,
+        muteUntil,
+      }).catch(() => {});
+
+      await applyWarn(ctx, userId, chatId, targetName, targetUsername, "por spam", {
+        chatConfig: groupConfig,
+        chatName,
+        topicId,
+        actor,
+      });
+
+      await notifySpamAdmin(ctx, groupConfig, userId, targetName, targetUsername);
+
+      await appendToLog(t("spam.applied"));
+
+      logger.info({ action: "spamCallback_apply", chatId, userId, reviewerId: ctx.from!.id });
     }
   } catch (err) {
     logger.error({ action: "spamCallbackHandler", error: String(err) });

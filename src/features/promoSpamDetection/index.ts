@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { InlineKeyboard } from "grammy";
+import { InlineKeyboard, NextFunction } from "grammy";
 import { BotContext } from "../../types";
 import { adminRepository } from "../../db/repositories/adminRepository";
 import { spamPatternRepository, normalizeText } from "../../db/repositories/spamPatternRepository";
@@ -8,9 +8,11 @@ import { silenceUser } from "../../bot/helpers/silenceUser";
 import { sendLog } from "../../bot/helpers/sendLog";
 import { forwardToLog } from "../../bot/helpers/forwardToLog";
 import { getChatTitle } from "../../bot/helpers/contextHelpers";
-import { esc } from "../../bot/helpers/html";
+import { esc, mentionHtml } from "../../bot/helpers/html";
 import { logger } from "../../utils/logger";
 import { SILENCE_DURATION_S } from "../../config/constants";
+import { t } from "../../locales/i18n";
+import { IChat } from "../../types";
 import { analyzeLinks } from "./linkAnalyzer";
 import { matchesSpamPattern } from "./patternMatcher";
 
@@ -26,9 +28,24 @@ export function buildRevertCallbackData(chatId: number, userId: number, warnMsgI
   return `spam_rv:${chatId}:${userId}:${warnMsgId}`;
 }
 
-export function parseCallbackData(
-  data: string
-): { verdict: "ok" | "rv"; chatId: number; userId: number; warnMsgId?: number } | null {
+/** spam_apply: "spam_apply:chatId:userId:messageId:topicId" (topicId 0 = none) */
+export function buildApplyCallbackData(
+  chatId: number,
+  userId: number,
+  messageId: number,
+  topicId?: number
+): string {
+  return `spam_apply:${chatId}:${userId}:${messageId}:${topicId ?? 0}`;
+}
+
+export function parseCallbackData(data: string): {
+  verdict: "ok" | "rv" | "apply";
+  chatId: number;
+  userId: number;
+  warnMsgId?: number;
+  messageId?: number;
+  topicId?: number;
+} | null {
   const mok = data.match(/^spam_ok:(-?\d+):(\d+)$/);
   if (mok) {
     return { verdict: "ok", chatId: parseInt(mok[1], 10), userId: parseInt(mok[2], 10) };
@@ -42,7 +59,37 @@ export function parseCallbackData(
       warnMsgId: parseInt(mrv[3], 10),
     };
   }
+  const mapply = data.match(/^spam_apply:(-?\d+):(\d+):(\d+):(\d+)$/);
+  if (mapply) {
+    const topicId = parseInt(mapply[4], 10);
+    return {
+      verdict: "apply",
+      chatId: parseInt(mapply[1], 10),
+      userId: parseInt(mapply[2], 10),
+      messageId: parseInt(mapply[3], 10),
+      topicId: topicId > 0 ? topicId : undefined,
+    };
+  }
   return null;
+}
+
+/** Pings the chat's personal `notifyChatId` (if configured and enabled) about an auto/confirmed spam action. */
+export async function notifySpamAdmin(
+  ctx: BotContext,
+  chatConfig: IChat | null | undefined,
+  targetId: number,
+  targetName: string,
+  targetUsername: string | undefined
+): Promise<void> {
+  if (!chatConfig?.notifyFlags?.notifySpam || !chatConfig.notifyChatId) return;
+  try {
+    const who = mentionHtml(targetId, targetName, targetUsername);
+    await ctx.api.sendMessage(chatConfig.notifyChatId, t("spam.adminNotify", { user: who }), {
+      parse_mode: "HTML",
+    });
+  } catch (err) {
+    logger.error({ action: "notifySpamAdmin", chatId: chatConfig.chatId, error: String(err) });
+  }
 }
 
 // ── Spam log sender ──────────────────────────────────────────────────
@@ -57,7 +104,8 @@ export async function sendSpamLog(
   targetName: string,
   detectionReason: string,
   topicId: number | undefined,
-  warnMsgId: number | undefined
+  warnMsgId: number | undefined,
+  options?: { unconfirmed?: boolean; messageId?: number }
 ): Promise<number | undefined> {
   try {
     const targetLink = `<a href="tg://user?id=${targetId}">${esc(targetName)}</a> [<code>${targetId}</code>]`;
@@ -81,7 +129,8 @@ export async function sendSpamLog(
     ];
     const fecha = `${now.getDate()} de ${meses[now.getMonth()]} ${now.getFullYear()} a las ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
 
-    const lines = [`🚫 #SPAM`, `• A: ${targetLink}`, `• Grupo: ${grupo}`];
+    const header = options?.unconfirmed ? "⚠️ #POSIBLE_SPAM (sin confirmar)" : "🚫 #SPAM";
+    const lines = [header, `• A: ${targetLink}`, `• Grupo: ${grupo}`];
 
     // Always add a navigable back-link — topic link if available, group link otherwise
     if (topicId) {
@@ -98,10 +147,17 @@ export async function sendSpamLog(
 
     const text = lines.join("\n");
 
-    const revertData = buildRevertCallbackData(chatId, targetId, warnMsgId ?? 0);
-    const keyboard = new InlineKeyboard()
-      .text("✅ Correcto", buildCallbackData("ok", chatId, targetId))
-      .text("↩️ Revertir (qsil + qav + borrar aviso)", revertData);
+    const keyboard = options?.unconfirmed
+      ? new InlineKeyboard().text(
+          "🛡️ Aplicar sanción",
+          buildApplyCallbackData(chatId, targetId, options.messageId ?? 0, topicId)
+        )
+      : new InlineKeyboard()
+          .text("✅ Correcto", buildCallbackData("ok", chatId, targetId))
+          .text(
+            "↩️ Revertir (qsil + qav + borrar aviso)",
+            buildRevertCallbackData(chatId, targetId, warnMsgId ?? 0)
+          );
 
     const sent = await ctx.api.sendMessage(logsTo, text, {
       parse_mode: "HTML",
@@ -117,29 +173,29 @@ export async function sendSpamLog(
 
 // ── Main handler ─────────────────────────────────────────────────────
 
-export async function promoSpamDetection(ctx: BotContext): Promise<void> {
+export async function promoSpamDetection(ctx: BotContext, next: NextFunction): Promise<void> {
   try {
     const chatConfig = ctx.chatConfig;
-    if (!chatConfig) return;
-    if (!chatConfig.features.promoSpamDetection) return;
-    if (!chatConfig.logsTo) return;
+    if (!chatConfig) return await next();
+    if (!chatConfig.features.promoSpamDetection) return await next();
+    if (!chatConfig.logsTo) return await next();
 
     const msg = ctx.message;
-    if (!msg) return;
+    if (!msg) return await next();
 
     const sender = msg.from;
-    if (!sender || sender.is_bot) return;
+    if (!sender || sender.is_bot) return await next();
 
     // Admin bypass (G4)
-    if (ctx.isAdmin) return;
+    if (ctx.isAdmin) return await next();
 
     // Per-chat user whitelist
     const spamUserWhitelist: number[] = chatConfig.spamUserWhitelist ?? [];
-    if (spamUserWhitelist.includes(sender.id)) return;
+    if (spamUserWhitelist.includes(sender.id)) return await next();
 
     // Double-check admin status in DB
     try {
-      if (await adminRepository.isChatAdmin(sender.id, msg.chat.id)) return;
+      if (await adminRepository.isChatAdmin(sender.id, msg.chat.id)) return await next();
     } catch {
       /* continue */
     }
@@ -186,9 +242,42 @@ export async function promoSpamDetection(ctx: BotContext): Promise<void> {
     ]);
 
     const flagged = linkResult.flagged || patternResult.matched;
-    if (!flagged) return;
+    if (!flagged) return await next();
 
     const detectionReason = linkResult.flagged ? linkResult.reason : patternResult.tag;
+
+    // Pattern matches are always trusted; a bare unconfirmed-TLD link match is not — a
+    // missing-space typo (e.g. "listo.no") produces the exact same shape as a real link.
+    const isLowConfidence = !patternResult.matched && linkResult.confidence === "low";
+
+    if (isLowConfidence) {
+      // Leave the message and user untouched — just surface it for manual review so a
+      // typo never triggers an auto silence+warn (see linkAnalyzer.ts CONFIDENT_BARE_TLDS).
+      await forwardToLog(ctx.api, logsTo, msg);
+      await sendSpamLog(
+        ctx,
+        logsTo,
+        chatId,
+        chatName,
+        chatConfig.type,
+        sender.id,
+        senderName,
+        detectionReason,
+        topicId,
+        undefined,
+        {
+          unconfirmed: true,
+          messageId: msg.message_id,
+        }
+      );
+      logger.info({
+        action: "promoSpamDetection_lowConfidence",
+        userId: sender.id,
+        chatId,
+        reason: detectionReason,
+      });
+      return await next();
+    }
 
     // ── Delete spam message immediately (file_ids remain valid after deletion) ─
     try {
@@ -235,6 +324,8 @@ export async function promoSpamDetection(ctx: BotContext): Promise<void> {
       topicId,
       actor: { id: ctx.me.id, name: ctx.me.first_name, username: ctx.me.username },
     });
+
+    await notifySpamAdmin(ctx, chatConfig, sender.id, senderName, senderUsername);
 
     // ── Update SPAM log keyboard with real warnMsgId ─────────────────
     if (spamLogMsgId && warnMsgId) {

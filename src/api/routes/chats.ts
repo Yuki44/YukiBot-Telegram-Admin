@@ -9,7 +9,7 @@ import { ActivityLog } from "../../db/models/ActivityLog";
 import { BannedWord } from "../../db/models/BannedWord";
 import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
-import { migrateChatData, setChatActive } from "../../services/chatMigration";
+import { migrateChatData, setChatActive, MigrationOptions } from "../../services/chatMigration";
 import { normalizeHttpUrl } from "../../utils/url";
 import { BotContext, IChat } from "../../types";
 
@@ -354,6 +354,65 @@ export function createChatsRouter(bot: Bot<BotContext>): Router {
     }
   );
 
+  // Personal admin-notification destination for confirmed/auto spam actions
+  // (see notifySpamAdmin in src/features/promoSpamDetection). Owner-only, same
+  // gate as feature toggles and welcome config.
+  router.put(
+    "/:chatId/notify",
+    requireChatAdmin({ ownerOnly: true }),
+    async (req: Request, res: Response) => {
+      const chatId = Number(req.params.chatId);
+      const body = (req.body ?? {}) as Record<string, unknown>;
+
+      const partial: { notifyChatId?: number | null; notifySpam?: boolean } = {};
+
+      if ("notifyChatId" in body) {
+        if (body.notifyChatId === null) {
+          partial.notifyChatId = null;
+        } else if (typeof body.notifyChatId === "number" && Number.isInteger(body.notifyChatId)) {
+          partial.notifyChatId = body.notifyChatId;
+        } else {
+          res.status(400).json({ error: "invalid_notify_chat_id" });
+          return;
+        }
+      }
+
+      if ("notifySpam" in body) {
+        if (typeof body.notifySpam !== "boolean") {
+          res.status(400).json({ error: "invalid_notify_spam" });
+          return;
+        }
+        partial.notifySpam = body.notifySpam;
+      }
+
+      try {
+        const updated = await chatRepository.patchNotify(chatId, partial);
+        if (!updated) {
+          res.status(404).json({ error: "chat_not_found" });
+          return;
+        }
+        logger.info({
+          action: "chats.notify.update",
+          chatId,
+          userId: req.user!.userId,
+          changed: Object.keys(partial),
+        });
+        recordActivity({
+          chatId,
+          type: "feature_toggle",
+          source: "panel",
+          actor: { id: req.user!.userId, name: req.user!.name, username: req.user!.username },
+          targetRef: "notify",
+          reason: "configuración actualizada",
+        });
+        res.json({ notifyChatId: updated.notifyChatId ?? null, notifyFlags: updated.notifyFlags });
+      } catch (err) {
+        logger.error({ action: "chats.notify.update", error: String(err), chatId });
+        res.status(500).json({ error: "internal_error" });
+      }
+    }
+  );
+
   // Copy moderation state from another chat into this (destination) chat.
   // Owner-only on the DESTINATION chat. By design no permission is required on
   // the source chat — the new chat's owner may differ from the old chat's owner
@@ -363,15 +422,50 @@ export function createChatsRouter(bot: Bot<BotContext>): Router {
     requireChatAdmin({ ownerOnly: true }),
     async (req: Request, res: Response) => {
       const destChatId = Number(req.params.chatId);
-      const sourceChatId = Number((req.body as { sourceChatId?: unknown })?.sourceChatId);
+      const body =
+        (req.body as {
+          sourceChatId?: unknown;
+          selection?: {
+            chatConfig?: unknown;
+            users?: unknown;
+            bannedWords?: unknown;
+            domainAllowances?: unknown;
+            usersMode?: unknown;
+          };
+        }) ?? {};
+      const sourceChatId = Number(body.sourceChatId);
 
       if (!Number.isFinite(sourceChatId) || sourceChatId === destChatId) {
         res.status(400).json({ error: "invalid_source" });
         return;
       }
 
+      let options: MigrationOptions | undefined;
+      if (body.selection) {
+        const sel = body.selection;
+        const chatConfig = sel.chatConfig === true;
+        const users = sel.users === true;
+        const bannedWords = sel.bannedWords === true;
+        const domainAllowances = sel.domainAllowances === true;
+        if (!chatConfig && !users && !bannedWords && !domainAllowances) {
+          res.status(400).json({ error: "nothing_selected" });
+          return;
+        }
+        const usersMode: MigrationOptions["usersMode"] = sel.usersMode === "bansOnly" ? "bansOnly" : "all";
+        options = {
+          chatConfig,
+          users,
+          bannedWords,
+          domainAllowances,
+          usersMode,
+          // Web flow merges with existing dest users (max warnings, union reasons,
+          // OR ban flags) — never decreases existing state, never duplicates rows.
+          userExistingBehavior: "merge",
+        };
+      }
+
       try {
-        const summary = await migrateChatData(sourceChatId, destChatId, req.user!.userId);
+        const summary = await migrateChatData(sourceChatId, destChatId, req.user!.userId, options);
 
         if (summary.logsTo) {
           const actor = req.user!.username ? `@${req.user!.username}` : String(req.user!.userId);

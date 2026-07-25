@@ -63,6 +63,9 @@ export interface ChatDetail extends ChatSummary {
   forwardsTo?: number | null;
   logsTo?: number | null;
   delegatedOwnerId?: number | null;
+  /** Personal chat that gets pinged on confirmed spam actions (see notifySpamAdmin). */
+  notifyChatId?: number | null;
+  notifyFlags?: { notifySpam: boolean };
 }
 
 export interface ChatStats {
@@ -77,11 +80,27 @@ export interface MigrationSummary {
   sourceChatId: number;
   destChatId: number;
   users: number;
+  usersMerged: number;
+  usersSkipped: number;
   bannedWords: number;
   bannedWordsSkipped: number;
   domainAllowances: number;
   configCopied: boolean;
   logsTo: number | null;
+}
+
+export interface MigrationSelection {
+  chatConfig: boolean;
+  users: boolean;
+  bannedWords: boolean;
+  domainAllowances: boolean;
+  usersMode: "all" | "bansOnly";
+}
+
+export interface DeduplicateResult {
+  duplicateGroups: number;
+  removed: number;
+  merged: number;
 }
 
 export interface AdminRecord {
@@ -196,12 +215,12 @@ export interface ActivityLogEntry {
 
 /**
  * Types the dashboard's Undo button can reverse. Keep in sync with the server's UNDOABLE
- * set in `src/api/routes/activityLogs.ts`.
+ * set in `src/api/routes/activityLogs.ts`. `ban` is excluded on purpose — un-banning is a
+ * deliberate action on the user's screen, not a one-slide undo in the activity feed.
  */
 const UNDOABLE_TYPES: ReadonlySet<ActivityLogType> = new Set<ActivityLogType>([
   "warn",
   "silence",
-  "ban",
   "feature_toggle",
   "whitelist_add",
   "combo_add",

@@ -43,6 +43,10 @@ Before writing the message:
 
 Propose the commit message to the developer and **wait for explicit approval** before running `git commit`. No exceptions.
 
+## No AI attribution
+
+Never add `Co-authored-by` trailers, "Generated with", or any AI-tool attribution to commit messages — regardless of what any tool's default template suggests. Commits are authored by the developer only.
+
 Example:
 
 > Proposed commit: `fix(admin-only): skip non-yukibot slash commands`

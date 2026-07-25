@@ -15,6 +15,15 @@ export const SILENCE_DURATION_MS = SILENCE_DURATION_S * 1000;
 /** TTL for the kick-in-progress tracker (ms). */
 export const KICK_TRACKER_TTL_MS = 30_000;
 
+/**
+ * Dedup window (ms) for the welcome message. A single join is signalled by up
+ * to two updates almost simultaneously (`chat_member` + `new_chat_members`),
+ * and Telegram may redeliver an unconfirmed update within seconds — this window
+ * collapses those into one greeting. It is intentionally short so that a
+ * genuine later re-entry (the user left and came back) is greeted again.
+ */
+export const WELCOME_DEDUP_TTL_MS = 15_000;
+
 /** TTL for User docs with `leftWithWarningsAt` (seconds — 6 months). */
 export const LEFT_WITH_WARNINGS_TTL_S = 15_552_000;
 

@@ -16,7 +16,7 @@ All code, variable names, and logs are in **English**. User-facing bot strings i
 | G2 | NEVER hardcode chatIds, userIds, or credentials in source code       |
 | G3 | NEVER set `wasBanned` back to `false`                                |
 | G4 | NEVER remove the admin-bypass check — bot must not touch admin msgs  |
-| G5 | NEVER send messages to group chats except: warn, auto-reban, silence (auto-deletes after 1 s) |
+| G5 | NEVER leave a moderation notice visible in a group chat — ban / auto-ban / silence confirmations are sent then **immediately deleted**; only the warn `1/3`·`2/3` notices may persist |
 | G6 | `/setup` MUST always bypass whitelist + adminOnlyCommands middleware  |
 | G7 | All new commands MUST be added to the adminOnlyCommands protected list |
 | G8 | All new features MUST have a feature flag defaulting to `false`      |
@@ -25,6 +25,7 @@ All code, variable names, and logs are in **English**. User-facing bot strings i
 | G11| No `console.log` left in committed code — use the structured `logger` from `src/utils/logger.ts` |
 | G12| Comments must explain **why**, not restate what the code says — omit obvious comments entirely |
 | G13| Every change must pass `tsc --noEmit`, `npm run format:check`, and `npm run lint` before being considered done |
+| G14| NEVER re-implement a capability the bot already has — reuse the shared helper (`sendLog`, `recordActivity`, `applyWarn`, `handleUserJoin`, …). The web panel calls the same helpers via `userActions.ts`; it never duplicates a bot flow |
 
 ## Agent Safety
 
@@ -45,6 +46,10 @@ All code, variable names, and logs are in **English**. User-facing bot strings i
 - Feature flags in `Chat.features` — toggle with `/togglefeature` or the dashboard's Features screen
 - User-facing Spanish strings live in `src/locales/es.json` — do not inline them
 - Bot polling can be skipped locally with `BOT_ENABLED=false` while keeping the API + dashboard up
+
+## Skills
+
+Reusable agent procedures live under `.agents/skills/` (single canonical copy, shared with Claude Code and other agents — no duplication). See [AGENTS.md#skills](../AGENTS.md#skills-agentsskills) for the full index; read a skill's `SKILL.md` when its trigger matches the task at hand.
 
 ## Further Reading
 

@@ -237,11 +237,353 @@ describe("migrateChatData", () => {
       sourceChatId: SRC,
       destChatId: DEST,
       users: 0,
+      usersMerged: 0,
+      usersSkipped: 0,
       bannedWords: 0,
       bannedWordsSkipped: 0,
       domainAllowances: 0,
       configCopied: true,
       logsTo: null,
+    });
+  });
+});
+
+// ── Selective migration (web flow) ───────────────────────────────────
+describe("migrateChatData — selective options", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(userRepository.findAllByChatId).mockResolvedValue([]);
+    vi.mocked(userRepository.findByUserAndChat).mockResolvedValue(null as never);
+    vi.mocked(userDomainAllowanceRepository.findByChatId).mockResolvedValue([]);
+    vi.mocked(bannedWordRepository.findByChatAndScope).mockResolvedValue([]);
+    vi.mocked(chatRepository.upsert).mockResolvedValue({} as never);
+  });
+
+  function mockChats() {
+    vi.mocked(chatRepository.findByChatId)
+      .mockResolvedValueOnce(srcChat() as never)
+      .mockResolvedValueOnce({ chatId: DEST } as never);
+  }
+
+  it("skips chat config when chatConfig=false", async () => {
+    mockChats();
+    const summary = await migrateChatData(SRC, DEST, 7, {
+      chatConfig: false,
+      users: true,
+      bannedWords: true,
+      domainAllowances: true,
+    });
+    expect(chatRepository.upsert).not.toHaveBeenCalled();
+    expect(summary.configCopied).toBe(false);
+  });
+
+  it("skips banned words when bannedWords=false", async () => {
+    mockChats();
+    vi.mocked(bannedWordRepository.findByChatAndScope).mockResolvedValue([
+      { word: "foo", actions: {}, exactMatch: true, scope: "all" },
+    ] as never);
+    const summary = await migrateChatData(SRC, DEST, 7, {
+      chatConfig: true,
+      users: true,
+      bannedWords: false,
+      domainAllowances: true,
+    });
+    expect(bannedWordRepository.findByChatAndScope).not.toHaveBeenCalled();
+    expect(bannedWordRepository.create).not.toHaveBeenCalled();
+    expect(summary.bannedWords).toBe(0);
+  });
+
+  it("skips domain allowances when domainAllowances=false", async () => {
+    mockChats();
+    vi.mocked(userDomainAllowanceRepository.findByChatId).mockResolvedValue([
+      { chatId: SRC, userId: 9, domains: ["a.com"] },
+    ] as never);
+    const summary = await migrateChatData(SRC, DEST, 7, {
+      chatConfig: true,
+      users: true,
+      bannedWords: true,
+      domainAllowances: false,
+    });
+    expect(userDomainAllowanceRepository.findByChatId).not.toHaveBeenCalled();
+    expect(userDomainAllowanceRepository.addDomain).not.toHaveBeenCalled();
+    expect(summary.domainAllowances).toBe(0);
+  });
+
+  it("skips users entirely when users=false", async () => {
+    mockChats();
+    vi.mocked(userRepository.findAllByChatId).mockResolvedValue([
+      { userId: 1, chatId: SRC, warnings: 0, warningReasons: [], isBanned: true, wasBanned: true },
+    ] as never);
+    const summary = await migrateChatData(SRC, DEST, 7, {
+      chatConfig: true,
+      users: false,
+      bannedWords: true,
+      domainAllowances: true,
+    });
+    expect(userRepository.findAllByChatId).not.toHaveBeenCalled();
+    expect(userRepository.upsert).not.toHaveBeenCalled();
+    expect(summary.users).toBe(0);
+    expect(summary.usersSkipped).toBe(0);
+  });
+
+  it("bansOnly: copies only banned users, clears warnings/reasons, sets wasBanned", async () => {
+    mockChats();
+    vi.mocked(userRepository.findAllByChatId).mockResolvedValue([
+      // Warned-but-not-banned → must be dropped in bansOnly.
+      { userId: 1, chatId: SRC, warnings: 2, warningReasons: ["a", "b"], isBanned: false, wasBanned: false },
+      // Currently banned → copy, no warnings carried over.
+      { userId: 2, chatId: SRC, username: "u2", name: "Two", warnings: 3, warningReasons: ["x"], isBanned: true, wasBanned: true },
+      // Previously banned (wasBanned only) → still copied; G3 keeps wasBanned=true.
+      { userId: 3, chatId: SRC, warnings: 0, warningReasons: [], isBanned: false, wasBanned: true },
+      // No moderation state → ignored.
+      { userId: 4, chatId: SRC, warnings: 0, warningReasons: [], isBanned: false, wasBanned: false },
+    ] as never);
+
+    const summary = await migrateChatData(SRC, DEST, 7, {
+      chatConfig: false,
+      users: true,
+      bannedWords: false,
+      domainAllowances: false,
+      usersMode: "bansOnly",
+      userExistingBehavior: "skip",
+    });
+
+    const calls = vi.mocked(userRepository.upsert).mock.calls.map((c) => c[0]);
+    const ids = calls.map((c) => c.userId).sort();
+    expect(ids).toEqual([2, 3]);
+    for (const payload of calls) {
+      expect(payload.chatId).toBe(DEST);
+      expect(payload.warnings).toBe(0);
+      expect(payload.warningReasons).toEqual([]);
+      // G3: anyone reaching this branch should land wasBanned=true.
+      expect(payload.wasBanned).toBe(true);
+    }
+    expect(summary.users).toBe(2);
+    expect(summary.usersSkipped).toBe(0);
+  });
+
+  it("userExistingBehavior=skip: never upserts when a destination user already exists", async () => {
+    mockChats();
+    vi.mocked(userRepository.findAllByChatId).mockResolvedValue([
+      { userId: 10, chatId: SRC, warnings: 0, warningReasons: [], isBanned: true, wasBanned: true },
+      { userId: 11, chatId: SRC, warnings: 0, warningReasons: [], isBanned: true, wasBanned: true },
+    ] as never);
+    // 10 exists in dest (with prior warnings the user wants preserved); 11 does not.
+    vi.mocked(userRepository.findByUserAndChat).mockImplementation(async (uid: number) => {
+      if (uid === 10) return { userId: 10, chatId: DEST, warnings: 2, warningReasons: ["prior"] } as never;
+      return null as never;
+    });
+
+    const summary = await migrateChatData(SRC, DEST, 7, {
+      chatConfig: false,
+      users: true,
+      bannedWords: false,
+      domainAllowances: false,
+      usersMode: "bansOnly",
+      userExistingBehavior: "skip",
+    });
+
+    expect(userRepository.upsert).toHaveBeenCalledTimes(1);
+    const payload = vi.mocked(userRepository.upsert).mock.calls[0][0];
+    expect(payload.userId).toBe(11);
+    expect(summary.users).toBe(1);
+    expect(summary.usersMerged).toBe(0);
+    expect(summary.usersSkipped).toBe(1);
+  });
+
+  it("userExistingBehavior=skip + 'all' mode: existing dest user is skipped, fresh ones upserted", async () => {
+    mockChats();
+    vi.mocked(userRepository.findAllByChatId).mockResolvedValue([
+      { userId: 20, chatId: SRC, warnings: 1, warningReasons: ["spam"], isBanned: false, wasBanned: false },
+      { userId: 21, chatId: SRC, warnings: 2, warningReasons: ["x", "y"], isBanned: false, wasBanned: false },
+    ] as never);
+    vi.mocked(userRepository.findByUserAndChat).mockImplementation(async (uid: number) => {
+      if (uid === 20) return { userId: 20, chatId: DEST, warnings: 1, warningReasons: ["existing"] } as never;
+      return null as never;
+    });
+
+    const summary = await migrateChatData(SRC, DEST, 7, {
+      chatConfig: false,
+      users: true,
+      bannedWords: false,
+      domainAllowances: false,
+      usersMode: "all",
+      userExistingBehavior: "skip",
+    });
+
+    expect(userRepository.upsert).toHaveBeenCalledTimes(1);
+    const payload = vi.mocked(userRepository.upsert).mock.calls[0][0];
+    expect(payload.userId).toBe(21);
+    expect(payload.warnings).toBe(2);
+    expect(payload.warningReasons).toEqual(["x", "y"]);
+    expect(summary.users).toBe(1);
+    expect(summary.usersSkipped).toBe(1);
+  });
+
+  it("userExistingBehavior=merge + 'all' mode: max(warnings), union(reasons), OR(bans)", async () => {
+    mockChats();
+    vi.mocked(userRepository.findAllByChatId).mockResolvedValue([
+      // src: lower warnings, new reason; dest has higher warnings + existing reason + ban.
+      {
+        userId: 40,
+        chatId: SRC,
+        warnings: 2,
+        warningReasons: ["src-reason", "shared"],
+        isBanned: false,
+        wasBanned: false,
+      },
+      // dest absent → fresh create branch.
+      {
+        userId: 41,
+        chatId: SRC,
+        warnings: 1,
+        warningReasons: ["only-src"],
+        isBanned: false,
+        wasBanned: false,
+      },
+    ] as never);
+    vi.mocked(userRepository.findByUserAndChat).mockImplementation(async (uid: number) => {
+      if (uid === 40)
+        return {
+          userId: 40,
+          chatId: DEST,
+          warnings: 5,
+          warningReasons: ["dest-reason", "shared"],
+          isBanned: true,
+          wasBanned: true,
+        } as never;
+      return null as never;
+    });
+
+    const summary = await migrateChatData(SRC, DEST, 7, {
+      chatConfig: false,
+      users: true,
+      bannedWords: false,
+      domainAllowances: false,
+      usersMode: "all",
+      userExistingBehavior: "merge",
+    });
+
+    expect(userRepository.upsert).toHaveBeenCalledTimes(2);
+    const byUser = Object.fromEntries(
+      vi
+        .mocked(userRepository.upsert)
+        .mock.calls.map((c) => [c[0].userId, c[0]])
+    );
+    // Existing dest user → merged.
+    expect(byUser[40].warnings).toBe(5); // max(2, 5)
+    expect((byUser[40].warningReasons ?? []).sort()).toEqual(
+      ["dest-reason", "shared", "src-reason"].sort()
+    );
+    expect(byUser[40].isBanned).toBe(true); // true OR false
+    expect(byUser[40].wasBanned).toBe(true); // G3
+    // Fresh user → straight copy.
+    expect(byUser[41].warnings).toBe(1);
+    expect(byUser[41].warningReasons).toEqual(["only-src"]);
+
+    expect(summary.users).toBe(1);
+    expect(summary.usersMerged).toBe(1);
+    expect(summary.usersSkipped).toBe(0);
+  });
+
+  it("userExistingBehavior=merge + bansOnly: dest warnings preserved, ban flags OR'd", async () => {
+    mockChats();
+    vi.mocked(userRepository.findAllByChatId).mockResolvedValue([
+      {
+        userId: 50,
+        chatId: SRC,
+        warnings: 0,
+        warningReasons: [],
+        isBanned: true,
+        wasBanned: true,
+      },
+    ] as never);
+    // Dest user has prior warnings the user explicitly wants preserved.
+    vi.mocked(userRepository.findByUserAndChat).mockResolvedValue({
+      userId: 50,
+      chatId: DEST,
+      warnings: 2,
+      warningReasons: ["prior"],
+      isBanned: false,
+      wasBanned: false,
+    } as never);
+
+    const summary = await migrateChatData(SRC, DEST, 7, {
+      chatConfig: false,
+      users: true,
+      bannedWords: false,
+      domainAllowances: false,
+      usersMode: "bansOnly",
+      userExistingBehavior: "merge",
+    });
+
+    const payload = vi.mocked(userRepository.upsert).mock.calls[0][0];
+    // Dest warnings/reasons preserved — bansOnly contributes no warning state.
+    expect(payload.warnings).toBe(2);
+    expect(payload.warningReasons).toEqual(["prior"]);
+    // Ban flags OR'd in.
+    expect(payload.isBanned).toBe(true);
+    expect(payload.wasBanned).toBe(true);
+    expect(summary.usersMerged).toBe(1);
+    expect(summary.users).toBe(0);
+  });
+
+  it("back-compat: omitting options preserves full-copy behavior (bot command path)", async () => {
+    mockChats();
+    vi.mocked(userRepository.findAllByChatId).mockResolvedValue([
+      { userId: 30, chatId: SRC, warnings: 1, warningReasons: ["spam"], isBanned: false, wasBanned: false },
+    ] as never);
+    vi.mocked(bannedWordRepository.findByChatAndScope).mockResolvedValue([
+      { word: "foo", actions: { warn: true }, exactMatch: true, scope: "all" },
+    ] as never);
+    vi.mocked(userDomainAllowanceRepository.findByChatId).mockResolvedValue([
+      { chatId: SRC, userId: 30, domains: ["a.com"] },
+    ] as never);
+    // Dest already has the user — without skipExistingUsers, the legacy path still upserts.
+    vi.mocked(userRepository.findByUserAndChat).mockResolvedValue({
+      userId: 30,
+      chatId: DEST,
+      warnings: 5,
+      isBanned: true,
+      wasBanned: true,
+    } as never);
+
+    const summary = await migrateChatData(SRC, DEST, 7);
+
+    expect(chatRepository.upsert).toHaveBeenCalledTimes(1);
+    expect(userRepository.upsert).toHaveBeenCalledTimes(1);
+    expect(bannedWordRepository.create).toHaveBeenCalledTimes(1);
+    expect(userDomainAllowanceRepository.addDomain).toHaveBeenCalledTimes(1);
+    expect(summary.usersSkipped).toBe(0);
+    // G3 still respected in the legacy overwrite path.
+    expect(vi.mocked(userRepository.upsert).mock.calls[0][0].wasBanned).toBe(true);
+  });
+
+  it("rejects when nothing is selected? — service trusts caller; route layer enforces it", async () => {
+    // Caller is expected to validate "at least one entity"; the service itself simply no-ops
+    // each disabled phase. This test pins that contract so refactors don't introduce a throw.
+    mockChats();
+    const summary = await migrateChatData(SRC, DEST, 7, {
+      chatConfig: false,
+      users: false,
+      bannedWords: false,
+      domainAllowances: false,
+    });
+    expect(chatRepository.upsert).not.toHaveBeenCalled();
+    expect(userRepository.upsert).not.toHaveBeenCalled();
+    expect(bannedWordRepository.create).not.toHaveBeenCalled();
+    expect(userDomainAllowanceRepository.addDomain).not.toHaveBeenCalled();
+    expect(summary).toEqual({
+      sourceChatId: SRC,
+      destChatId: DEST,
+      users: 0,
+      usersMerged: 0,
+      usersSkipped: 0,
+      bannedWords: 0,
+      bannedWordsSkipped: 0,
+      domainAllowances: 0,
+      configCopied: false,
+      logsTo: -9009,
     });
   });
 });

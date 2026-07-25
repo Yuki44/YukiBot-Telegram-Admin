@@ -53,7 +53,27 @@
       "Bash(Get-ChildItem -Path . -Depth 1)",
       "Bash(Select-Object Name, FullName)",
       "Bash(npm test *)",
-      "Bash(npx *)"
+      "Bash(npx *)",
+      "Bash(git fetch *)",
+      "Bash(gh run *)",
+      "Bash(git log *)",
+      "Bash(git stash *)",
+      "Bash(Get-ChildItem *)",
+      "Read(//c/Users/dariu/Desktop/**)",
+      "Read(//c/Users/dariu/OneDrive/**)",
+      "Bash(xargs grep -l \"ActivityLog\\\\|activity.*log\")",
+      "Bash(echo \"ESLINT_EXIT=$?\")",
+      "Bash(echo \"PRETTIER_EXIT=$?\")",
+      "Bash(Select-Object -First 50)",
+      "Bash(Format-Table -Property FullName)",
+      "Bash(npm --prefix web run lint)",
+      "Bash(git rm *)",
+      "Bash(git commit *)",
+      "Bash(node *)",
+      "Bash(git rev-list *)",
+      "Bash(Select-Object -First 20 FullName)",
+      "Bash(Select-Object -First 20)",
+      "Bash(Format-Table FullName)"
     ]
   }
 }

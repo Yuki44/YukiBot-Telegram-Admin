@@ -3,131 +3,115 @@ import { BotContext } from "../../types";
 import { userRepository } from "../../db/repositories/userRepository";
 import { adminRepository } from "../../db/repositories/adminRepository";
 import { sendLog, LogUser } from "../helpers/sendLog";
-import { sendWelcome } from "../helpers/sendWelcome";
+import { handleUserJoin } from "../helpers/handleJoin";
+import { clearRecentWelcome } from "../helpers/welcomeTracker";
 import { isKickInProgress, clearKick } from "../helpers/kickTracker";
 import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
 
+type TgUserLike = { id: number; first_name: string; last_name?: string; username?: string };
+
+/** Convert a Telegram User-shaped object to the shared LogUser shape. */
+function toLogUser(u: TgUserLike): LogUser {
+  return {
+    id: u.id,
+    name: [u.first_name, u.last_name].filter(Boolean).join(" "),
+    username: u.username,
+  };
+}
+
+/** `.catch` handler factory — keeps fire-and-forget DB calls one-liners (G9). */
+const logErr = (action: string, userId: number, chatId: number) => (err: unknown) =>
+  logger.error({ action, userId, chatId, error: String(err) });
+
 export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">): Promise<void> {
   try {
-    const { old_chat_member, new_chat_member } = ctx.chatMember;
-    const { status, user } = new_chat_member;
-    const oldStatus = old_chat_member.status;
-
-    if (user.is_bot) return;
     if (!ctx.chatConfig) return;
+    const { old_chat_member: oldM, new_chat_member: newM, from } = ctx.chatMember;
+    if (newM.user.is_bot) return;
 
-    const userId = user.id;
-    const username = user.username;
-    const name = user.first_name;
-    const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ");
+    const userId = newM.user.id;
+    const username = newM.user.username;
+    const firstName = newM.user.first_name; // welcome-address fallback
     const chatId = ctx.chat.id;
     const chatName = ctx.chat.title ?? "Unknown";
+    const target = toLogUser(newM.user);
 
-    const target: LogUser = { id: userId, name: fullName, username };
-
-    // --- Admin demotion ---
-    const wasAdmin = oldStatus === "administrator" || oldStatus === "creator";
-    const isAdminNow = status === "administrator" || status === "creator";
+    // --- Admin demotion / promotion ---
+    const wasAdmin = oldM.status === "administrator" || oldM.status === "creator";
+    const isAdminNow = newM.status === "administrator" || newM.status === "creator";
 
     if (wasAdmin && !isAdminNow) {
-      adminRepository
-        .remove(userId, chatId)
-        .catch((err) =>
-          logger.error({ action: "chatMember_adminRemove", userId, chatId, error: String(err) })
-        );
+      adminRepository.remove(userId, chatId).catch(logErr("chatMember_adminRemove", userId, chatId));
     }
 
-    // --- Admin promotion ---
     if (isAdminNow) {
       adminRepository
         .upsert({
           userId,
           username: username || "",
-          name: fullName || "Unknown",
+          name: target.name || "Unknown",
           chatId,
           chatName,
-          role: status === "creator" ? "owner" : "admin",
+          role: newM.status === "creator" ? "owner" : "admin",
         })
-        .catch((err) =>
-          logger.error({ action: "chatMember_adminUpsert", userId, chatId, error: String(err) })
-        );
+        .catch(logErr("chatMember_adminUpsert", userId, chatId));
 
       userRepository
-        .findOrCreate(userId, chatId, username, name)
-        .catch((err) =>
-          logger.error({ action: "chatMember_userUpsert", userId, chatId, error: String(err) })
-        );
+        .findOrCreate(userId, chatId, username, firstName)
+        .catch(logErr("chatMember_userUpsert", userId, chatId));
+
       void userRepository.syncIdentityAcrossChats(userId, {
-        name: fullName || undefined,
+        name: target.name || undefined,
         username: username ?? null,
       });
       return;
     }
 
     // --- Banned / Kicked ---
-    if (status === "kicked") {
+    // Telegram's "kicked" covers both a permanent ban (`until_date === 0`) and a
+    // temporary one that auto-expires (`until_date > 0`). We diverge on whether
+    // to persist `wasBanned`, but the log+activity payload to mirror an external
+    // admin's action is the same shape — only the action name changes.
+    if (newM.status === "kicked") {
+      clearRecentWelcome(chatId, userId); // re-entry should greet again
       if (isKickInProgress(chatId, userId)) return;
 
-      const from = ctx.chatMember.from;
-      const untilDate: number = (new_chat_member as { until_date?: number }).until_date ?? 0;
+      const untilDate = (newM as { until_date?: number }).until_date ?? 0;
+      const isPermanent = untilDate === 0;
 
-      if (untilDate > 0) {
-        if (from && from.id !== ctx.me.id) {
-          const actor: LogUser = {
-            id: from.id,
-            name: [from.first_name, from.last_name].filter(Boolean).join(" "),
-            username: from.username,
-          };
-          sendLog(ctx.api, ctx.chatConfig, {
-            action: "KICK",
-            actor,
-            target,
+      if (isPermanent) {
+        try {
+          await userRepository.upsert({
+            userId,
             chatId,
-            chatName,
-            chatType: ctx.chatConfig.type,
-          }).catch(() => {});
-          // Mirror into the queryable ActivityLog so the dashboard Registro reflects
-          // kicks done by other admins/bots too — not only YukiBot's own /kk. The
-          // `from !== me` guard means YukiBot command paths (which set from=bot, plus
-          // the isKickInProgress short-circuit) never reach here, so no double entry.
-          recordActivity({
-            chatId,
-            type: "kick",
-            source: "bot",
-            actor,
-            target,
+            username,
+            name: firstName,
+            isBanned: true,
+            wasBanned: true,
           });
+        } catch (err) {
+          logger.error({ action: "chatMember_banSync", userId, chatId, error: String(err) });
         }
-        return;
       }
 
-      try {
-        await userRepository.upsert({ userId, chatId, username, name, isBanned: true, wasBanned: true });
-      } catch (err) {
-        logger.error({ action: "chatMember_banSync", userId, chatId, error: String(err) });
-      }
-
+      // Mirror moderation done by *other* admins/bots into the log channel and
+      // the queryable ActivityLog. YukiBot's own /bn, /kk, and 3-strike autoban
+      // all set from=bot (and isKickInProgress short-circuits the kick path),
+      // so we never double-log.
       if (from && from.id !== ctx.me.id) {
-        const actor: LogUser = {
-          id: from.id,
-          name: [from.first_name, from.last_name].filter(Boolean).join(" "),
-          username: from.username,
-        };
+        const actor = toLogUser(from);
         sendLog(ctx.api, ctx.chatConfig, {
-          action: "BAN",
+          action: isPermanent ? "BAN" : "KICK",
           actor,
           target,
           chatId,
           chatName,
           chatType: ctx.chatConfig.type,
         }).catch(() => {});
-        // Mirror into the queryable ActivityLog so the Registro shows bans done by
-        // other admins/bots too. YukiBot's own /bn and 3-strike autoban set
-        // from=bot, so they're excluded here and recorded by their own paths.
         recordActivity({
           chatId,
-          type: "ban",
+          type: isPermanent ? "ban" : "kick",
           source: "bot",
           actor,
           target,
@@ -137,36 +121,22 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
     }
 
     // --- Left ---
-    if (status === "left") {
-      if (oldStatus === "kicked") {
+    if (newM.status === "left") {
+      clearRecentWelcome(chatId, userId); // re-entry should greet again
+      if (oldM.status === "kicked") {
         clearKick(chatId, userId);
         return;
       }
 
-      let existingUser;
+      let existing;
       try {
-        existingUser = await userRepository.findByUserAndChat(userId, chatId);
+        existing = await userRepository.findByUserAndChat(userId, chatId);
       } catch {
-        /* silent */
+        /* silent — the kicked branch already finalised this case if relevant */
       }
-
-      if (existingUser?.wasBanned) return;
-
-      if ((existingUser?.warnings ?? 0) > 0) {
-        userRepository
-          .upsert({ userId, chatId, leftWithWarningsAt: new Date() })
-          .catch((err) =>
-            logger.error({ action: "chatMember_leftStamp", userId, chatId, error: String(err) })
-          );
-        sendLog(ctx.api, ctx.chatConfig, {
-          action: "SALIDA_USUARIO",
-          target,
-          chatId,
-          chatName,
-          chatType: ctx.chatConfig.type,
-        }).catch(() => {});
-        return;
-      }
+      // A banned user's exit was already handled in the kicked branch; ignore
+      // the follow-up "left" service update so we don't double-log.
+      if (existing?.wasBanned) return;
 
       sendLog(ctx.api, ctx.chatConfig, {
         action: "SALIDA_USUARIO",
@@ -175,116 +145,55 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
         chatName,
         chatType: ctx.chatConfig.type,
       }).catch(() => {});
-      userRepository
-        .remove(userId, chatId)
-        .catch((err) =>
-          logger.error({ action: "chatMember_userRemove", userId, chatId, error: String(err) })
-        );
+
+      // Preserve warnings across exits — a re-entry stamps them as returning
+      // warned. Otherwise drop the User row outright.
+      if ((existing?.warnings ?? 0) > 0) {
+        userRepository
+          .upsert({ userId, chatId, leftWithWarningsAt: new Date() })
+          .catch(logErr("chatMember_leftStamp", userId, chatId));
+      } else {
+        userRepository.remove(userId, chatId).catch(logErr("chatMember_userRemove", userId, chatId));
+      }
       return;
     }
 
     // --- Joined ---
-    let record;
-    try {
-      record = await userRepository.findOrCreate(userId, chatId, username, name);
-    } catch (err) {
-      logger.error({ action: "chatMember_findOrCreate", userId, chatId, error: String(err) });
-      return;
-    }
+    // Only an actual out → in transition is a join. Telegram fires `chat_member`
+    // for every status change, including ones that happen entirely inside the
+    // chat (member ↔ restricted from /sil, /elsilav, etc., or an admin being
+    // demoted to plain member). Without this gate those would fall through and
+    // replay the welcome on every mute.
+    const wasOut = oldM.status === "left" || oldM.status === "kicked";
+    if (!wasOut) return;
 
-    if (record.leftWithWarningsAt && !record.wasBanned) {
-      userRepository
-        .clearLeftDate(userId, chatId)
-        .catch((err) => logger.error({ action: "chatMember_clearLeft", userId, chatId, error: String(err) }));
-    }
+    // handleUserJoin is shared with newChatMembersHandler: a re-banned user is
+    // banned (autoBan), otherwise greeted exactly once. Return early on
+    // auto-ban (no ENTRADA log for a re-banned user) and on findOrCreate
+    // failure (already logged inside the helper).
+    const outcome = await handleUserJoin(ctx.api, ctx.chatConfig, ctx.me.id, chatId, chatName, {
+      id: userId,
+      username,
+      name: firstName,
+      fullName: target.name,
+    });
+    if (!outcome.ok || outcome.autobanned) return;
 
-    if (ctx.chatConfig.features.autoBan && record.wasBanned) {
-      try {
-        await ctx.api.banChatMember(chatId, userId);
-        await ctx.api.sendMessage(chatId, `🚫 @${username ?? userId} baneado.`);
-      } catch (err) {
-        logger.error({ action: "chatMember_autoReban", userId, chatId, error: String(err) });
-      }
-      sendLog(ctx.api, ctx.chatConfig, {
-        action: "AUTO_BAN",
-        target,
-        chatId,
-        chatName,
-        chatType: ctx.chatConfig.type,
-      }).catch(() => {});
-      recordActivity({
-        chatId,
-        type: "autoban",
-        source: "auto",
-        actor: { id: ctx.me.id, name: "YukiBot" },
-        target: { id: userId, name: target.name, username: target.username },
-        reason: "wasBanned=true al reentrar",
-      });
-      return;
-    }
+    const actor = from && from.id !== userId ? toLogUser(from) : undefined;
+    const inviteLink = (ctx.chatMember as unknown as Record<string, unknown>).invite_link as
+      | { creator?: TgUserLike }
+      | undefined;
+    const inviter = inviteLink?.creator ? toLogUser(inviteLink.creator) : undefined;
 
-    // --- Welcome message ---
-    // Runs only after the auto-ban block's `return` above, so a re-banned user
-    // is banned, not welcomed. claimWelcome is an atomic per-user guard: under
-    // 200 concurrent joins (or Telegram update redelivery) exactly one caller
-    // wins and sends. Skip entirely when nothing is configured so a later
-    // configured join can still welcome. On send failure we release the claim
-    // so a future join retries (a transient 429 must not permanently suppress
-    // a user's welcome).
-    const welcome = ctx.chatConfig.welcome;
-    if (ctx.chatConfig.features.welcomeMessage && welcome && welcome.message.trim().length > 0) {
-      try {
-        const claimed = await userRepository.claimWelcome(userId, chatId);
-        if (claimed) {
-          const ok = await sendWelcome(
-            ctx.api,
-            chatId,
-            welcome,
-            { id: userId, username, name: name || fullName || String(userId) },
-            chatName
-          );
-          if (!ok) await userRepository.releaseWelcome(userId, chatId);
-        }
-      } catch (err) {
-        logger.error({ action: "chatMember_welcome", userId, chatId, error: String(err) });
-      }
-    }
-
-    const wasOut = oldStatus === "left" || oldStatus === "kicked";
-    if (wasOut) {
-      const from = ctx.chatMember.from;
-      const actor: LogUser | undefined =
-        from && from.id !== userId
-          ? {
-              id: from.id,
-              name: [from.first_name, from.last_name].filter(Boolean).join(" "),
-              username: from.username,
-            }
-          : undefined;
-
-      let inviter: LogUser | undefined;
-      const inviteLink = (ctx.chatMember as unknown as Record<string, unknown>).invite_link as
-        | { creator?: { id: number; first_name: string; last_name?: string; username?: string } }
-        | undefined;
-      if (inviteLink?.creator) {
-        const c = inviteLink.creator;
-        inviter = {
-          id: c.id,
-          name: [c.first_name, c.last_name].filter(Boolean).join(" "),
-          username: c.username,
-        };
-      }
-
-      sendLog(ctx.api, ctx.chatConfig, {
-        action: "ENTRADA_USUARIO",
-        actor,
-        target,
-        chatId,
-        chatName,
-        chatType: ctx.chatConfig.type,
-        inviter,
-      }).catch(() => {});
-    }
+    sendLog(ctx.api, ctx.chatConfig, {
+      action: "ENTRADA_USUARIO",
+      actor,
+      target,
+      chatId,
+      chatName,
+      chatType: ctx.chatConfig.type,
+      inviter,
+    }).catch(() => {});
   } catch (err) {
     logger.error({ action: "chatMemberHandler", error: String(err) });
   }

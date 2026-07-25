@@ -59,6 +59,7 @@ export const chatRepository = {
       delegatedOwnerId: null,
       forwardsTo: null,
       logsTo: null,
+      notifyChatId: null,
       welcome: { message: "", button: { enabled: false, text: "", url: "" } },
     };
     for (const [key, def] of Object.entries(topLevelDefaults)) {
@@ -98,6 +99,12 @@ export const chatRepository = {
       if (existing == null || existingLogFlags?.[k] === undefined) $set[`logFlags.${k}`] = false;
     }
 
+    const notifyFlagKeys = ["notifySpam"] as const;
+    const existingNotifyFlags = existing?.notifyFlags as Record<string, unknown> | undefined;
+    for (const k of notifyFlagKeys) {
+      if (existing == null || existingNotifyFlags?.[k] === undefined) $set[`notifyFlags.${k}`] = false;
+    }
+
     return await Chat.findOneAndUpdate({ chatId }, { $set }, { upsert: true, returnDocument: "after" });
   },
 
@@ -111,6 +118,20 @@ export const chatRepository = {
     for (const [k, v] of Object.entries(partial)) {
       if (typeof v === "boolean") $set[`features.${k}`] = v;
     }
+    if (Object.keys($set).length === 0) {
+      return await Chat.findOne({ chatId });
+    }
+    return await Chat.findOneAndUpdate({ chatId }, { $set }, { returnDocument: "after" });
+  },
+
+  /** Partial update for the personal notification destination — only changes the keys provided. */
+  async patchNotify(
+    chatId: number,
+    partial: { notifyChatId?: number | null; notifySpam?: boolean }
+  ): Promise<IChat | null> {
+    const $set: Record<string, unknown> = {};
+    if ("notifyChatId" in partial) $set.notifyChatId = partial.notifyChatId;
+    if (typeof partial.notifySpam === "boolean") $set["notifyFlags.notifySpam"] = partial.notifySpam;
     if (Object.keys($set).length === 0) {
       return await Chat.findOne({ chatId });
     }

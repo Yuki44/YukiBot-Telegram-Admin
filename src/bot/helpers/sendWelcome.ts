@@ -1,6 +1,6 @@
 import { Api } from "grammy";
 import { IChat } from "../../types";
-import { esc } from "./html";
+import { esc, mentionHtml } from "./html";
 import { logger } from "../../utils/logger";
 
 export type WelcomeConfig = NonNullable<IChat["welcome"]>;
@@ -11,26 +11,30 @@ export interface WelcomeUser {
   name: string;
 }
 
-// The two literal tokens an admin can put in the welcome message. Kept as a
-// capturing group so String.split keeps the delimiters in the result.
-const TOKEN_RE = /(<@username>|<chat name>)/g;
+// The literal tokens an admin can put in the welcome message. The current
+// tokens are `@usuario` / `@nombreGrupo`; the older `<@username>` / `<chat name>`
+// are still accepted so messages saved before the rename keep working. Kept as
+// a capturing group so String.split keeps the delimiters in the result. The
+// `\b` after the @-tokens stops `@usuarios` (and similar) from partially
+// matching — only the bare token, followed by a non-word char or end, expands.
+const TOKEN_RE = /(@usuario\b|@nombreGrupo\b|<@username>|<chat name>)/g;
 
 /**
  * Render the admin-configured template. We split on the tokens *before*
  * escaping, then escape only the plain-text segments — so admin-entered
  * `<`/`>`/`&` can't break the HTML, while the generated mention/title stay
- * intact. Per D1: with a @username we emit `@username` (Telegram auto-links
- * it); without one we emit the plain escaped name and never a link.
+ * intact. The mention is always a clickable `tg://user?id=` link (see
+ * mentionHtml) so it works even for users with no public @username.
  */
 export function renderWelcome(template: string, user: WelcomeUser, chatTitle: string): string {
-  const usernameRepl = user.username ? `@${user.username}` : esc(user.name);
+  const usernameRepl = mentionHtml(user.id, user.name, user.username);
   const chatRepl = esc(chatTitle);
 
   return template
     .split(TOKEN_RE)
     .map((part) => {
-      if (part === "<@username>") return usernameRepl;
-      if (part === "<chat name>") return chatRepl;
+      if (part === "@usuario" || part === "<@username>") return usernameRepl;
+      if (part === "@nombreGrupo" || part === "<chat name>") return chatRepl;
       return esc(part);
     })
     .join("");
