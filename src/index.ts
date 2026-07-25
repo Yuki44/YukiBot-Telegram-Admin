@@ -38,6 +38,9 @@ import { comHandler } from "./bot/commands/com";
 import { kkHandler } from "./bot/commands/kk";
 import { bnHandler } from "./bot/commands/bn";
 import { spamCallbackHandler } from "./bot/handlers/spamCallbackHandler";
+import { csamCallbackHandler } from "./bot/handlers/csamCallbackHandler";
+import { startCsamScanner } from "./features/csamDetection/scanner";
+import { csamImageScan } from "./bot/handlers/csamImageHandler";
 import { promoSpamDetection } from "./features/promoSpamDetection";
 import { spamHandler } from "./bot/commands/spam";
 import { nospamHandler } from "./bot/commands/nospam";
@@ -112,8 +115,12 @@ bot.on("chat_member", chatMemberHandler);
 // spam/topic filters. handleUserJoin's short-window guard dedups the overlap.
 bot.on("message:new_chat_members", newChatMembersHandler);
 
-// Callback query handler for spam ✅/❌ inline buttons
-bot.on("callback_query", spamCallbackHandler);
+// Callback query router: CSAM alert buttons vs. spam ✅/❌ buttons (by data prefix)
+bot.on("callback_query", async (ctx) => {
+  const data = ctx.callbackQuery.data ?? "";
+  if (data.startsWith("csam_")) return await csamCallbackHandler(ctx);
+  return await spamCallbackHandler(ctx);
+});
 
 bot.on("message:forum_topic_created", async (ctx) => {
   const chatId = ctx.chat.id;
@@ -143,6 +150,7 @@ bot.on("message:forum_topic_edited", async (ctx) => {
   }
 });
 
+bot.on("message", csamImageScan);
 bot.on("message", mediaForwardHandler);
 bot.on("message", topicFiltering);
 bot.on("message", bannedWordsEnforcement);
@@ -195,7 +203,11 @@ async function start() {
   logger.info({ action: "startup", status: "starting bot polling..." });
   await bot.start({
     allowed_updates: ["message", "chat_member", "callback_query", "channel_post"],
-    onStart: () => logger.info({ action: "startup", status: "YukiBot is running" }),
+    onStart: () => {
+      logger.info({ action: "startup", status: "YukiBot is running" });
+      // botInfo is populated by now — safe to boot the rolling CSAM bio scanner.
+      startCsamScanner(bot);
+    },
   });
 }
 

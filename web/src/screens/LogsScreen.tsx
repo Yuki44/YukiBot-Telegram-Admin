@@ -51,45 +51,154 @@ interface TypeMeta {
 function metaFor(type: ActivityLogType): TypeMeta {
   switch (type) {
     case "warn":
-      return { icon: () => I.alert({ size: 14 }), bg: "var(--warn-bg)", fg: "var(--warn-fg)", label: "Aviso" };
+      return {
+        icon: () => I.alert({ size: 14 }),
+        bg: "var(--warn-bg)",
+        fg: "var(--warn-fg)",
+        label: "Aviso",
+      };
     case "unwarn":
-      return { icon: () => I.refresh({ size: 14 }), bg: "var(--ok-bg)", fg: "var(--ok-fg)", label: "Quitar aviso" };
+      return {
+        icon: () => I.refresh({ size: 14 }),
+        bg: "var(--ok-bg)",
+        fg: "var(--ok-fg)",
+        label: "Quitar aviso",
+      };
     case "silence":
-      return { icon: () => I.silence({ size: 14 }), bg: "var(--info-bg)", fg: "var(--info-fg)", label: "Silencio" };
+      return {
+        icon: () => I.silence({ size: 14 }),
+        bg: "var(--info-bg)",
+        fg: "var(--info-fg)",
+        label: "Silencio",
+      };
     case "unsilence":
-      return { icon: () => I.silence({ size: 14 }), bg: "var(--ok-bg)", fg: "var(--ok-fg)", label: "Quitar silencio" };
+      return {
+        icon: () => I.silence({ size: 14 }),
+        bg: "var(--ok-bg)",
+        fg: "var(--ok-fg)",
+        label: "Quitar silencio",
+      };
     case "ban":
-      return { icon: () => I.ban({ size: 14 }), bg: "var(--danger-bg)", fg: "var(--danger-fg)", label: "Ban" };
+      return {
+        icon: () => I.ban({ size: 14 }),
+        bg: "var(--danger-bg)",
+        fg: "var(--danger-fg)",
+        label: "Ban",
+      };
     case "unban":
-      return { icon: () => I.check({ size: 14 }), bg: "var(--ok-bg)", fg: "var(--ok-fg)", label: "Quitar ban" };
+      return {
+        icon: () => I.check({ size: 14 }),
+        bg: "var(--ok-bg)",
+        fg: "var(--ok-fg)",
+        label: "Quitar ban",
+      };
     case "autoban":
-      return { icon: () => I.ban({ size: 14 }), bg: "var(--danger-bg)", fg: "var(--danger-fg)", label: "Auto-ban" };
+      return {
+        icon: () => I.ban({ size: 14 }),
+        bg: "var(--danger-bg)",
+        fg: "var(--danger-fg)",
+        label: "Auto-ban",
+      };
     case "kick":
-      return { icon: () => I.logout({ size: 14 }), bg: "var(--danger-bg)", fg: "var(--danger-fg)", label: "Kick" };
+      return {
+        icon: () => I.logout({ size: 14 }),
+        bg: "var(--danger-bg)",
+        fg: "var(--danger-fg)",
+        label: "Kick",
+      };
     case "pardon":
       return { icon: () => I.check({ size: 14 }), bg: "var(--ok-bg)", fg: "var(--ok-fg)", label: "Perdón" };
     case "feature_toggle":
-      return { icon: () => I.toggle({ size: 14 }), bg: "var(--brand-50)", fg: "var(--brand-700)", label: "Función" };
+      return {
+        icon: () => I.toggle({ size: 14 }),
+        bg: "var(--brand-50)",
+        fg: "var(--brand-700)",
+        label: "Función",
+      };
     case "topic_rule_change":
-      return { icon: () => I.hash({ size: 14 }), bg: "var(--brand-50)", fg: "var(--brand-700)", label: "Regla de tema" };
+      return {
+        icon: () => I.hash({ size: 14 }),
+        bg: "var(--brand-50)",
+        fg: "var(--brand-700)",
+        label: "Regla de tema",
+      };
     case "whitelist_add":
-      return { icon: () => I.shield({ size: 14 }), bg: "var(--ok-bg)", fg: "var(--ok-fg)", label: "Permitido añadido" };
+      return {
+        icon: () => I.shield({ size: 14 }),
+        bg: "var(--ok-bg)",
+        fg: "var(--ok-fg)",
+        label: "Permitido añadido",
+      };
     case "whitelist_remove":
-      return { icon: () => I.shield({ size: 14 }), bg: "var(--warn-bg)", fg: "var(--warn-fg)", label: "Permitido quitado" };
+      return {
+        icon: () => I.shield({ size: 14 }),
+        bg: "var(--warn-bg)",
+        fg: "var(--warn-fg)",
+        label: "Permitido quitado",
+      };
     case "combo_add":
-      return { icon: () => I.shield({ size: 14 }), bg: "var(--ok-bg)", fg: "var(--ok-fg)", label: "Permiso mixto añadido" };
+      return {
+        icon: () => I.shield({ size: 14 }),
+        bg: "var(--ok-bg)",
+        fg: "var(--ok-fg)",
+        label: "Permiso mixto añadido",
+      };
     case "combo_remove":
-      return { icon: () => I.shield({ size: 14 }), bg: "var(--warn-bg)", fg: "var(--warn-fg)", label: "Permiso mixto quitado" };
+      return {
+        icon: () => I.shield({ size: 14 }),
+        bg: "var(--warn-bg)",
+        fg: "var(--warn-fg)",
+        label: "Permiso mixto quitado",
+      };
     case "banned_word_add":
-      return { icon: () => I.word({ size: 14 }), bg: "var(--warn-bg)", fg: "var(--warn-fg)", label: "Palabra añadida" };
+      return {
+        icon: () => I.word({ size: 14 }),
+        bg: "var(--warn-bg)",
+        fg: "var(--warn-fg)",
+        label: "Palabra añadida",
+      };
     case "banned_word_remove":
-      return { icon: () => I.word({ size: 14 }), bg: "var(--ok-bg)", fg: "var(--ok-fg)", label: "Palabra quitada" };
+      return {
+        icon: () => I.word({ size: 14 }),
+        bg: "var(--ok-bg)",
+        fg: "var(--ok-fg)",
+        label: "Palabra quitada",
+      };
     case "owner_delegate":
-      return { icon: () => I.star({ size: 14 }), bg: "var(--brand-50)", fg: "var(--brand-700)", label: "Delegación de propietario" };
+      return {
+        icon: () => I.star({ size: 14 }),
+        bg: "var(--brand-50)",
+        fg: "var(--brand-700)",
+        label: "Delegación de propietario",
+      };
     case "owner_revoke":
-      return { icon: () => I.star({ size: 14 }), bg: "var(--warn-bg)", fg: "var(--warn-fg)", label: "Delegación revocada" };
+      return {
+        icon: () => I.star({ size: 14 }),
+        bg: "var(--warn-bg)",
+        fg: "var(--warn-fg)",
+        label: "Delegación revocada",
+      };
     case "spam_confirmed":
-      return { icon: () => I.shield({ size: 14 }), bg: "var(--info-bg)", fg: "var(--info-fg)", label: "Spam confirmado" };
+      return {
+        icon: () => I.shield({ size: 14 }),
+        bg: "var(--info-bg)",
+        fg: "var(--info-fg)",
+        label: "Spam confirmado",
+      };
+    case "csam_autoban":
+      return {
+        icon: () => I.ban({ size: 14 }),
+        bg: "var(--danger-bg)",
+        fg: "var(--danger-fg)",
+        label: "CP auto-ban",
+      };
+    case "csam_silence":
+      return {
+        icon: () => I.silence({ size: 14 }),
+        bg: "var(--warn-bg)",
+        fg: "var(--warn-fg)",
+        label: "CP revisión",
+      };
   }
 }
 
@@ -129,10 +238,7 @@ function LogRow({ log, showTopic, onOpenUser, onUndo }: LogRowProps) {
 
   return (
     <div className="yk-row" style={{ alignItems: "flex-start", cursor: "default" }}>
-      <div
-        className="yk-row-icon"
-        style={{ background: cfg.bg, color: cfg.fg, marginTop: 2, flexShrink: 0 }}
-      >
+      <div className="yk-row-icon" style={{ background: cfg.bg, color: cfg.fg, marginTop: 2, flexShrink: 0 }}>
         {cfg.icon()}
       </div>
       <div className="yk-row-body">
@@ -159,10 +265,7 @@ function LogRow({ log, showTopic, onOpenUser, onUndo }: LogRowProps) {
                 {target}
               </button>
             ) : (
-              <span
-                className="yk-mono"
-                style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}
-              >
+              <span className="yk-mono" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>
                 {target}
               </span>
             )}
@@ -186,7 +289,11 @@ function LogRow({ log, showTopic, onOpenUser, onUndo }: LogRowProps) {
         </div>
         <div style={{ marginTop: 2, fontSize: 12, color: "var(--ink-500)" }}>
           por <b style={{ color: "var(--ink-700)" }}>{actor}</b>
-          <span style={{ color: "var(--ink-400)" }}> · {log.source === "panel" ? "desde panel" : log.source === "auto" ? "automático" : "desde Telegram"}</span>
+          <span style={{ color: "var(--ink-400)" }}>
+            {" "}
+            ·{" "}
+            {log.source === "panel" ? "desde panel" : log.source === "auto" ? "automático" : "desde Telegram"}
+          </span>
         </div>
         {log.messageText && (
           <div
@@ -305,11 +412,7 @@ export function LogsScreen() {
     // A paired inverse entry will appear after the next load — but the user sees the
     // immediate result right away.
     setEntries((prev) =>
-      prev
-        ? prev.map((e) =>
-            e.id === log.id ? { ...e, undoneAt: new Date().toISOString() } : e
-          )
-        : prev
+      prev ? prev.map((e) => (e.id === log.id ? { ...e, undoneAt: new Date().toISOString() } : e)) : prev
     );
     setUndoTarget(null);
   }
@@ -428,27 +531,22 @@ export function LogsScreen() {
           >
             {I.help({ size: 18 })}
             <div>
-              Historial de los últimos 90 días. Después se borra automáticamente para mantener la
-              base de datos ligera.
+              Historial de los últimos 90 días. Después se borra automáticamente para mantener la base de
+              datos ligera.
             </div>
           </div>
         </div>
 
         {error && (
           <div className="yk-section">
-            <div
-              className="yk-banner"
-              style={{ background: "var(--danger-bg)", color: "var(--danger-fg)" }}
-            >
+            <div className="yk-banner" style={{ background: "var(--danger-bg)", color: "var(--danger-fg)" }}>
               {I.alert({ size: 18 })}
               <div>{error}</div>
             </div>
           </div>
         )}
 
-        {entries === null && !error && (
-          <div style={{ padding: 24, color: "var(--ink-500)" }}>Cargando…</div>
-        )}
+        {entries === null && !error && <div style={{ padding: 24, color: "var(--ink-500)" }}>Cargando…</div>}
 
         {entries && entries.length === 0 && (
           <div className="yk-section">

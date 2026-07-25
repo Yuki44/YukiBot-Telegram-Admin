@@ -51,6 +51,9 @@ const userSchema = new Schema<IUser>({
   photoCheckedAt: {
     type: Date,
   },
+  lastBioCheckAt: {
+    type: Date,
+  },
 });
 
 // Compound unique index on userId + chatId

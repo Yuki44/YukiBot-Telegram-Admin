@@ -127,11 +127,12 @@ export const chatRepository = {
   /** Partial update for the personal notification destination — only changes the keys provided. */
   async patchNotify(
     chatId: number,
-    partial: { notifyChatId?: number | null; notifySpam?: boolean }
+    partial: { notifyChatId?: number | null; notifySpam?: boolean; notifyCsam?: boolean }
   ): Promise<IChat | null> {
     const $set: Record<string, unknown> = {};
     if ("notifyChatId" in partial) $set.notifyChatId = partial.notifyChatId;
     if (typeof partial.notifySpam === "boolean") $set["notifyFlags.notifySpam"] = partial.notifySpam;
+    if (typeof partial.notifyCsam === "boolean") $set["notifyFlags.notifyCsam"] = partial.notifyCsam;
     if (Object.keys($set).length === 0) {
       return await Chat.findOne({ chatId });
     }

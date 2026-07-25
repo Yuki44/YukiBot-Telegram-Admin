@@ -32,3 +32,31 @@ export const AUTO_DELETE_DELAY_MS = 5_000;
 
 /** Short delay (ms) for confirmation-only ephemeral messages. */
 export const AUTO_DELETE_SHORT_MS = 1_000;
+
+// ── CSAM/impostor rolling bio scanner ────────────────────────────────
+
+/** Spacing (ms) between consecutive getChat calls in the bio scanner (rate-safe). */
+export const CSAM_SCAN_SPACING_MS = 1_500;
+
+/** How many users the scanner pulls per DB batch. */
+export const CSAM_SCAN_BATCH = 25;
+
+/** Idle wait (ms) when there is nothing due to scan, before polling again. */
+export const CSAM_SCAN_IDLE_MS = 60_000;
+
+/**
+ * A bio is re-checked once it is older than this (ms). Catches the "clean bio at
+ * join, swap in the sales pitch days later" trick without re-fetching constantly.
+ */
+export const CSAM_SCAN_RECHECK_MS = 12 * 60 * 60 * 1000;
+
+// ── CSAM/impostor image OCR ──────────────────────────────────────────
+
+/** Longest-edge cap (px) an image is downscaled to before OCR (cost control). */
+export const CSAM_OCR_MAX_DIM = 900;
+
+/** Skip OCR entirely for files larger than this (bytes) — cheap DoS guard. */
+export const CSAM_OCR_MAX_BYTES = 5 * 1024 * 1024;
+
+/** TTL (seconds) for OCR text cache rows (reviewed-safe rows never expire). */
+export const CSAM_IMAGE_CACHE_TTL_S = 7 * 24 * 60 * 60;

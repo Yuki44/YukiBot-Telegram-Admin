@@ -75,7 +75,10 @@ export function DashboardScreen() {
   // Stats render lazily — failure is non-fatal so the dashboard still works.
   useEffect(() => {
     if (!chatId) return;
-    api.chats.stats(chatId).then(setStats).catch(() => setStats(null));
+    api.chats
+      .stats(chatId)
+      .then(setStats)
+      .catch(() => setStats(null));
   }, [chatId, refreshTick]);
 
   if (error) {
@@ -107,8 +110,7 @@ export function DashboardScreen() {
   }
 
   const { on } = featureCount(chat);
-  const roleLabel =
-    chat.role === "super" ? "Super-admin" : chat.role === "owner" ? "Propietario" : "Admin";
+  const roleLabel = chat.role === "super" ? "Super-admin" : chat.role === "owner" ? "Propietario" : "Admin";
   const typeLabel = chat.type === "topics" ? "Con temas" : "Grupo";
 
   return (
@@ -296,6 +298,15 @@ export function DashboardScreen() {
                 title="Migrar datos de otro chat"
                 sub="Copiar usuarios, listas y configuración desde un chat antiguo"
                 onClick={() => navigate(`/chats/${chat.chatId}/migrate`)}
+              />
+            )}
+            {chat.role === "super" && (
+              <NavRow
+                icon={I.shield({ size: 20 })}
+                iconClass="danger"
+                title="Lista CP / impostor (global)"
+                sub="Cuentas y palabras que detonan la detección en todos los chats"
+                onClick={() => navigate("/csam-watchlist")}
               />
             )}
           </div>

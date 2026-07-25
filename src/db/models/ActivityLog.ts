@@ -28,6 +28,8 @@ const schema = new Schema<IActivityLog>({
       "owner_delegate",
       "owner_revoke",
       "spam_confirmed",
+      "csam_autoban",
+      "csam_silence",
     ],
     required: true,
   },

@@ -49,6 +49,10 @@ const chatSchema = new Schema<IChat>({
       type: Boolean,
       default: false,
     },
+    csamDetection: {
+      type: Boolean,
+      default: false,
+    },
     welcomeMessage: {
       type: Boolean,
       default: false,
@@ -121,6 +125,7 @@ const chatSchema = new Schema<IChat>({
   },
   notifyFlags: {
     notifySpam: { type: Boolean, default: false },
+    notifyCsam: { type: Boolean, default: false },
   },
   welcome: {
     message: { type: String, default: "" },

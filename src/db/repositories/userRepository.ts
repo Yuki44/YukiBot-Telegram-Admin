@@ -351,4 +351,26 @@ export const userRepository = {
     await user.save();
     return user;
   },
+
+  /**
+   * Candidates for the rolling CSAM bio scan: members of the given chats whose
+   * bio has never been checked, or was checked before `staleBefore`. Ordered
+   * never-checked first, then oldest-checked, so new joiners are seen quickly
+   * and everyone is eventually re-checked. Banned users are skipped.
+   */
+  async findDueForBioScan(chatIds: number[], staleBefore: Date, limit: number): Promise<IUser[]> {
+    if (chatIds.length === 0) return [];
+    return await User.find({
+      chatId: { $in: chatIds },
+      isBanned: { $ne: true },
+      $or: [{ lastBioCheckAt: { $exists: false } }, { lastBioCheckAt: { $lt: staleBefore } }],
+    })
+      .sort({ lastBioCheckAt: 1 })
+      .limit(limit);
+  },
+
+  /** Stamp lastBioCheckAt on every chat doc for this user (bio is a global property). */
+  async markBioChecked(userId: number, when: Date = new Date()): Promise<void> {
+    await User.updateMany({ userId }, { $set: { lastBioCheckAt: when } });
+  },
 };
