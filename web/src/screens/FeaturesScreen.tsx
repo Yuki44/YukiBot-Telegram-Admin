@@ -45,6 +45,11 @@ const FEATURE_META: FeatureMeta[] = [
     desc: "Cuando alguien escriba una palabra de la lista, se aplica la acción configurada (aviso, borrar, silenciar o expulsar).",
   },
   {
+    id: "csamDetection",
+    name: "Detección CP / cuentas impostoras",
+    desc: "Analiza imágenes (OCR) y biografías en busca del vendedor de CP y sus cuentas ALT. Coincidencia clara en bio → baneo automático en todos los chats; imágenes o casos dudosos → silencio y aviso al chat de admins para revisión manual. Nunca banea a quien va en contra (p. ej. «no cp»).",
+  },
+  {
     id: "welcomeMessage",
     name: "Mensaje de bienvenida",
     desc: "Saluda automáticamente a quien entra al grupo. Configura el mensaje y el botón en su pantalla.",
@@ -66,6 +71,7 @@ export function FeaturesScreen() {
   const [savingKey, setSavingKey] = useState<FeatureKey | null>(null);
 
   const [notifySpam, setNotifySpam] = useState(false);
+  const [notifyCsam, setNotifyCsam] = useState(false);
   const [notifyChatIdInput, setNotifyChatIdInput] = useState("");
   const [notifySaving, setNotifySaving] = useState(false);
   const [notifyError, setNotifyError] = useState<string | null>(null);
@@ -78,6 +84,7 @@ export function FeaturesScreen() {
         setChat(c);
         setFeatures(c.features);
         setNotifySpam(!!c.notifyFlags?.notifySpam);
+        setNotifyCsam(!!c.notifyFlags?.notifyCsam);
         setNotifyChatIdInput(c.notifyChatId != null ? String(c.notifyChatId) : "");
       })
       .catch((err) => {
@@ -135,6 +142,29 @@ export function FeaturesScreen() {
     }
   }
 
+  async function toggleNotifyCsam() {
+    if (!chatId || notifySaving) return;
+    const next = !notifyCsam;
+    const previous = notifyCsam;
+    setNotifyCsam(next);
+    setNotifySaving(true);
+    setNotifyError(null);
+    try {
+      await api.chats.updateNotify(chatId, { notifyCsam: next });
+    } catch (err) {
+      setNotifyCsam(previous);
+      setNotifyError(
+        err instanceof ApiError && err.status === 403
+          ? "Solo el propietario puede cambiar esto."
+          : err instanceof Error
+            ? err.message
+            : "error"
+      );
+    } finally {
+      setNotifySaving(false);
+    }
+  }
+
   async function saveNotifyChatId(e: React.FormEvent) {
     e.preventDefault();
     if (!chatId || notifySaving) return;
@@ -176,10 +206,7 @@ export function FeaturesScreen() {
 
         {error && (
           <div className="yk-section">
-            <div
-              className="yk-banner"
-              style={{ background: "var(--danger-bg)", color: "var(--danger-fg)" }}
-            >
+            <div className="yk-banner" style={{ background: "var(--danger-bg)", color: "var(--danger-fg)" }}>
               {I.alert({ size: 18 })}
               <div>{error}</div>
             </div>
@@ -237,11 +264,29 @@ export function FeaturesScreen() {
                   {notifySaving && <span className="yk-chip">Guardando…</span>}
                 </div>
                 <div className="yk-row-sub" style={{ whiteSpace: "normal" }}>
-                  Además del registro en el canal de logs, avisa en un chat aparte cada vez que se
-                  aplica una sanción por spam (automática o confirmada manualmente).
+                  Además del registro en el canal de logs, avisa en un chat aparte cada vez que se aplica una
+                  sanción por spam (automática o confirmada manualmente).
                 </div>
               </div>
               <div className={`yk-switch ${notifySpam ? "on" : ""}`} />
+            </div>
+
+            <div className="yk-row" style={{ cursor: "pointer" }} onClick={toggleNotifyCsam}>
+              <div className="yk-row-body">
+                <div
+                  className="yk-row-title"
+                  style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}
+                >
+                  Notificación personal de CP / impostor
+                  {notifySaving && <span className="yk-chip">Guardando…</span>}
+                </div>
+                <div className="yk-row-sub" style={{ whiteSpace: "normal" }}>
+                  Avisa en el chat destino cada vez que la detección de CP/impostor actúa: baneo automático
+                  (bio clara) o silencio para revisión manual (imágenes o casos dudosos), con botones para
+                  confirmar o deshacer.
+                </div>
+              </div>
+              <div className={`yk-switch ${notifyCsam ? "on" : ""}`} />
             </div>
 
             <form

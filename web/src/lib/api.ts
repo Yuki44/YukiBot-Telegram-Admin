@@ -16,6 +16,8 @@ import type {
   MigrationSummary,
   SpamDetection,
   SpamDetectionPermitResult,
+  CsamWatchlistData,
+  CsamWatchCategory,
   TelegramAuthData,
   Topic,
   UserDomainAllowance,
@@ -101,17 +103,19 @@ export const api = {
   },
   chats: {
     list: (): Promise<ChatSummary[]> => request<ChatSummary[]>("GET", "/chats"),
-    get: (chatId: number | string): Promise<ChatDetail> =>
-      request<ChatDetail>("GET", `/chats/${chatId}`),
+    get: (chatId: number | string): Promise<ChatDetail> => request<ChatDetail>("GET", `/chats/${chatId}`),
     stats: (chatId: number | string): Promise<ChatStats> =>
       request<ChatStats>("GET", `/chats/${chatId}/stats`),
     updateFeatures: (chatId: number | string, partial: Partial<ChatFeatures>): Promise<ChatFeatures> =>
       request<ChatFeatures>("PUT", `/chats/${chatId}/features`, partial),
     updateNotify: (
       chatId: number | string,
-      partial: { notifyChatId?: number | null; notifySpam?: boolean }
-    ): Promise<{ notifyChatId: number | null; notifyFlags: { notifySpam: boolean } }> =>
-      request<{ notifyChatId: number | null; notifyFlags: { notifySpam: boolean } }>(
+      partial: { notifyChatId?: number | null; notifySpam?: boolean; notifyCsam?: boolean }
+    ): Promise<{
+      notifyChatId: number | null;
+      notifyFlags: { notifySpam: boolean; notifyCsam?: boolean };
+    }> =>
+      request<{ notifyChatId: number | null; notifyFlags: { notifySpam: boolean; notifyCsam?: boolean } }>(
         "PUT",
         `/chats/${chatId}/notify`,
         partial
@@ -130,15 +134,13 @@ export const api = {
       sourceChatId: number,
       active: boolean
     ): Promise<{ chatId: number; isActive: boolean }> =>
-      request<{ chatId: number; isActive: boolean }>(
-        "POST",
-        `/chats/${chatId}/migrate/source-active`,
-        { sourceChatId, active }
-      ),
+      request<{ chatId: number; isActive: boolean }>("POST", `/chats/${chatId}/migrate/source-active`, {
+        sourceChatId,
+        active,
+      }),
   },
   topics: {
-    list: (chatId: number | string): Promise<Topic[]> =>
-      request<Topic[]>("GET", `/chats/${chatId}/topics`),
+    list: (chatId: number | string): Promise<Topic[]> => request<Topic[]>("GET", `/chats/${chatId}/topics`),
     create: (
       chatId: number | string,
       body: { topicId: number; name: string; allowedMsgTypes: string[]; adminOnly?: boolean }
@@ -259,10 +261,7 @@ export const api = {
     list: (chatId: number | string, limit = 50): Promise<SpamDetection[]> =>
       request<SpamDetection[]>("GET", `/chats/${chatId}/spam-detections?limit=${limit}`),
     permit: (chatId: number | string, patternId: string): Promise<SpamDetectionPermitResult> =>
-      request<SpamDetectionPermitResult>(
-        "POST",
-        `/chats/${chatId}/spam-detections/${patternId}/permit`
-      ),
+      request<SpamDetectionPermitResult>("POST", `/chats/${chatId}/spam-detections/${patternId}/permit`),
     discard: (chatId: number | string, patternId: string): Promise<void> =>
       request<void>("DELETE", `/chats/${chatId}/spam-detections/${patternId}`),
   },
@@ -281,6 +280,19 @@ export const api = {
     },
     undo: (chatId: number | string, id: string): Promise<void> =>
       request<void>("POST", `/chats/${chatId}/logs/${id}/undo`),
+  },
+  csam: {
+    getWatchlist: (): Promise<CsamWatchlistData> => request<CsamWatchlistData>("GET", "/csam/watchlist"),
+    addTerm: (category: CsamWatchCategory, value: string): Promise<{ stored: CsamWatchlistData["stored"] }> =>
+      request<{ stored: CsamWatchlistData["stored"] }>("POST", "/csam/watchlist", { category, value }),
+    removeTerm: (
+      category: CsamWatchCategory,
+      value: string
+    ): Promise<{ stored: CsamWatchlistData["stored"] }> =>
+      request<{ stored: CsamWatchlistData["stored"] }>(
+        "DELETE",
+        `/csam/watchlist/${category}/${encodeURIComponent(value)}`
+      ),
   },
 };
 

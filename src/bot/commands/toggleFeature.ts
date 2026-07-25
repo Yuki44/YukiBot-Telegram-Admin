@@ -11,6 +11,7 @@ const VALID_FEATURES = [
   "autoWarnSpam",
   "promoSpamDetection",
   "bannedWordsEnforcement",
+  "csamDetection",
 ] as const;
 
 type FeatureName = (typeof VALID_FEATURES)[number];
@@ -30,7 +31,7 @@ export async function toggleFeatureHandler(ctx: CommandContext<BotContext>) {
 
     if (!featureName || !VALID_FEATURES.includes(featureName as FeatureName)) {
       await ctx.reply(
-        "Valid features: languageDetection, topicFiltering, autoBan, autoWarnSpam, promoSpamDetection, bannedWordsEnforcement"
+        "Valid features: languageDetection, topicFiltering, autoBan, autoWarnSpam, promoSpamDetection, bannedWordsEnforcement, csamDetection"
       );
       return;
     }

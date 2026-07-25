@@ -35,6 +35,15 @@ export const BOT_LOGIN_DOMAIN = (process.env.BOT_LOGIN_DOMAIN ?? "")
 // Required at startup if the API server is enabled.
 export const JWT_SECRET = process.env.JWT_SECRET ?? "";
 
+// Comma-separated watched handles that seed the CSAM/impostor detector
+// (e.g. CSAM_WATCH_HANDLES=baduser1,baduser2). Kept in config — NOT source — to honour
+// G2 (no hardcoded identifiers). Leading "@" is stripped and values are lowercased.
+export const CSAM_WATCH_HANDLES: string[] = process.env.CSAM_WATCH_HANDLES
+  ? process.env.CSAM_WATCH_HANDLES.split(",")
+      .map((h) => h.trim().replace(/^@/, "").toLowerCase())
+      .filter((h) => h)
+  : [];
+
 // Parse TOPIC_RULES from JSON string
 // Example: TOPIC_RULES={"4":["photo","video"],"2":["video"]}
 export const TOPIC_RULES: Record<number, MessageType[]> = (() => {

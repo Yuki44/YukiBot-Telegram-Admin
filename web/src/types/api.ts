@@ -44,6 +44,7 @@ export interface ChatFeatures {
   promoSpamDetection: boolean;
   bannedWordsEnforcement: boolean;
   welcomeMessage: boolean;
+  csamDetection: boolean;
 }
 
 export interface WelcomeConfig {
@@ -65,7 +66,7 @@ export interface ChatDetail extends ChatSummary {
   delegatedOwnerId?: number | null;
   /** Personal chat that gets pinged on confirmed spam actions (see notifySpamAdmin). */
   notifyChatId?: number | null;
-  notifyFlags?: { notifySpam: boolean };
+  notifyFlags?: { notifySpam: boolean; notifyCsam?: boolean };
 }
 
 export interface ChatStats {
@@ -124,15 +125,7 @@ export interface AdminsResponse {
 
 export type MsgType = "photo" | "video" | "sticker" | "audio" | "voice" | "document" | "text";
 
-export const ALL_MSG_TYPES: MsgType[] = [
-  "text",
-  "photo",
-  "video",
-  "sticker",
-  "voice",
-  "audio",
-  "document",
-];
+export const ALL_MSG_TYPES: MsgType[] = ["text", "photo", "video", "sticker", "voice", "audio", "document"];
 
 export interface Topic {
   chatId: number;
@@ -188,7 +181,9 @@ export type ActivityLogType =
   | "banned_word_remove"
   | "owner_delegate"
   | "owner_revoke"
-  | "spam_confirmed";
+  | "spam_confirmed"
+  | "csam_autoban"
+  | "csam_silence";
 
 export type ActivityLogSource = "bot" | "panel" | "auto";
 
@@ -328,4 +323,19 @@ export function userStatus(u: UserRecord): UserStatus {
   if (u.isMuted) return "silenced";
   if (u.warnings > 0) return "warned";
   return "active";
+}
+
+export type CsamWatchCategory = "handles" | "solicitation" | "negation" | "keywords";
+
+export interface CsamWatchlistData {
+  /** Operator-added terms per category (removable). */
+  stored: Record<CsamWatchCategory, string[]>;
+  /** Always-on built-in tokens (read-only reference). */
+  defaults: {
+    solicitation: string[];
+    negation: string[];
+    keywords: string[];
+  };
+  /** How many handles are seeded from the CSAM_WATCH_HANDLES env var (values hidden). */
+  envHandleCount: number;
 }

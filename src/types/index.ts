@@ -38,6 +38,8 @@ export interface IChat extends Document {
     promoSpamDetection: boolean;
     /** When true, messages matching configured BannedWord rules trigger enforcement (warn/delete/silence/kick). */
     bannedWordsEnforcement?: boolean;
+    /** When true, the CSAM/impostor detector runs: rolling bio scan (auto-ban) + image OCR (silence). */
+    csamDetection?: boolean;
     /** When true, each user is greeted once (per chat) with the configured `welcome` message on join. */
     welcomeMessage?: boolean;
   };
@@ -98,6 +100,8 @@ export interface IChat extends Document {
   /** Per-notification-type toggles for the `notifyChatId` destination (mirrors `logFlags`). */
   notifyFlags?: {
     notifySpam: boolean;
+    /** Ping notifyChatId when the CSAM/impostor detector fires (auto-ban or silence-for-review). */
+    notifyCsam?: boolean;
   };
 }
 
@@ -163,6 +167,8 @@ export interface IUser extends Document {
    */
   photoFileId?: string | null;
   photoCheckedAt?: Date;
+  /** Last time the rolling CSAM bio scanner checked this user's bio (undefined = never). */
+  lastBioCheckAt?: Date;
 }
 
 /**
@@ -200,7 +206,9 @@ export type ActivityLogType =
   | "banned_word_remove"
   | "owner_delegate"
   | "owner_revoke"
-  | "spam_confirmed";
+  | "spam_confirmed"
+  | "csam_autoban"
+  | "csam_silence";
 
 /** Where the action originated. */
 export type ActivityLogSource = "bot" | "panel" | "auto";

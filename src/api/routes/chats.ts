@@ -21,6 +21,7 @@ const FEATURE_KEYS: ReadonlyArray<keyof IChat["features"]> = [
   "promoSpamDetection",
   "bannedWordsEnforcement",
   "welcomeMessage",
+  "csamDetection",
 ];
 
 const WELCOME_MAX_LEN = 1024;
@@ -364,7 +365,7 @@ export function createChatsRouter(bot: Bot<BotContext>): Router {
       const chatId = Number(req.params.chatId);
       const body = (req.body ?? {}) as Record<string, unknown>;
 
-      const partial: { notifyChatId?: number | null; notifySpam?: boolean } = {};
+      const partial: { notifyChatId?: number | null; notifySpam?: boolean; notifyCsam?: boolean } = {};
 
       if ("notifyChatId" in body) {
         if (body.notifyChatId === null) {
@@ -383,6 +384,14 @@ export function createChatsRouter(bot: Bot<BotContext>): Router {
           return;
         }
         partial.notifySpam = body.notifySpam;
+      }
+
+      if ("notifyCsam" in body) {
+        if (typeof body.notifyCsam !== "boolean") {
+          res.status(400).json({ error: "invalid_notify_csam" });
+          return;
+        }
+        partial.notifyCsam = body.notifyCsam;
       }
 
       try {
