@@ -128,9 +128,13 @@ export async function sendCsamAlert(
   const notifyDest =
     chatConfig.notifyFlags?.notifyCsam && chatConfig.notifyChatId ? chatConfig.notifyChatId : null;
 
-  let notifyKeyboard = alert.keyboard;
+  // Real buttons only when logsTo isn't configured at all — a failed logsTo
+  // send must NOT fall back to them, or the one case Registro exists to guard
+  // against (real buttons in the busier notify chat) happens anyway.
+  let notifyKeyboard: InlineKeyboard | undefined = alert.keyboard;
 
   if (chatConfig.logsTo) {
+    notifyKeyboard = undefined;
     try {
       const sent = await api.sendMessage(chatConfig.logsTo, alert.logText, {
         parse_mode: "HTML",
