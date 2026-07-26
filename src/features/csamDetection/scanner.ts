@@ -1,9 +1,9 @@
 import { Bot } from "grammy";
-import { BotContext } from "../../types";
+import { BotContext, IChat, IUser } from "../../types";
 import { chatRepository } from "../../db/repositories/chatRepository";
 import { userRepository } from "../../db/repositories/userRepository";
 import { csamWatchlistRepository } from "../../db/repositories/csamWatchlistRepository";
-import { evaluateBio, BioResult } from "./matcher";
+import { evaluateBio, BioResult, WatchConfig } from "./matcher";
 import { executeCsamAutoBan, executeCsamSilence, CsamTarget } from "./actions";
 import { logger } from "../../utils/logger";
 import { ActivityActor } from "../../utils/activityLog";
@@ -12,6 +12,7 @@ import {
   CSAM_SCAN_BATCH,
   CSAM_SCAN_IDLE_MS,
   CSAM_SCAN_RECHECK_MS,
+  CSAM_URGENT_COOLDOWN_MS,
 } from "../../config/constants";
 
 /**
@@ -26,6 +27,9 @@ import {
  * rate limits, and `lastBioCheckAt` gives never-checked users priority while
  * still re-checking everyone every CSAM_SCAN_RECHECK_MS (the "clean bio at
  * join, sales pitch later" trick).
+ *
+ * A small urgent queue lets a user who just posted jump the line, spending
+ * this same rate-limited loop's next tick on them instead of extra API calls.
  */
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -38,6 +42,39 @@ export function summarizeBioMatch(r: BioResult): string {
   return parts.join(" + ");
 }
 
+/** True when a bio is old enough (or never checked) to warrant an urgent re-check. */
+export function isBioCheckStale(
+  lastBioCheckAt: Date | undefined,
+  now: Date = new Date(),
+  cooldownMs: number = CSAM_URGENT_COOLDOWN_MS
+): boolean {
+  if (!lastBioCheckAt) return true;
+  return now.getTime() - lastBioCheckAt.getTime() >= cooldownMs;
+}
+
+// ── Urgent queue (message-triggered priority checks) ──────────────────
+
+interface UrgentEntry {
+  userId: number;
+  chatId: number;
+}
+
+const urgentQueue = new Map<number, UrgentEntry>();
+
+/** Dedups by userId so a chatty user only occupies one queue slot. */
+export function enqueueUrgentBioCheck(userId: number, chatId: number): void {
+  if (!urgentQueue.has(userId)) urgentQueue.set(userId, { userId, chatId });
+}
+
+/** FIFO pop. */
+export function dequeueUrgentBioCheck(): UrgentEntry | undefined {
+  const next = urgentQueue.keys().next();
+  if (next.done) return undefined;
+  const entry = urgentQueue.get(next.value);
+  urgentQueue.delete(next.value);
+  return entry;
+}
+
 async function fetchBio(bot: Bot<BotContext>, userId: number): Promise<string | null> {
   try {
     const chat = await bot.api.getChat(userId);
@@ -48,9 +85,60 @@ async function fetchBio(bot: Bot<BotContext>, userId: number): Promise<string | 
   }
 }
 
+/** Fetch + evaluate one user's bio and act on the verdict. Shared by both queues. */
+async function checkUserBio(
+  bot: Bot<BotContext>,
+  chatConfig: IChat,
+  target: CsamTarget,
+  config: WatchConfig,
+  actor: ActivityActor
+): Promise<void> {
+  const bio = await fetchBio(bot, target.userId);
+  // Stamp first so a mid-action failure never wedges the scanner on one user.
+  await userRepository.markBioChecked(target.userId);
+  if (!bio) return;
+
+  const result = evaluateBio(bio, config);
+  if (result.verdict === "NONE") return;
+
+  const summary = summarizeBioMatch(result);
+  try {
+    if (result.verdict === "AUTO_BAN") {
+      await executeCsamAutoBan(bot.api, chatConfig, target, summary, actor);
+    } else {
+      await executeCsamSilence(bot.api, chatConfig, target, summary, actor);
+    }
+  } catch (err) {
+    logger.error({ action: "csam_scan_action", userId: target.userId, error: String(err) });
+  }
+}
+
+/** Spends this tick's getChat call on the next valid, still-stale urgent entry, if any. */
+async function drainOneUrgent(
+  bot: Bot<BotContext>,
+  chatById: Map<number, IChat>,
+  config: WatchConfig,
+  actor: ActivityActor
+): Promise<boolean> {
+  for (;;) {
+    const entry = dequeueUrgentBioCheck();
+    if (!entry) return false;
+
+    const chatConfig = chatById.get(entry.chatId);
+    if (!chatConfig) continue;
+
+    const user: IUser | null = await userRepository.findByUserAndChat(entry.userId, entry.chatId);
+    if (!isBioCheckStale(user?.lastBioCheckAt)) continue;
+
+    const target: CsamTarget = { userId: entry.userId, name: user?.name, username: user?.username };
+    await checkUserBio(bot, chatConfig, target, config, actor);
+    return true;
+  }
+}
+
 /**
- * Process one batch of due users. Exported for integration testing / manual
- * triggering. Returns the number of distinct users actually checked.
+ * Process one batch of due users (urgent queue first). Exported for
+ * integration testing / manual triggering. Returns the number processed.
  */
 export async function runBioScanBatch(bot: Bot<BotContext>, actor: ActivityActor): Promise<number> {
   const chats = (await chatRepository.listAll()).filter(
@@ -59,46 +147,32 @@ export async function runBioScanBatch(bot: Bot<BotContext>, actor: ActivityActor
   if (chats.length === 0) return 0;
 
   const chatById = new Map(chats.map((c) => [c.chatId, c]));
-  const staleBefore = new Date(Date.now() - CSAM_SCAN_RECHECK_MS);
-  const due = await userRepository.findDueForBioScan(
-    chats.map((c) => c.chatId),
-    staleBefore,
-    CSAM_SCAN_BATCH
-  );
-  if (due.length === 0) return 0;
-
+  const chatIds = chats.map((c) => c.chatId);
   const config = await csamWatchlistRepository.getConfig();
-  const seen = new Set<number>();
+  const staleBefore = new Date(Date.now() - CSAM_SCAN_RECHECK_MS);
+
   let processed = 0;
 
-  for (const u of due) {
-    if (seen.has(u.userId)) continue;
-    seen.add(u.userId);
-
-    const chatConfig = chatById.get(u.chatId);
-    if (!chatConfig) continue;
-
-    const bio = await fetchBio(bot, u.userId);
-    // Stamp first so a mid-action failure never wedges the scanner on one user.
-    await userRepository.markBioChecked(u.userId);
-    processed += 1;
-
-    if (bio) {
-      const result = evaluateBio(bio, config);
-      if (result.verdict !== "NONE") {
-        const target: CsamTarget = { userId: u.userId, name: u.name, username: u.username };
-        const summary = summarizeBioMatch(result);
-        try {
-          if (result.verdict === "AUTO_BAN") {
-            await executeCsamAutoBan(bot.api, chatConfig, target, summary, actor);
-          } else {
-            await executeCsamSilence(bot.api, chatConfig, target, summary, actor);
-          }
-        } catch (err) {
-          logger.error({ action: "csam_scan_action", userId: u.userId, error: String(err) });
-        }
-      }
+  for (let i = 0; i < CSAM_SCAN_BATCH; i++) {
+    const didUrgent = await drainOneUrgent(bot, chatById, config, actor);
+    if (didUrgent) {
+      processed += 1;
+      await sleep(CSAM_SCAN_SPACING_MS);
+      continue;
     }
+
+    const [next] = await userRepository.findDueForBioScan(chatIds, staleBefore, 1);
+    if (!next) break;
+
+    const chatConfig = chatById.get(next.chatId);
+    if (!chatConfig) {
+      logger.error({ action: "csam_scan_missing_chat", chatId: next.chatId, userId: next.userId });
+      break;
+    }
+
+    const target: CsamTarget = { userId: next.userId, name: next.name, username: next.username };
+    await checkUserBio(bot, chatConfig, target, config, actor);
+    processed += 1;
 
     await sleep(CSAM_SCAN_SPACING_MS);
   }

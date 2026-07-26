@@ -50,6 +50,14 @@ export const CSAM_SCAN_IDLE_MS = 60_000;
  */
 export const CSAM_SCAN_RECHECK_MS = 12 * 60 * 60 * 1000;
 
+/**
+ * Minimum gap (ms) before a user who just posted can jump the rotation queue
+ * again. Keeps a chatty user from burning the shared getChat rate budget on
+ * every single message while still checking anyone who hasn't been looked at
+ * recently the moment they show activity.
+ */
+export const CSAM_URGENT_COOLDOWN_MS = 10 * 60 * 1000;
+
 // ── CSAM/impostor image OCR ──────────────────────────────────────────
 
 /** Longest-edge cap (px) an image is downscaled to before OCR (cost control). */

@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
+
+vi.mock("../../src/utils/logger", () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
+
 import { scanImage, ImageScanDeps } from "../../src/features/csamDetection/imageScan";
 import { WatchConfig } from "../../src/features/csamDetection/matcher";
+import { logger } from "../../src/utils/logger";
 
 const config: WatchConfig = {
   handles: ["nomax16"],
@@ -85,7 +89,8 @@ describe("scanImage cost-control pipeline", () => {
     expect(r.keyword).toBeDefined();
   });
 
-  it("download failure degrades to skip (never throws)", async () => {
+  it("download failure degrades to skip (never throws) but logs the error", async () => {
+    vi.mocked(logger.error).mockClear();
     const r = await scanImage(
       { fileId: "f", fileUniqueId: "u" },
       makeDeps({
@@ -96,5 +101,29 @@ describe("scanImage cost-control pipeline", () => {
     );
     expect(r.matched).toBe(false);
     expect(r.source).toBe("skip");
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "csam_image_scan_failed",
+        fileUniqueId: "u",
+        error: expect.stringContaining("boom"),
+      })
+    );
+  });
+
+  it("OCR failure (not just download) also degrades to skip and logs", async () => {
+    vi.mocked(logger.error).mockClear();
+    const r = await scanImage(
+      { fileId: "f", fileUniqueId: "u2" },
+      makeDeps({
+        ocr: async () => {
+          throw new Error("tesseract crashed");
+        },
+      })
+    );
+    expect(r.matched).toBe(false);
+    expect(r.source).toBe("skip");
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "csam_image_scan_failed", fileUniqueId: "u2" })
+    );
   });
 });
