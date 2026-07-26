@@ -1,9 +1,16 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { Api } from "grammy";
+import { IChat } from "../../src/types";
 import {
   buildCsamCallback,
   parseCsamCallback,
   buildCsamAlert,
+  buildRegistroKeyboard,
+  sendCsamAlert,
+  chunk,
 } from "../../src/features/csamDetection/actions";
+
+vi.mock("../../src/utils/logger", () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 
 describe("csam callback data", () => {
   it("round-trips ban/qsil/undo verdicts", () => {
@@ -66,5 +73,85 @@ describe("buildCsamAlert", () => {
     });
     expect(logText).not.toContain("<b>x</b>");
     expect(logText).toContain("&lt;b&gt;");
+  });
+});
+
+describe("sendCsamAlert notify-chat keyboard", () => {
+  const alert = {
+    logText: "log",
+    notifyText: "notify",
+    keyboard: buildCsamAlert("AUTO_BAN", {
+      chatId: -1001111111111,
+      chatName: "GayBCN",
+      targetId: 1,
+      matchSummary: "x",
+    }).keyboard,
+  };
+
+  function makeChatConfig(over: Partial<IChat> = {}): IChat {
+    return {
+      chatId: -1001111111111,
+      logsTo: -1002222222222,
+      notifyChatId: -1003333333333,
+      notifyFlags: { notifyCsam: true },
+      ...over,
+    } as unknown as IChat;
+  }
+
+  it("redirects to logsTo when the logsTo post succeeds", async () => {
+    const sendMessage = vi.fn().mockResolvedValue({ message_id: 999 });
+    const api = { sendMessage } as unknown as Api;
+
+    await sendCsamAlert(api, makeChatConfig(), alert);
+
+    const notifyCall = sendMessage.mock.calls.find((c) => c[0] === -1003333333333)!;
+    const kb = notifyCall[2].reply_markup.inline_keyboard[0][0] as { url?: string };
+    expect(kb.url).toBe("https://t.me/c/2222222222/999");
+  });
+
+  it("never shows the real buttons in the notify chat, even if the logsTo post fails", async () => {
+    const sendMessage = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("logsTo send failed"))
+      .mockResolvedValueOnce({ message_id: 1 });
+    const api = { sendMessage } as unknown as Api;
+
+    await sendCsamAlert(api, makeChatConfig(), alert);
+
+    const notifyCall = sendMessage.mock.calls.find((c) => c[0] === -1003333333333)!;
+    expect(notifyCall[2].reply_markup).toBeUndefined();
+  });
+
+  it("falls back to the real buttons when no logsTo is configured", async () => {
+    const sendMessage = vi.fn().mockResolvedValue({ message_id: 1 });
+    const api = { sendMessage } as unknown as Api;
+
+    await sendCsamAlert(api, makeChatConfig({ logsTo: undefined }), alert);
+
+    const notifyCall = sendMessage.mock.calls.find((c) => c[0] === -1003333333333)!;
+    expect(notifyCall[2].reply_markup).toBe(alert.keyboard);
+  });
+});
+
+describe("buildRegistroKeyboard", () => {
+  it("links to the message inside the -100-prefixed supergroup", () => {
+    const kb = buildRegistroKeyboard(-1001234567890, 555);
+    const btn = kb.inline_keyboard[0][0] as { text: string; url?: string };
+    expect(btn.url).toBe("https://t.me/c/1234567890/555");
+    expect(btn.text).toBe("📋 Ver registro");
+  });
+});
+
+describe("chunk", () => {
+  it("splits an array into groups of the given size", () => {
+    expect(chunk([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
+  });
+
+  it("returns one group when under the size", () => {
+    expect(chunk([1, 2], 100)).toEqual([[1, 2]]);
+  });
+
+  it("returns an empty array for an empty input", () => {
+    expect(chunk([], 100)).toEqual([]);
   });
 });

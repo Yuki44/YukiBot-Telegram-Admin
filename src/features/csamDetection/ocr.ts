@@ -3,23 +3,32 @@ import sharp from "sharp";
 import { logger } from "../../utils/logger";
 import { CSAM_OCR_MAX_DIM } from "../../config/constants";
 
-/**
- * Local OCR engine (tesseract.js) — no image or text ever leaves the process.
- *
- * A single lazily-created worker keeps memory bounded, and a promise chain
- * serialises `recognize` calls (tesseract workers are not re-entrant). Images
- * are downscaled + greyscaled with sharp first to cut work and improve accuracy
- * on the low-contrast gallery screenshots this targets.
- */
+/** Local OCR (tesseract.js), no image/text ever leaves the process. 2-worker pool, urgent jobs jump the queue. */
 
-let workerPromise: Promise<Worker> | null = null;
-let queue: Promise<unknown> = Promise.resolve();
+const MAX_WORKERS = 2;
 
-async function getWorker(): Promise<Worker> {
-  if (!workerPromise) {
-    workerPromise = createWorker("eng+spa");
+interface Job {
+  input: Buffer;
+  resolve: (text: string) => void;
+}
+
+let workers: Worker[] = [];
+let freeWorkers: Worker[] = [];
+let poolReady: Promise<void> | null = null;
+const urgentJobs: Job[] = [];
+const normalJobs: Job[] = [];
+
+async function ensurePool(): Promise<void> {
+  if (!poolReady) {
+    poolReady = (async () => {
+      while (workers.length < MAX_WORKERS) {
+        const w = await createWorker("eng+spa");
+        workers.push(w);
+        freeWorkers.push(w);
+      }
+    })();
   }
-  return workerPromise;
+  await poolReady;
 }
 
 async function preprocess(input: Buffer): Promise<Buffer> {
@@ -40,33 +49,50 @@ async function preprocess(input: Buffer): Promise<Buffer> {
   }
 }
 
-/** Extract text from an image buffer. Serialised; returns "" on failure. */
-export async function ocrImage(input: Buffer): Promise<string> {
-  const run = queue.then(async () => {
-    try {
-      const prepared = await preprocess(input);
-      const worker = await getWorker();
-      const { data } = await worker.recognize(prepared);
-      return data.text ?? "";
-    } catch (err) {
-      logger.error({ action: "csam_ocr_recognize", error: String(err) });
-      return "";
-    }
-  });
-  // Keep the chain alive even if this run rejects (it can't — caught above).
-  queue = run.catch(() => undefined);
-  return run;
+async function runJob(worker: Worker, job: Job): Promise<void> {
+  try {
+    const prepared = await preprocess(job.input);
+    const { data } = await worker.recognize(prepared);
+    job.resolve(data.text ?? "");
+  } catch (err) {
+    logger.error({ action: "csam_ocr_recognize", error: String(err) });
+    job.resolve("");
+  }
 }
 
-/** Tear down the worker (used on shutdown / after tests). */
+/** Hands the next free worker the highest-priority waiting job, if any. */
+function dispatch(): void {
+  if (freeWorkers.length === 0) return;
+  const job = urgentJobs.shift() ?? normalJobs.shift();
+  if (!job) return;
+  const worker = freeWorkers.pop()!;
+  void runJob(worker, job).finally(() => {
+    freeWorkers.push(worker);
+    dispatch();
+  });
+}
+
+/** Extract text from an image buffer. `urgent` jumps ahead of already-queued normal jobs. */
+export async function ocrImage(input: Buffer, urgent = false): Promise<string> {
+  await ensurePool();
+  return new Promise<string>((resolve) => {
+    (urgent ? urgentJobs : normalJobs).push({ input, resolve });
+    dispatch();
+  });
+}
+
+/** Tear down the worker pool (used on shutdown / after tests). */
 export async function terminateOcr(): Promise<void> {
-  if (workerPromise) {
+  for (const w of workers) {
     try {
-      const w = await workerPromise;
       await w.terminate();
     } catch {
       /* silent */
     }
-    workerPromise = null;
   }
+  workers = [];
+  freeWorkers = [];
+  poolReady = null;
+  urgentJobs.length = 0;
+  normalJobs.length = 0;
 }

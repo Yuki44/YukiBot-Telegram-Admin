@@ -34,7 +34,8 @@ export interface ImageScanResult {
 export interface ImageScanDeps {
   getConfig: () => Promise<WatchConfig>;
   download: (fileId: string) => Promise<Buffer>;
-  ocr: (image: Buffer) => Promise<string>;
+  /** `urgent` (no caption to fall back on) jumps ahead of queued non-urgent OCR jobs. */
+  ocr: (image: Buffer, urgent: boolean) => Promise<string>;
   cacheGet: (fileUniqueId: string) => Promise<{ text: string; reviewedSafe: boolean } | null>;
   cacheSet: (fileUniqueId: string, text: string) => Promise<void>;
 }
@@ -63,7 +64,7 @@ export async function scanImage(candidate: ScanCandidate, deps: ImageScanDeps): 
   let text: string;
   try {
     const buf = await deps.download(candidate.fileId);
-    text = await deps.ocr(buf);
+    text = await deps.ocr(buf, !caption);
   } catch (err) {
     // G10/G11 — must not be silent, or a real failure reads as "OCR ran, no match".
     logger.error({

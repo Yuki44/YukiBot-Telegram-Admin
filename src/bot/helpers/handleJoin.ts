@@ -7,6 +7,7 @@ import { claimRecentWelcome, clearRecentWelcome, claimRecentAutoban } from "./we
 import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
 import { t } from "../../locales/i18n";
+import { enqueueUrgentBioCheck } from "../../features/csamDetection/scanner";
 
 export interface JoinUser {
   id: number;
@@ -63,6 +64,9 @@ export async function handleUserJoin(
     logger.error({ action: "handleUserJoin_findOrCreate", userId, chatId, error: String(err) });
     return { ok: false, autobanned: false };
   }
+
+  // Catch a CSAM/impostor bio before the first message, not after it.
+  if (chatConfig.features.csamDetection) enqueueUrgentBioCheck(userId, chatId);
 
   if (record.leftWithWarningsAt && !record.wasBanned) {
     userRepository
