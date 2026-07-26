@@ -1,4 +1,5 @@
 import { WatchConfig, evaluateImageText } from "./matcher";
+import { logger } from "../../utils/logger";
 
 /**
  * Image OCR decision pipeline (pure orchestration — engine/IO injected so it
@@ -63,7 +64,13 @@ export async function scanImage(candidate: ScanCandidate, deps: ImageScanDeps): 
   try {
     const buf = await deps.download(candidate.fileId);
     text = await deps.ocr(buf);
-  } catch {
+  } catch (err) {
+    // G10/G11 — must not be silent, or a real failure reads as "OCR ran, no match".
+    logger.error({
+      action: "csam_image_scan_failed",
+      fileUniqueId: candidate.fileUniqueId,
+      error: String(err),
+    });
     return { matched: false, text: "", source: "skip" };
   }
   await deps.cacheSet(candidate.fileUniqueId, text);

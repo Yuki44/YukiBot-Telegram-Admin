@@ -41,6 +41,7 @@ import { spamCallbackHandler } from "./bot/handlers/spamCallbackHandler";
 import { csamCallbackHandler } from "./bot/handlers/csamCallbackHandler";
 import { startCsamScanner } from "./features/csamDetection/scanner";
 import { csamImageScan } from "./bot/handlers/csamImageHandler";
+import { csamBioTrigger } from "./bot/handlers/csamBioTrigger";
 import { promoSpamDetection } from "./features/promoSpamDetection";
 import { spamHandler } from "./bot/commands/spam";
 import { nospamHandler } from "./bot/commands/nospam";
@@ -151,6 +152,7 @@ bot.on("message:forum_topic_edited", async (ctx) => {
 });
 
 bot.on("message", csamImageScan);
+bot.on("message", csamBioTrigger);
 bot.on("message", mediaForwardHandler);
 bot.on("message", topicFiltering);
 bot.on("message", bannedWordsEnforcement);
