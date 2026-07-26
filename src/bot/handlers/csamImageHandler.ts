@@ -115,13 +115,12 @@ export async function csamImageScan(ctx: BotContext, next: NextFunction): Promis
       logger.error({ action: "csam_image_delete", chatId: msg.chat.id, error: String(err) });
     }
 
-    // The bio scanner may have auto-banned this user while OCR was still running
-    // (deleting their messages in the process) — don't re-alert on someone already gone.
+    // Bio scan may have already banned them mid-OCR — don't re-alert.
     let alreadyBanned = false;
     try {
       alreadyBanned = (await userRepository.findByUserAndChat(sender.id, msg.chat.id))?.isBanned === true;
     } catch {
-      /* continue — worst case is a redundant alert, not a missed one */
+      /* continue */
     }
     if (alreadyBanned) {
       logger.info({ action: "csam_image_match_already_banned", chatId: msg.chat.id, userId: sender.id });

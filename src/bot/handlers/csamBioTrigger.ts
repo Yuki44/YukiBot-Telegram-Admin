@@ -4,11 +4,7 @@ import { adminRepository } from "../../db/repositories/adminRepository";
 import { csamRecentMessageRepository } from "../../db/repositories/csamRecentMessageRepository";
 import { enqueueUrgentBioCheck } from "../../features/csamDetection/scanner";
 
-/**
- * On every message in a csamDetection-enabled chat: queue the sender for a
- * priority bio check, and record the message id so an eventual ban can
- * batch-delete it (see csamRecentMessageRepository).
- */
+/** On every message in a csamDetection chat: queue a priority bio check and log the message id for on-ban cleanup. */
 export async function csamBioTrigger(ctx: BotContext, next: NextFunction): Promise<void> {
   try {
     const chatConfig = ctx.chatConfig;

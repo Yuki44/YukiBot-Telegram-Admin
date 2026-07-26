@@ -119,13 +119,7 @@ export function buildRegistroKeyboard(chatId: number, messageId: number): Inline
   return new InlineKeyboard().url("📋 Ver registro", `https://t.me/c/${internalId}/${messageId}`);
 }
 
-/**
- * Post the alert: full detail + real action buttons to the log channel, and a
- * compact ping to the notify chat. The notify-chat ping only ever carries a
- * redirect to the log-channel message — never the real buttons — so a rushed
- * tap there can't act. If no log channel is configured there's nowhere to
- * redirect to, so the notify chat falls back to the real buttons directly.
- */
+/** Notify chat only ever gets a redirect to logsTo's buttons — direct buttons only if no logsTo. */
 export async function sendCsamAlert(
   api: Api,
   chatConfig: IChat,
@@ -172,7 +166,7 @@ export async function sendCsamAlert(
 
 // ── Enforcement ──────────────────────────────────────────────────────
 
-/** Splits an array into groups of at most `size` — Telegram caps deleteMessages at 100 ids. */
+/** deleteMessages caps at 100 ids per call. */
 export function chunk<T>(items: T[], size: number): T[][] {
   const groups: T[][] = [];
   for (let i = 0; i < items.length; i += size) {

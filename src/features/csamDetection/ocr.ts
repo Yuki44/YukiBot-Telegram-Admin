@@ -3,14 +3,7 @@ import sharp from "sharp";
 import { logger } from "../../utils/logger";
 import { CSAM_OCR_MAX_DIM } from "../../config/constants";
 
-/**
- * Local OCR engine (tesseract.js) — no image or text ever leaves the process.
- *
- * A small fixed-size worker pool lets two images be recognised at once, and a
- * priority queue lets an urgent (captionless) image jump ahead of whatever
- * else is waiting — CSAM posts are typically a single unannotated image, and
- * every second it sits unscanned is a second it's visible in the chat.
- */
+/** Local OCR (tesseract.js), no image/text ever leaves the process. 2-worker pool, urgent jobs jump the queue. */
 
 const MAX_WORKERS = 2;
 

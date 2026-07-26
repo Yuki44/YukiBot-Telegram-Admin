@@ -1,11 +1,7 @@
 import { Schema, model } from "mongoose";
 import { CSAM_RECENT_MESSAGE_TTL_S } from "../../config/constants";
 
-/**
- * Rolling per-(user,chat) message-id log for csamDetection chats, so an
- * auto-ban can batch-delete what this person just posted. TTL-expired after
- * CSAM_RECENT_MESSAGE_TTL_S — a short lookback window, not a message archive.
- */
+/** TTL-expired message-id log per (user,chat) — feeds the on-ban bulk delete. */
 export interface ICsamRecentMessage {
   userId: number;
   chatId: number;
