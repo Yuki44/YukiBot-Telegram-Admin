@@ -2,6 +2,7 @@ import { NextFunction } from "grammy";
 import { Api } from "grammy";
 import { BotContext } from "../../types";
 import { adminRepository } from "../../db/repositories/adminRepository";
+import { userRepository } from "../../db/repositories/userRepository";
 import { csamWatchlistRepository } from "../../db/repositories/csamWatchlistRepository";
 import { csamImageCacheRepository } from "../../db/repositories/csamImageCacheRepository";
 import { scanImage, ScanCandidate, ImageScanDeps } from "../../features/csamDetection/imageScan";
@@ -112,6 +113,19 @@ export async function csamImageScan(ctx: BotContext, next: NextFunction): Promis
       await ctx.api.deleteMessage(msg.chat.id, msg.message_id);
     } catch (err) {
       logger.error({ action: "csam_image_delete", chatId: msg.chat.id, error: String(err) });
+    }
+
+    // The bio scanner may have auto-banned this user while OCR was still running
+    // (deleting their messages in the process) — don't re-alert on someone already gone.
+    let alreadyBanned = false;
+    try {
+      alreadyBanned = (await userRepository.findByUserAndChat(sender.id, msg.chat.id))?.isBanned === true;
+    } catch {
+      /* continue — worst case is a redundant alert, not a missed one */
+    }
+    if (alreadyBanned) {
+      logger.info({ action: "csam_image_match_already_banned", chatId: msg.chat.id, userId: sender.id });
+      return;
     }
 
     const target: CsamTarget = {

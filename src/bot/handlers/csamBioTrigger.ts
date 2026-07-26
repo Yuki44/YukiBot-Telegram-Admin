@@ -1,9 +1,14 @@
 import { NextFunction } from "grammy";
 import { BotContext } from "../../types";
 import { adminRepository } from "../../db/repositories/adminRepository";
+import { csamRecentMessageRepository } from "../../db/repositories/csamRecentMessageRepository";
 import { enqueueUrgentBioCheck } from "../../features/csamDetection/scanner";
 
-/** On every message in a csamDetection-enabled chat, queue the sender for a priority bio check. */
+/**
+ * On every message in a csamDetection-enabled chat: queue the sender for a
+ * priority bio check, and record the message id so an eventual ban can
+ * batch-delete it (see csamRecentMessageRepository).
+ */
 export async function csamBioTrigger(ctx: BotContext, next: NextFunction): Promise<void> {
   try {
     const chatConfig = ctx.chatConfig;
@@ -24,6 +29,7 @@ export async function csamBioTrigger(ctx: BotContext, next: NextFunction): Promi
     }
 
     enqueueUrgentBioCheck(sender.id, msg.chat.id);
+    void csamRecentMessageRepository.record(sender.id, msg.chat.id, msg.message_id);
     return await next();
   } catch {
     return await next();

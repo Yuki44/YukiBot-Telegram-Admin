@@ -2,6 +2,7 @@ import { Api, InlineKeyboard } from "grammy";
 import { IChat } from "../../types";
 import { userRepository } from "../../db/repositories/userRepository";
 import { chatRepository } from "../../db/repositories/chatRepository";
+import { csamRecentMessageRepository } from "../../db/repositories/csamRecentMessageRepository";
 import { recordActivity, ActivityActor } from "../../utils/activityLog";
 import { logger } from "../../utils/logger";
 import { esc, mentionHtml } from "../../bot/helpers/html";
@@ -112,7 +113,19 @@ export function buildCsamAlert(
 
 // ── Alert delivery ───────────────────────────────────────────────────
 
-/** Post the alert: full detail to the log channel, a compact ping to the notify chat. */
+/** Deep-link to a message inside a private supergroup/channel (the -100 prefix is stripped). */
+export function buildRegistroKeyboard(chatId: number, messageId: number): InlineKeyboard {
+  const internalId = String(chatId).replace(/^-100/, "");
+  return new InlineKeyboard().url("📋 Ver registro", `https://t.me/c/${internalId}/${messageId}`);
+}
+
+/**
+ * Post the alert: full detail + real action buttons to the log channel, and a
+ * compact ping to the notify chat. The notify-chat ping only ever carries a
+ * redirect to the log-channel message — never the real buttons — so a rushed
+ * tap there can't act. If no log channel is configured there's nowhere to
+ * redirect to, so the notify chat falls back to the real buttons directly.
+ */
 export async function sendCsamAlert(
   api: Api,
   chatConfig: IChat,
@@ -121,19 +134,65 @@ export async function sendCsamAlert(
   const notifyDest =
     chatConfig.notifyFlags?.notifyCsam && chatConfig.notifyChatId ? chatConfig.notifyChatId : null;
 
-  const post = async (dest: number, text: string): Promise<void> => {
-    try {
-      await api.sendMessage(dest, text, { parse_mode: "HTML", reply_markup: alert.keyboard });
-    } catch (err) {
-      logger.error({ action: "csam_alert_send", chatId: chatConfig.chatId, dest, error: String(err) });
-    }
-  };
+  let notifyKeyboard = alert.keyboard;
 
-  if (chatConfig.logsTo) await post(chatConfig.logsTo, alert.logText);
-  if (notifyDest && notifyDest !== chatConfig.logsTo) await post(notifyDest, alert.notifyText);
+  if (chatConfig.logsTo) {
+    try {
+      const sent = await api.sendMessage(chatConfig.logsTo, alert.logText, {
+        parse_mode: "HTML",
+        reply_markup: alert.keyboard,
+      });
+      notifyKeyboard = buildRegistroKeyboard(chatConfig.logsTo, sent.message_id);
+    } catch (err) {
+      logger.error({
+        action: "csam_alert_send",
+        chatId: chatConfig.chatId,
+        dest: chatConfig.logsTo,
+        error: String(err),
+      });
+    }
+  }
+
+  if (notifyDest && notifyDest !== chatConfig.logsTo) {
+    try {
+      await api.sendMessage(notifyDest, alert.notifyText, {
+        parse_mode: "HTML",
+        reply_markup: notifyKeyboard,
+      });
+    } catch (err) {
+      logger.error({
+        action: "csam_alert_send",
+        chatId: chatConfig.chatId,
+        dest: notifyDest,
+        error: String(err),
+      });
+    }
+  }
 }
 
 // ── Enforcement ──────────────────────────────────────────────────────
+
+/** Splits an array into groups of at most `size` — Telegram caps deleteMessages at 100 ids. */
+export function chunk<T>(items: T[], size: number): T[][] {
+  const groups: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    groups.push(items.slice(i, i + size));
+  }
+  return groups;
+}
+
+/** Deletes everything this user is known to have posted in one chat (best-effort). */
+async function deleteRecentMessages(api: Api, chatId: number, userId: number): Promise<void> {
+  const ids = await csamRecentMessageRepository.findMessageIds(userId, chatId);
+  if (ids.length === 0) return;
+  for (const group of chunk(ids, 100)) {
+    try {
+      await api.deleteMessages(chatId, group);
+    } catch (err) {
+      logger.error({ action: "csam_bulk_delete", chatId, userId, error: String(err) });
+    }
+  }
+}
 
 /** Ban an id across every active managed chat + mark wasBanned (G3). Returns chats touched. */
 export async function banAcrossChats(api: Api, target: CsamTarget): Promise<number> {
@@ -150,6 +209,7 @@ export async function banAcrossChats(api: Api, target: CsamTarget): Promise<numb
     } catch {
       /* may not be a member / already gone — still record intent below */
     }
+    await deleteRecentMessages(api, c.chatId, target.userId);
     try {
       await userRepository.markBanned(target.userId, c.chatId, target.username, target.name);
       count += 1;

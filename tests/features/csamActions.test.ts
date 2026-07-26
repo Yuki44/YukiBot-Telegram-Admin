@@ -3,6 +3,8 @@ import {
   buildCsamCallback,
   parseCsamCallback,
   buildCsamAlert,
+  buildRegistroKeyboard,
+  chunk,
 } from "../../src/features/csamDetection/actions";
 
 describe("csam callback data", () => {
@@ -66,5 +68,28 @@ describe("buildCsamAlert", () => {
     });
     expect(logText).not.toContain("<b>x</b>");
     expect(logText).toContain("&lt;b&gt;");
+  });
+});
+
+describe("buildRegistroKeyboard", () => {
+  it("links to the message inside the -100-prefixed supergroup", () => {
+    const kb = buildRegistroKeyboard(-1001234567890, 555);
+    const btn = kb.inline_keyboard[0][0] as { text: string; url?: string };
+    expect(btn.url).toBe("https://t.me/c/1234567890/555");
+    expect(btn.text).toBe("📋 Ver registro");
+  });
+});
+
+describe("chunk", () => {
+  it("splits an array into groups of the given size", () => {
+    expect(chunk([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
+  });
+
+  it("returns one group when under the size", () => {
+    expect(chunk([1, 2], 100)).toEqual([[1, 2]]);
+  });
+
+  it("returns an empty array for an empty input", () => {
+    expect(chunk([], 100)).toEqual([]);
   });
 });
