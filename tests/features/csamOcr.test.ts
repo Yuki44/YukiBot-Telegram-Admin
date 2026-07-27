@@ -1,18 +1,28 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { CSAM_OCR_SCALES } from "../../src/config/constants";
 
-const recognizeCalls: { text: string; resolve: () => void }[] = [];
+/** Passes per image = every scale run through both page-seg modes. */
+const PASSES_PER_JOB = CSAM_OCR_SCALES.length * 2;
+
+interface RecogCall {
+  input: string;
+  resolved: boolean;
+  resolve: () => void;
+}
+const recognizeCalls: RecogCall[] = [];
 
 vi.mock("tesseract.js", () => ({
-  PSM: { SPARSE_TEXT: "11" },
+  PSM: { SPARSE_TEXT: "11", SINGLE_BLOCK: "6" },
   createWorker: vi.fn(async () => ({
     setParameters: vi.fn(async () => {}),
+    // Each recognize parks itself (labelled by the job's original buffer, which the
+    // sharp stub passes straight through) until the test releases it, so we can drive
+    // completion order across the two workers.
     recognize: vi.fn(
-      (_img: Buffer) =>
+      (img: Buffer) =>
         new Promise((resolve) => {
-          // Each call registers itself and waits until the test releases it,
-          // so we can control completion order across concurrent workers.
-          const text = `text-${recognizeCalls.length}`;
-          recognizeCalls.push({ text, resolve: () => resolve({ data: { text } }) });
+          const input = img.toString();
+          recognizeCalls.push({ input, resolved: false, resolve: () => resolve({ data: { text: input } }) });
         })
     ),
     terminate: vi.fn(async () => {}),
@@ -20,13 +30,15 @@ vi.mock("tesseract.js", () => ({
 }));
 
 vi.mock("sharp", () => {
-  // Chainable stub: every transform returns the same object; toBuffer ends the chain.
-  const chain: Record<string, unknown> = {};
-  for (const m of ["resize", "grayscale", "normalize", "sharpen"]) {
-    chain[m] = () => chain;
-  }
-  chain.toBuffer = async () => Buffer.from("prepared");
-  return { default: () => chain };
+  // Chainable stub; toBuffer passes the ORIGINAL input through so each recognize call
+  // is identifiable by its job label.
+  const make = (input: Buffer) => {
+    const chain: Record<string, unknown> = {};
+    for (const m of ["resize", "grayscale", "normalize", "sharpen"]) chain[m] = () => chain;
+    chain.toBuffer = async () => input;
+    return chain;
+  };
+  return { default: (input: Buffer) => make(input) };
 });
 
 vi.mock("../../src/utils/logger", () => ({
@@ -35,7 +47,41 @@ vi.mock("../../src/utils/logger", () => ({
 
 import { ocrImage, terminateOcr } from "../../src/features/csamDetection/ocr";
 
-describe("ocrImage priority", () => {
+/** Release every not-yet-resolved recognize call, repeatedly, until `promises` all settle. */
+async function drain(promises: Promise<unknown>[]): Promise<void> {
+  let pending = promises.length;
+  promises.forEach((p) => void p.finally(() => (pending -= 1)));
+  const start = Date.now();
+  while (pending > 0) {
+    for (const c of recognizeCalls) {
+      if (!c.resolved) {
+        c.resolved = true;
+        c.resolve();
+      }
+    }
+    await new Promise((r) => setTimeout(r, 0));
+    if (Date.now() - start > 3000) throw new Error("drain timeout");
+  }
+}
+
+/** Release only the passes of the job labelled `label`, until `promise` settles. */
+async function completeJob(label: string, promise: Promise<unknown>): Promise<void> {
+  let done = false;
+  void promise.finally(() => (done = true));
+  const start = Date.now();
+  while (!done) {
+    for (const c of recognizeCalls) {
+      if (c.input === label && !c.resolved) {
+        c.resolved = true;
+        c.resolve();
+      }
+    }
+    await new Promise((r) => setTimeout(r, 0));
+    if (Date.now() - start > 3000) throw new Error(`timeout completing ${label}`);
+  }
+}
+
+describe("ocrImage", () => {
   beforeEach(() => {
     recognizeCalls.length = 0;
   });
@@ -44,43 +90,42 @@ describe("ocrImage priority", () => {
     await terminateOcr();
   });
 
+  it("unions every scale × mode pass into one text blob", async () => {
+    const p = ocrImage(Buffer.from("photo"));
+    await drain([p]);
+    const text = await p;
+    // Same label came back from every pass; the union keeps them all.
+    expect(text.split(/\s+/).filter((t) => t === "photo")).toHaveLength(PASSES_PER_JOB);
+  });
+
   it("runs two jobs concurrently on the two-worker pool", async () => {
     const a = ocrImage(Buffer.from("a"));
     const b = ocrImage(Buffer.from("b"));
 
-    // Give both calls a tick to reach the worker — if only one worker existed,
-    // only one recognize() call would have registered by now.
+    // If only one worker existed, only one job's first pass would have registered.
     await vi.waitFor(() => expect(recognizeCalls.length).toBe(2));
+    expect(recognizeCalls.map((c) => c.input).sort()).toEqual(["a", "b"]);
 
-    recognizeCalls[0].resolve();
-    recognizeCalls[1].resolve();
-    await Promise.all([a, b]);
+    await drain([a, b]);
   });
 
   it("dispatches an urgent (captionless) job ahead of an already-queued normal one", async () => {
-    // Both workers busy first.
+    // Both workers busy on their first pass.
     const busy1 = ocrImage(Buffer.from("busy1"));
     const busy2 = ocrImage(Buffer.from("busy2"));
     await vi.waitFor(() => expect(recognizeCalls.length).toBe(2));
 
-    // Queue a normal job, then an urgent one — urgent must be served first
-    // once a worker frees up.
+    // Queue a normal job, then an urgent one — urgent must win the first freed worker.
     const normal = ocrImage(Buffer.from("normal"), false);
     const urgent = ocrImage(Buffer.from("urgent"), true);
 
-    recognizeCalls[0].resolve();
-    recognizeCalls[1].resolve();
-    await Promise.all([busy1, busy2]);
+    // Free exactly one worker by finishing busy1 (busy2 stays parked).
+    await completeJob("busy1", busy1);
 
-    await vi.waitFor(() => expect(recognizeCalls.length).toBe(3));
-    // The 3rd recognize() call dispatched must belong to the urgent job, not
-    // the normal one that was queued first.
-    recognizeCalls[2].resolve();
-    const urgentText = await urgent;
-    expect(urgentText).toBe("text-2");
+    // The freed worker picked up the urgent job, not the normal one queued before it.
+    await vi.waitFor(() => expect(recognizeCalls.some((c) => c.input === "urgent")).toBe(true));
+    expect(recognizeCalls.some((c) => c.input === "normal")).toBe(false);
 
-    await vi.waitFor(() => expect(recognizeCalls.length).toBe(4));
-    recognizeCalls[3].resolve();
-    await normal;
+    await drain([busy2, urgent, normal]);
   });
 });
