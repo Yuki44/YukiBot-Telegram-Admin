@@ -71,3 +71,17 @@ export const CSAM_OCR_MAX_BYTES = 5 * 1024 * 1024;
 
 /** TTL (seconds) for OCR text cache rows (reviewed-safe rows never expire). */
 export const CSAM_IMAGE_CACHE_TTL_S = 7 * 24 * 60 * 60;
+
+// ── Language detection ───────────────────────────────────────────────
+
+/**
+ * Messages with this many words or fewer are never evaluated (Stage 1 hard gate).
+ * "not hard" / "hi" / "dm me" — one or two words is normal chat noise. Kept at 2 (not
+ * 3) so a short-but-fully-foreign phrase like "comment ca marche" (3 words) still
+ * reaches the classifier, which is better positioned to tell an assimilated loanword
+ * ("dm me") from a genuine foreign sentence than a raw word count ever could.
+ */
+export const LANGUAGE_MIN_WORDS = 2;
+
+/** Bulk-delete window (ms) on offense #2+ — "the last couple of hours" of a user's messages. */
+export const LANGUAGE_BULK_DELETE_WINDOW_MS = 2 * 60 * 60 * 1000;

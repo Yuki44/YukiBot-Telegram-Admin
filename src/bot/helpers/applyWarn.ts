@@ -2,7 +2,7 @@ import { Message } from "grammy/types";
 import { BotContext, IChat } from "../../types";
 import { userRepository } from "../../db/repositories/userRepository";
 import { sendLog } from "./sendLog";
-import { esc, displayName } from "./html";
+import { esc, mentionHtml } from "./html";
 import { buildActor, getChatTitle } from "./contextHelpers";
 import { MAX_WARNINGS } from "../../config/constants";
 import { t } from "../../locales/i18n";
@@ -23,10 +23,13 @@ export async function applyWarn(
     actor?: { id: number; name: string; username?: string };
     repliedMsg?: Message;
   }
-): Promise<{ warnMsgId?: number }> {
+): Promise<{ warnMsgId?: number; warned?: boolean; banned?: boolean; warningsAfter?: number }> {
   try {
     const user = await userRepository.incrementWarning(targetUserId, chatId, reason, username, name);
-    const dn = displayName(name, username);
+    // Always a real, notifying tg://user?id= mention — a plain "(@username)" suffix only
+    // auto-links (and notifies) when a username exists; users without one got silently
+    // skipped otherwise.
+    const dn = mentionHtml(targetUserId, name, username);
 
     const resolvedChatConfig = options?.chatConfig !== undefined ? options.chatConfig : ctx.chatConfig;
     const resolvedChatName = options?.chatName ?? getChatTitle(ctx);
@@ -141,7 +144,7 @@ export async function applyWarn(
       warnMsgId = sent.message_id;
     }
 
-    return { warnMsgId };
+    return { warnMsgId, warned: true, banned: user.warnings >= MAX_WARNINGS, warningsAfter: user.warnings };
   } catch {
     return {};
   }

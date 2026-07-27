@@ -58,7 +58,6 @@ const FEATURE_META: FeatureMeta[] = [
     id: "languageDetection",
     name: "Detección de idioma",
     desc: "Avisará si se habla fuera del idioma del grupo.",
-    soon: true,
   },
 ];
 

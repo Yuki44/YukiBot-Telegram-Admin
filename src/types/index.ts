@@ -169,6 +169,11 @@ export interface IUser extends Document {
   photoCheckedAt?: Date;
   /** Last time the rolling CSAM bio scanner checked this user's bio (undefined = never). */
   lastBioCheckAt?: Date;
+  /**
+   * When the one-time languageDetection grace notice was given (per userId+chatId, never
+   * reset). Undefined = never given, i.e. their next blatant-language hit is still a grace.
+   */
+  languageGraceGivenAt?: Date;
 }
 
 /**

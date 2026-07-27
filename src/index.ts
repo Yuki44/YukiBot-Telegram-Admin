@@ -39,10 +39,12 @@ import { kkHandler } from "./bot/commands/kk";
 import { bnHandler } from "./bot/commands/bn";
 import { spamCallbackHandler } from "./bot/handlers/spamCallbackHandler";
 import { csamCallbackHandler } from "./bot/handlers/csamCallbackHandler";
+import { languageCallbackHandler } from "./bot/handlers/languageCallbackHandler";
 import { startCsamScanner } from "./features/csamDetection/scanner";
 import { csamImageScan } from "./bot/handlers/csamImageHandler";
 import { csamBioTrigger } from "./bot/handlers/csamBioTrigger";
 import { promoSpamDetection } from "./features/promoSpamDetection";
+import { languageDetection } from "./features/languageDetection";
 import { spamHandler } from "./bot/commands/spam";
 import { nospamHandler } from "./bot/commands/nospam";
 import { wladdHandler, wldelHandler, wlsHandler } from "./bot/commands/wlLinks";
@@ -120,6 +122,7 @@ bot.on("message:new_chat_members", newChatMembersHandler);
 bot.on("callback_query", async (ctx) => {
   const data = ctx.callbackQuery.data ?? "";
   if (data.startsWith("csam_")) return await csamCallbackHandler(ctx);
+  if (data.startsWith("langgrace_")) return await languageCallbackHandler(ctx);
   return await spamCallbackHandler(ctx);
 });
 
@@ -157,6 +160,7 @@ bot.on("message", mediaForwardHandler);
 bot.on("message", topicFiltering);
 bot.on("message", bannedWordsEnforcement);
 bot.on("message", promoSpamDetection);
+bot.on("message", languageDetection);
 
 let httpServer: HttpServer | null = null;
 
