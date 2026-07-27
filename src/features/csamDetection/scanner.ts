@@ -128,6 +128,7 @@ async function drainOneUrgent(
     if (!chatConfig) continue;
 
     const user: IUser | null = await userRepository.findByUserAndChat(entry.userId, entry.chatId);
+    if (user?.isBanned) continue; // already banned (e.g. an OCR hit won the race) — nothing to do
     if (!isBioCheckStale(user?.lastBioCheckAt)) continue;
 
     const target: CsamTarget = { userId: entry.userId, name: user?.name, username: user?.username };

@@ -5,9 +5,14 @@ import { adminRepository } from "../../db/repositories/adminRepository";
 import { userRepository } from "../../db/repositories/userRepository";
 import { csamWatchlistRepository } from "../../db/repositories/csamWatchlistRepository";
 import { csamImageCacheRepository } from "../../db/repositories/csamImageCacheRepository";
-import { scanImage, ScanCandidate, ImageScanDeps } from "../../features/csamDetection/imageScan";
+import {
+  scanImage,
+  ScanCandidate,
+  ImageScanDeps,
+  ImageScanResult,
+} from "../../features/csamDetection/imageScan";
 import { ocrImage } from "../../features/csamDetection/ocr";
-import { executeCsamSilence, CsamTarget } from "../../features/csamDetection/actions";
+import { executeCsamAutoBan, executeCsamSilence, CsamTarget } from "../../features/csamDetection/actions";
 import { logger } from "../../utils/logger";
 import { CSAM_OCR_MAX_BYTES } from "../../config/constants";
 
@@ -60,6 +65,14 @@ function extractStill(msg: NonNullable<BotContext["message"]>): ScanCandidate | 
   return null;
 }
 
+/** e.g. "imagen (ocr): nomax16 + videos, for buy". */
+function summarizeImageMatch(r: ImageScanResult): string {
+  const parts = [r.handle, ...r.solicitation];
+  if (r.keyword) parts.push(r.keyword);
+  const detail = parts.filter(Boolean).join(", ") || r.keyword || "cp";
+  return `imagen (${r.source}): ${detail}`;
+}
+
 async function downloadFile(api: Api, fileId: string): Promise<Buffer> {
   const file = await api.getFile(fileId);
   if (!file.file_path) throw new Error("no file_path");
@@ -70,9 +83,9 @@ async function downloadFile(api: Api, fileId: string): Promise<Buffer> {
 }
 
 /**
- * OCR-scan images in csamDetection-enabled chats. On a match: delete the image
- * and SILENCE the sender for human review (images NEVER auto-ban). Registered
- * BEFORE mediaForwardHandler so a matched CSAM image is never forwarded (S-rules).
+ * OCR-scan images in csamDetection-enabled chats. On a match, delete the image and either
+ * AUTO_BAN (strong hit) or SILENCE for review. Registered BEFORE mediaForwardHandler so a
+ * matched CSAM image is never forwarded (S-rules).
  */
 export async function csamImageScan(ctx: BotContext, next: NextFunction): Promise<void> {
   try {
@@ -95,7 +108,17 @@ export async function csamImageScan(ctx: BotContext, next: NextFunction): Promis
 
     const candidate = extractStill(msg);
     if (!candidate) return await next();
-    if (candidate.fileSize && candidate.fileSize > CSAM_OCR_MAX_BYTES) return await next();
+    if (candidate.fileSize && candidate.fileSize > CSAM_OCR_MAX_BYTES) {
+      // An oversized file bypassing OCR must never be silent.
+      logger.warn({
+        action: "csam_image_skipped_oversize",
+        chatId: msg.chat.id,
+        userId: sender.id,
+        fileSize: candidate.fileSize,
+        maxBytes: CSAM_OCR_MAX_BYTES,
+      });
+      return await next();
+    }
 
     const deps: ImageScanDeps = {
       getConfig: () => csamWatchlistRepository.getConfig(),
@@ -106,16 +129,35 @@ export async function csamImageScan(ctx: BotContext, next: NextFunction): Promis
     };
 
     const result = await scanImage(candidate, deps);
-    if (!result.matched) return await next();
+    logger.info({
+      action: "csam_image_scanned",
+      chatId: msg.chat.id,
+      userId: sender.id,
+      source: result.source,
+      verdict: result.verdict,
+      textLen: result.text.length,
+    });
+    if (result.verdict === "NONE") return await next();
 
-    // Delete before anything else so the image cannot linger or be forwarded downstream.
+    // Delete the exact triggering message first (Telegram-confirmed) so it can't linger or be forwarded.
     try {
       await ctx.api.deleteMessage(msg.chat.id, msg.message_id);
+      logger.info({
+        action: "csam_image_deleted",
+        chatId: msg.chat.id,
+        messageId: msg.message_id,
+        userId: sender.id,
+      });
     } catch (err) {
-      logger.error({ action: "csam_image_delete", chatId: msg.chat.id, error: String(err) });
+      logger.error({
+        action: "csam_image_delete",
+        chatId: msg.chat.id,
+        messageId: msg.message_id,
+        error: String(err),
+      });
     }
 
-    // Bio scan may have already banned them mid-OCR — don't re-alert.
+    // Bio scan may have banned them mid-OCR; image is deleted above regardless — just skip the dup alert.
     let alreadyBanned = false;
     try {
       alreadyBanned = (await userRepository.findByUserAndChat(sender.id, msg.chat.id))?.isBanned === true;
@@ -132,18 +174,21 @@ export async function csamImageScan(ctx: BotContext, next: NextFunction): Promis
       name: [sender.first_name, sender.last_name].filter(Boolean).join(" "),
       username: sender.username,
     };
-    const matchToken = result.handle ?? result.keyword ?? "cp";
-    const summary = `imagen (${result.source}): ${matchToken}`;
+    const summary = summarizeImageMatch(result);
     const actor = { id: ctx.me.id, name: ctx.me.first_name, username: ctx.me.username };
 
-    await executeCsamSilence(ctx.api, chatConfig, target, summary, actor);
+    if (result.verdict === "AUTO_BAN") {
+      await executeCsamAutoBan(ctx.api, chatConfig, target, summary, actor);
+    } else {
+      await executeCsamSilence(ctx.api, chatConfig, target, summary, actor);
+    }
 
     logger.info({
-      action: "csam_image_match",
+      action: result.verdict === "AUTO_BAN" ? "csam_image_autoban" : "csam_image_silence",
       chatId: msg.chat.id,
       userId: sender.id,
       source: result.source,
-      match: matchToken,
+      match: summary,
     });
     // Handled — do NOT call next(): stops mediaForward/topic/spam from re-processing.
   } catch (err) {

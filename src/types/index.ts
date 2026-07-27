@@ -213,7 +213,8 @@ export type ActivityLogType =
   | "owner_revoke"
   | "spam_confirmed"
   | "csam_autoban"
-  | "csam_silence";
+  | "csam_silence"
+  | "message_delete";
 
 /** Where the action originated. */
 export type ActivityLogSource = "bot" | "panel" | "auto";

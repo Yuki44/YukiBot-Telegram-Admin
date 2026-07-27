@@ -39,9 +39,12 @@ export interface BioResult {
 }
 
 export interface ImageResult {
+  verdict: BioVerdict;
   matched: boolean;
   handle?: string;
   keyword?: string;
+  solicitation: string[];
+  negation: string[];
 }
 
 function collapseSpaces(s: string): string {
@@ -101,7 +104,7 @@ export function evaluateBio(bio: string, config: WatchConfig): BioResult {
   return { verdict, handle, solicitation, negation };
 }
 
-/** AGGRESSIVE image/OCR text check — any handle OR CSAM keyword ⇒ matched (⇒ silence). */
+/** Mirrors evaluateBio: AUTO_BAN on handle + solicitation (no negation), else SILENCE on a lone handle/keyword. */
 export function evaluateImageText(text: string, config: WatchConfig): ImageResult {
   const folded = normalizeAndFold(text ?? "");
   const foldedSpaced = collapseSpaces(folded);
@@ -109,5 +112,15 @@ export function evaluateImageText(text: string, config: WatchConfig): ImageResul
 
   const handle = firstMatch(folded, foldedSpaced, config.handles);
   const keyword = (config.keywords ?? []).find((t) => imageKeywordMatch(folded, foldedSpaced, compact, t));
-  return { matched: Boolean(handle || keyword), handle, keyword };
+  const solicitation = config.solicitation.filter((t) => imageKeywordMatch(folded, foldedSpaced, compact, t));
+  const negation = config.negation.filter((t) => imageKeywordMatch(folded, foldedSpaced, compact, t));
+
+  let verdict: BioVerdict = "NONE";
+  if (handle && solicitation.length > 0 && negation.length === 0) {
+    verdict = "AUTO_BAN";
+  } else if (handle || keyword) {
+    verdict = "SILENCE";
+  }
+
+  return { verdict, matched: verdict !== "NONE", handle, keyword, solicitation, negation };
 }

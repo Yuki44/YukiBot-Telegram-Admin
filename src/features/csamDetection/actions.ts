@@ -179,21 +179,86 @@ export function chunk<T>(items: T[], size: number): T[][] {
   return groups;
 }
 
-/** Deletes everything this user is known to have posted in one chat (best-effort). */
-async function deleteRecentMessages(api: Api, chatId: number, userId: number): Promise<void> {
-  const ids = await csamRecentMessageRepository.findMessageIds(userId, chatId);
-  if (ids.length === 0) return;
+export interface DeleteResult {
+  deleted: number[];
+  failed: { id: number; reason: string }[];
+}
+
+/**
+ * Delete ids with per-message confirmation. Bulk `deleteMessages` is all-or-nothing —
+ * one poison id nukes the whole chunk (this is what shielded the CSAM image) — so on
+ * failure we retry that chunk id-by-id. resolve = gone, throw = reason.
+ */
+export async function deleteMessagesConfirmed(
+  api: Api,
+  chatId: number,
+  ids: number[]
+): Promise<DeleteResult> {
+  const deleted: number[] = [];
+  const failed: { id: number; reason: string }[] = [];
   for (const group of chunk(ids, 100)) {
     try {
       await api.deleteMessages(chatId, group);
-    } catch (err) {
-      logger.error({ action: "csam_bulk_delete", chatId, userId, error: String(err) });
+      deleted.push(...group);
+    } catch {
+      for (const id of group) {
+        try {
+          await api.deleteMessage(chatId, id);
+          deleted.push(id);
+        } catch (err) {
+          failed.push({ id, reason: String(err) });
+        }
+      }
     }
+  }
+  return { deleted, failed };
+}
+
+/** Deletes this user's known messages in one chat + records a confirmed-delete row. */
+async function deleteRecentMessages(
+  api: Api,
+  chatId: number,
+  userId: number,
+  actor: ActivityActor,
+  target: CsamTarget,
+  reason: string
+): Promise<void> {
+  const ids = await csamRecentMessageRepository.findMessageIds(userId, chatId);
+  if (ids.length === 0) {
+    logger.info({ action: "csam_bulk_delete", chatId, userId, found: 0, deleted: 0 });
+    return;
+  }
+  const res = await deleteMessagesConfirmed(api, chatId, ids);
+  logger.info({
+    action: "csam_bulk_delete",
+    chatId,
+    userId,
+    found: ids.length,
+    deleted: res.deleted.length,
+    failed: res.failed.length,
+  });
+  if (res.failed.length > 0) {
+    logger.warn({ action: "csam_bulk_delete_failed", chatId, userId, failed: res.failed.slice(0, 20) });
+  }
+  if (res.deleted.length > 0) {
+    recordActivity({
+      chatId,
+      type: "message_delete",
+      source: "bot",
+      actor,
+      target: { id: target.userId, name: target.name, username: target.username },
+      reason: `${reason} — ${res.deleted.length} mensaje(s) borrado(s)`,
+    });
   }
 }
 
 /** Ban an id across every active managed chat + mark wasBanned (G3). Returns chats touched. */
-export async function banAcrossChats(api: Api, target: CsamTarget): Promise<number> {
+export async function banAcrossChats(
+  api: Api,
+  target: CsamTarget,
+  actor: ActivityActor,
+  reason: string
+): Promise<number> {
   let chats: IChat[] = [];
   try {
     chats = (await chatRepository.listAll()).filter((c) => c.isActive !== false);
@@ -207,7 +272,7 @@ export async function banAcrossChats(api: Api, target: CsamTarget): Promise<numb
     } catch {
       /* may not be a member / already gone — still record intent below */
     }
-    await deleteRecentMessages(api, c.chatId, target.userId);
+    await deleteRecentMessages(api, c.chatId, target.userId, actor, target, reason);
     try {
       await userRepository.markBanned(target.userId, c.chatId, target.username, target.name);
       count += 1;
@@ -374,7 +439,7 @@ export async function executeCsamAutoBan(
   matchSummary: string,
   actor: ActivityActor
 ): Promise<void> {
-  const propagatedTo = await banAcrossChats(api, target);
+  const propagatedTo = await banAcrossChats(api, target, actor, `CP/impostor: ${matchSummary}`);
 
   recordActivity({
     chatId: chatConfig.chatId,

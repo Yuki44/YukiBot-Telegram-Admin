@@ -1,4 +1,4 @@
-import { WatchConfig, evaluateImageText } from "./matcher";
+import { WatchConfig, evaluateImageText, BioVerdict } from "./matcher";
 import { logger } from "../../utils/logger";
 
 /**
@@ -10,7 +10,7 @@ import { logger } from "../../utils/logger";
  *   2. cache lookup   — reuse prior OCR text; honour the reviewed-safe allowlist.
  *   3. OCR            — download + OCR only when the above didn't decide.
  *
- * Images NEVER auto-ban (adversarial/noisy) — a match yields SILENCE-for-review.
+ * A strong hit (handle + solicitation) AUTO-BANs; a lone hit SILENCEs for review.
  */
 
 export interface ScanCandidate {
@@ -24,10 +24,12 @@ export interface ScanCandidate {
 export type ScanSource = "caption" | "cache" | "ocr" | "skip";
 
 export interface ImageScanResult {
+  verdict: BioVerdict;
   matched: boolean;
   text: string;
   handle?: string;
   keyword?: string;
+  solicitation: string[];
   source: ScanSource;
 }
 
@@ -46,19 +48,35 @@ export async function scanImage(candidate: ScanCandidate, deps: ImageScanDeps): 
 
   if (caption) {
     const cap = evaluateImageText(caption, config);
-    if (cap.matched) {
-      return { matched: true, text: caption, handle: cap.handle, keyword: cap.keyword, source: "caption" };
+    if (cap.verdict !== "NONE") {
+      return {
+        verdict: cap.verdict,
+        matched: true,
+        text: caption,
+        handle: cap.handle,
+        keyword: cap.keyword,
+        solicitation: cap.solicitation,
+        source: "caption",
+      };
     }
   }
 
   const cached = await deps.cacheGet(candidate.fileUniqueId);
   if (cached) {
     if (cached.reviewedSafe) {
-      return { matched: false, text: cached.text, source: "cache" };
+      return { verdict: "NONE", matched: false, text: cached.text, solicitation: [], source: "cache" };
     }
     const combined = [caption, cached.text].filter(Boolean).join(" ");
     const r = evaluateImageText(combined, config);
-    return { matched: r.matched, text: cached.text, handle: r.handle, keyword: r.keyword, source: "cache" };
+    return {
+      verdict: r.verdict,
+      matched: r.matched,
+      text: cached.text,
+      handle: r.handle,
+      keyword: r.keyword,
+      solicitation: r.solicitation,
+      source: "cache",
+    };
   }
 
   let text: string;
@@ -72,11 +90,27 @@ export async function scanImage(candidate: ScanCandidate, deps: ImageScanDeps): 
       fileUniqueId: candidate.fileUniqueId,
       error: String(err),
     });
-    return { matched: false, text: "", source: "skip" };
+    return { verdict: "NONE", matched: false, text: "", solicitation: [], source: "skip" };
   }
   await deps.cacheSet(candidate.fileUniqueId, text);
 
   const combined = [caption, text].filter(Boolean).join(" ");
   const r = evaluateImageText(combined, config);
-  return { matched: r.matched, text, handle: r.handle, keyword: r.keyword, source: "ocr" };
+  // Log what OCR read (text only) so a miss is diagnosable, not silent.
+  logger.info({
+    action: "csam_ocr_result",
+    fileUniqueId: candidate.fileUniqueId,
+    textLen: text.length,
+    verdict: r.verdict,
+    sample: text.replace(/\s+/g, " ").trim().slice(0, 160),
+  });
+  return {
+    verdict: r.verdict,
+    matched: r.matched,
+    text,
+    handle: r.handle,
+    keyword: r.keyword,
+    solicitation: r.solicitation,
+    source: "ocr",
+  };
 }

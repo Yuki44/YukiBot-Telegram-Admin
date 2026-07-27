@@ -1,4 +1,4 @@
-import { createWorker, Worker } from "tesseract.js";
+import { createWorker, Worker, PSM } from "tesseract.js";
 import sharp from "sharp";
 import { logger } from "../../utils/logger";
 import { CSAM_OCR_MAX_DIM } from "../../config/constants";
@@ -23,6 +23,8 @@ async function ensurePool(): Promise<void> {
     poolReady = (async () => {
       while (workers.length < MAX_WORKERS) {
         const w = await createWorker("eng+spa");
+        // SPARSE_TEXT: find text anywhere (a banner over a collage), not one assumed column.
+        await w.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT });
         workers.push(w);
         freeWorkers.push(w);
       }
@@ -34,14 +36,11 @@ async function ensurePool(): Promise<void> {
 async function preprocess(input: Buffer): Promise<Buffer> {
   try {
     return await sharp(input)
-      .resize({
-        width: CSAM_OCR_MAX_DIM,
-        height: CSAM_OCR_MAX_DIM,
-        fit: "inside",
-        withoutEnlargement: true,
-      })
+      // Upscale small images (no withoutEnlargement) so text is big enough for tesseract.
+      .resize({ width: CSAM_OCR_MAX_DIM, height: CSAM_OCR_MAX_DIM, fit: "inside" })
       .grayscale()
       .normalize()
+      .sharpen()
       .toBuffer();
   } catch (err) {
     logger.warn({ action: "csam_ocr_preprocess", error: String(err) });
