@@ -33,6 +33,7 @@ describe("scanImage cost-control pipeline", () => {
       makeDeps({ download, ocr })
     );
     expect(r.matched).toBe(true);
+    expect(r.verdict).toBe("AUTO_BAN"); // handle @nomax16 + "for buy" ⇒ ban, no OCR needed
     expect(r.source).toBe("caption");
     expect(download).not.toHaveBeenCalled();
     expect(ocr).not.toHaveBeenCalled();
@@ -67,6 +68,7 @@ describe("scanImage cost-control pipeline", () => {
       makeDeps({ ocr: async () => "pls text to @NOMAX16 for buy", cacheSet })
     );
     expect(r.matched).toBe(true);
+    expect(r.verdict).toBe("AUTO_BAN"); // handle + "for buy" read off the image ⇒ OCR alone bans
     expect(r.source).toBe("ocr");
     expect(cacheSet).toHaveBeenCalledWith("u", "pls text to @NOMAX16 for buy");
   });
@@ -80,13 +82,23 @@ describe("scanImage cost-control pipeline", () => {
     expect(r.source).toBe("ocr");
   });
 
-  it("keyword-only OCR text (no handle) still matches (aggressive image tier)", async () => {
+  it("keyword-only OCR text (no handle) SILENCEs, never bans (aggressive image tier)", async () => {
     const r = await scanImage(
       { fileId: "f", fileUniqueId: "u" },
       makeDeps({ ocr: async () => ">11000 videos cp gei" })
     );
     expect(r.matched).toBe(true);
+    expect(r.verdict).toBe("SILENCE"); // keyword alone is never enough to auto-ban
     expect(r.keyword).toBeDefined();
+  });
+
+  it("handle alone (no sale word) SILENCEs, never bans", async () => {
+    const r = await scanImage(
+      { fileId: "f", fileUniqueId: "u" },
+      makeDeps({ ocr: async () => "contact nomax16" })
+    );
+    expect(r.matched).toBe(true);
+    expect(r.verdict).toBe("SILENCE");
   });
 
   it("download failure degrades to skip (never throws) but logs the error", async () => {

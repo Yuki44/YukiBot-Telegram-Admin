@@ -199,6 +199,13 @@ function metaFor(type: ActivityLogType): TypeMeta {
         fg: "var(--warn-fg)",
         label: "CP revisión",
       };
+    case "message_delete":
+      return {
+        icon: () => I.trash({ size: 14 }),
+        bg: "var(--danger-bg)",
+        fg: "var(--danger-fg)",
+        label: "Mensajes borrados",
+      };
   }
 }
 

@@ -89,6 +89,7 @@ try {
 
 - No obvious comments — omit anything that just restates what the code already says.
 - Comments must explain **why**, not **what**. If it can be read from the code, don't write it.
+- **Keep them short and rare.** Prefer one terse line; a comment that runs 3+ lines or narrates a mini-essay is a smell — cut it to the single non-obvious fact. Most lines need no comment at all; don't annotate every block.
 - JSDoc on exported functions only when the name + signature aren't self-explanatory.
 - TODO comments must include context: `// TODO(#issue): reason`.
 

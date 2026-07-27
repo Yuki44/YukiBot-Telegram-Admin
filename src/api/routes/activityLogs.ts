@@ -35,6 +35,9 @@ const VALID_TYPES: ActivityLogType[] = [
   "owner_delegate",
   "owner_revoke",
   "spam_confirmed",
+  "csam_autoban",
+  "csam_silence",
+  "message_delete",
 ];
 
 /**

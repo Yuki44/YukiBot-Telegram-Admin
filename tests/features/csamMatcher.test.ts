@@ -88,6 +88,33 @@ describe("evaluateImageText — aggressive (silence-only) matching", () => {
   });
 });
 
+describe("evaluateImageText — verdict tiers (OCR can now AUTO_BAN, mirroring the bio rule)", () => {
+  it("AUTO_BANs the real reported gallery text (handle + sale words, no negation)", () => {
+    const r = evaluateImageText(">11000 videos cp gei pls text to @Nomax16 for buy", config);
+    expect(r.verdict).toBe("AUTO_BAN");
+    expect(r.handle).toBeDefined();
+    expect(r.solicitation.length).toBeGreaterThan(0);
+  });
+
+  it("SILENCEs (never bans) a handle with no solicitation word", () => {
+    expect(evaluateImageText("contact nomax16", config).verdict).toBe("SILENCE");
+  });
+
+  it("SILENCEs (never bans) a lone CSAM keyword with no handle", () => {
+    expect(evaluateImageText("cp gei", config).verdict).toBe("SILENCE");
+  });
+
+  it("downgrades handle + sale word to SILENCE when a negation is present (protect the ally)", () => {
+    const r = evaluateImageText("nomax16 sells cp — report him, scam", config);
+    expect(r.verdict).toBe("SILENCE");
+    expect(r.negation.length).toBeGreaterThan(0);
+  });
+
+  it("NONE for an innocent image", () => {
+    expect(evaluateImageText("sunset over the beach, lovely day", config).verdict).toBe("NONE");
+  });
+});
+
 describe("evaluateImageText — obfuscated abuse keywords (space-free tokens)", () => {
   const kw: WatchConfig = {
     handles: ["nomax16"],

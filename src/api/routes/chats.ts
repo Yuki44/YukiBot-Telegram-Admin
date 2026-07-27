@@ -22,6 +22,7 @@ const FEATURE_KEYS: ReadonlyArray<keyof IChat["features"]> = [
   "bannedWordsEnforcement",
   "welcomeMessage",
   "csamDetection",
+  "trackNameChanges",
 ];
 
 const WELCOME_MAX_LEN = 1024;

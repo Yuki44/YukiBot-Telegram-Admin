@@ -43,6 +43,7 @@ import { languageCallbackHandler } from "./bot/handlers/languageCallbackHandler"
 import { startCsamScanner } from "./features/csamDetection/scanner";
 import { csamImageScan } from "./bot/handlers/csamImageHandler";
 import { csamBioTrigger } from "./bot/handlers/csamBioTrigger";
+import { nameChangeTracker } from "./bot/handlers/nameChangeTracker";
 import { promoSpamDetection } from "./features/promoSpamDetection";
 import { languageDetection } from "./features/languageDetection";
 import { spamHandler } from "./bot/commands/spam";
@@ -154,8 +155,10 @@ bot.on("message:forum_topic_edited", async (ctx) => {
   }
 });
 
-bot.on("message", csamImageScan);
+// Record the message id + queue the bio check BEFORE the slow OCR, so a ban firing mid-OCR still finds it stored.
 bot.on("message", csamBioTrigger);
+bot.on("message", nameChangeTracker);
+bot.on("message", csamImageScan);
 bot.on("message", mediaForwardHandler);
 bot.on("message", topicFiltering);
 bot.on("message", bannedWordsEnforcement);

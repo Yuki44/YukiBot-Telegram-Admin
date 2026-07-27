@@ -3,7 +3,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const recognizeCalls: { text: string; resolve: () => void }[] = [];
 
 vi.mock("tesseract.js", () => ({
+  PSM: { SPARSE_TEXT: "11" },
   createWorker: vi.fn(async () => ({
+    setParameters: vi.fn(async () => {}),
     recognize: vi.fn(
       (_img: Buffer) =>
         new Promise((resolve) => {
@@ -17,17 +19,15 @@ vi.mock("tesseract.js", () => ({
   })),
 }));
 
-vi.mock("sharp", () => ({
-  default: () => ({
-    resize: () => ({
-      grayscale: () => ({
-        normalize: () => ({
-          toBuffer: async () => Buffer.from("prepared"),
-        }),
-      }),
-    }),
-  }),
-}));
+vi.mock("sharp", () => {
+  // Chainable stub: every transform returns the same object; toBuffer ends the chain.
+  const chain: Record<string, unknown> = {};
+  for (const m of ["resize", "grayscale", "normalize", "sharpen"]) {
+    chain[m] = () => chain;
+  }
+  chain.toBuffer = async () => Buffer.from("prepared");
+  return { default: () => chain };
+});
 
 vi.mock("../../src/utils/logger", () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },

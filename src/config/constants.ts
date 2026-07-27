@@ -63,11 +63,11 @@ export const CSAM_RECENT_MESSAGE_TTL_S = 48 * 60 * 60;
 
 // ── CSAM/impostor image OCR ──────────────────────────────────────────
 
-/** Longest-edge cap (px) an image is downscaled to before OCR (cost control). */
-export const CSAM_OCR_MAX_DIM = 900;
+/** Longest edge (px) images are scaled TO before OCR — small ones upscaled so text is legible, large ones downscaled for cost. */
+export const CSAM_OCR_MAX_DIM = 1600;
 
 /** Skip OCR entirely for files larger than this (bytes) — cheap DoS guard. */
-export const CSAM_OCR_MAX_BYTES = 5 * 1024 * 1024;
+export const CSAM_OCR_MAX_BYTES = 10 * 1024 * 1024;
 
 /** TTL (seconds) for OCR text cache rows (reviewed-safe rows never expire). */
 export const CSAM_IMAGE_CACHE_TTL_S = 7 * 24 * 60 * 60;

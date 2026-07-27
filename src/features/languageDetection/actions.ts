@@ -3,7 +3,7 @@ import { Message } from "grammy/types";
 import { BotContext } from "../../types";
 import { userRepository } from "../../db/repositories/userRepository";
 import { csamRecentMessageRepository } from "../../db/repositories/csamRecentMessageRepository";
-import { chunk } from "../csamDetection/actions";
+import { deleteMessagesConfirmed } from "../csamDetection/actions";
 import { silenceUser } from "../../bot/helpers/silenceUser";
 import { applyWarn } from "../../bot/helpers/applyWarn";
 import { sendLog, buildNavLine } from "../../bot/helpers/sendLog";
@@ -212,12 +212,24 @@ export async function executeLanguageEnforcement(
   try {
     const sinceMs = Date.now() - LANGUAGE_BULK_DELETE_WINDOW_MS;
     const ids = await csamRecentMessageRepository.findMessageIdsSince(target.userId, chatId, sinceMs);
-    for (const group of chunk(ids, 100)) {
-      try {
-        await ctx.api.deleteMessages(chatId, group);
-      } catch (err) {
-        logger.error({ action: "language_bulk_delete", chatId, userId: target.userId, error: String(err) });
-      }
+    const res = await deleteMessagesConfirmed(ctx.api, chatId, ids);
+    logger.info({
+      action: "language_bulk_delete",
+      chatId,
+      userId: target.userId,
+      found: ids.length,
+      deleted: res.deleted.length,
+      failed: res.failed.length,
+    });
+    if (res.deleted.length > 0) {
+      recordActivity({
+        chatId,
+        type: "message_delete",
+        source: "bot",
+        actor,
+        target: { id: target.userId, name: target.name, username: target.username },
+        reason: `idioma — ${res.deleted.length} mensaje(s) borrado(s)`,
+      });
     }
   } catch (err) {
     logger.error({ action: "language_bulk_delete_query", chatId, userId: target.userId, error: String(err) });

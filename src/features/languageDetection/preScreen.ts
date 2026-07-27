@@ -101,13 +101,6 @@ const STOPWORDS = new Set([
 /** Skip only when at least this many distinct stopwords are found — a margin against one coincidental hit. */
 const MIN_STOPWORD_MATCHES = 2;
 
-// Admin policy carve-out: "dm"/"dm me" requests carry real weight in this chat's context
-// and must always reach the classifier, even though they'd otherwise be short enough for
-// the word-count gate to silently exempt them. Exact-phrase match, not a substring search —
-// a longer Spanish sentence that happens to mention "dm" already passes the word-count gate
-// on its own and gets judged in full context by Stage 2.
-const DM_REQUEST_PATTERNS = [/^dm$/, /^dm me$/, /^dm me pls$/, /^dm me please$/, /^dm pls$/, /^dm please$/];
-
 function normalize(text: string): string[] {
   return text
     .toLowerCase()
@@ -126,14 +119,8 @@ function looksLikeSpanishOrCatalan(text: string): boolean {
   return matches.size >= MIN_STOPWORD_MATCHES;
 }
 
-function isDmRequest(text: string): boolean {
-  const normalized = normalize(text).join(" ");
-  return DM_REQUEST_PATTERNS.some((p) => p.test(normalized));
-}
-
 /** Biased toward "candidate": a false positive here just costs one harmless Stage 2 call. */
 export function isCandidate(text: string): boolean {
-  if (isDmRequest(text)) return true;
   if (countWords(text) <= LANGUAGE_MIN_WORDS) return false;
   if (looksLikeSpanishOrCatalan(text)) return false;
   return true;

@@ -59,6 +59,11 @@ const FEATURE_META: FeatureMeta[] = [
     name: "Detección de idioma",
     desc: "Avisará si se habla fuera del idioma del grupo.",
   },
+  {
+    id: "trackNameChanges",
+    name: "Seguimiento de nombres",
+    desc: "Avisa (en el grupo y en el canal de registro) cuando alguien cambia su nombre o @usuario, y mantiene sus datos al día.",
+  },
 ];
 
 export function FeaturesScreen() {

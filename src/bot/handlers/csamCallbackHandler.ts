@@ -54,7 +54,7 @@ export async function csamCallbackHandler(ctx: BotContext): Promise<void> {
     const actor = { id: ctx.from!.id, name: ctx.from!.first_name, username: ctx.from?.username };
 
     if (verdict === "ban") {
-      const propagatedTo = await banAcrossChats(ctx.api, target);
+      const propagatedTo = await banAcrossChats(ctx.api, target, actor, "CP/impostor confirmado manualmente");
       recordActivity({
         chatId,
         type: "csam_autoban",
