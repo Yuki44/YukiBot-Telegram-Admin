@@ -27,3 +27,8 @@ export function mentionHtml(id: number, name: string, username?: string): string
   const label = username ? `@${username}` : esc(name);
   return `<a href="tg://user?id=${id}">${label}</a>`;
 }
+
+/** Profile link with explicit display text (unlike mentionHtml, never swaps in @username). */
+export function profileLink(id: number, label: string): string {
+  return `<a href="tg://user?id=${id}">${esc(label)}</a>`;
+}

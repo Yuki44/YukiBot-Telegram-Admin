@@ -201,6 +201,17 @@ export const userRepository = {
     );
   },
 
+  /** Persist a user's current name/username. Unsets username when removed so it isn't stale. */
+  async updateIdentity(userId: number, chatId: number, name?: string, username?: string): Promise<void> {
+    const set: Record<string, unknown> = {};
+    const update: Record<string, unknown> = { $setOnInsert: { userId, chatId } };
+    if (name && name.trim()) set.name = name.trim();
+    if (username && username.trim()) set.username = username.trim();
+    else update.$unset = { username: 1 };
+    if (Object.keys(set).length > 0) update.$set = set;
+    await User.updateOne({ userId, chatId }, update, { upsert: true, setDefaultsOnInsert: true });
+  },
+
   async findOrCreate(userId: number, chatId: number, username?: string, name?: string): Promise<IUser> {
     const update: Record<string, unknown> = {
       $setOnInsert: {

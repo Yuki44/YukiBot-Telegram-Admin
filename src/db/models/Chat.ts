@@ -57,6 +57,10 @@ const chatSchema = new Schema<IChat>({
       type: Boolean,
       default: false,
     },
+    trackNameChanges: {
+      type: Boolean,
+      default: false,
+    },
   },
   linkWhitelist: {
     type: [String],

@@ -45,6 +45,7 @@ export interface ChatFeatures {
   bannedWordsEnforcement: boolean;
   welcomeMessage: boolean;
   csamDetection: boolean;
+  trackNameChanges: boolean;
 }
 
 export interface WelcomeConfig {

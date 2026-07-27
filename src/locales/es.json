@@ -1,4 +1,7 @@
 {
+  "nameTracker": {
+    "none": "(ninguno)"
+  },
   "errors": {
     "userNotFound": "⚠️ No se encontró al usuario.",
     "specifyUser": "⚠️ Especifica un usuario.",

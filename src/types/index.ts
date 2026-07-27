@@ -42,6 +42,8 @@ export interface IChat extends Document {
     csamDetection?: boolean;
     /** When true, each user is greeted once (per chat) with the configured `welcome` message on join. */
     welcomeMessage?: boolean;
+    /** When true, name/@username changes are announced (group + logsTo) and the DB is kept fresh. */
+    trackNameChanges?: boolean;
   };
   /** Domains/URLs exempt from link spam detection (e.g. "example.com") */
   linkWhitelist: string[];
