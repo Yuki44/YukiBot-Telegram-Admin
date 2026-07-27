@@ -148,12 +148,49 @@ describe("evaluateImageText — obfuscated abuse keywords (space-free tokens)", 
     expect(evaluateImageText(">11000 cp gei", kw).matched).toBe(true);
   });
 
+  it("matches the real OCR misread 'cp gei' → 'cplgei' (inserted char)", () => {
+    expect(evaluateImageText("11000 cplgei pls text", kw).matched).toBe(true);
+  });
+
+  it("matches the real OCR misread 'cp gei' → 'tp geil' (c→t + inserted char)", () => {
+    expect(evaluateImageText("1000 maces tp geil for buy", kw).matched).toBe(true);
+  });
+
   it("does not match benign 'child' alone", () => {
     expect(evaluateImageText("my child drew a picture today", kw).matched).toBe(false);
   });
 
   it("does not match benign 'no es porno, es arte'", () => {
     expect(evaluateImageText("no es porno, es arte", kw).matched).toBe(false);
+  });
+});
+
+describe("evaluateImageText — OCR digit/letter handle garble (real 2026-07-27 gallery)", () => {
+  it("matches the handle when OCR reads '@Nomax16' as '@Nomax:l6' (1→l, stray colon)", () => {
+    const r = evaluateImageText("pls a to @Nomax:l6", config);
+    expect(r.matched).toBe(true);
+    expect(r.handle).toBe("nomax16");
+  });
+
+  it("matches on the real 973-char Railway OCR read (handle survives the noise)", () => {
+    const prod =
+      "FA on el =— E EE 1000 Maces tp geil A CA e LI E Pls a to @Nomax:l6, EE = L 4 a Ll " +
+      "== y Sh e A SE =— Th Amer) | TEEN =] Gal. pe => : 48 —- br PN Photos Collect";
+    expect(evaluateImageText(prod, config).matched).toBe(true);
+  });
+
+  it("matches when the misread '@' is fused to the front of the handle (Onomax16)", () => {
+    const r = evaluateImageText("11000 videos cp gei ONomax16 for buy", config);
+    expect(r.matched).toBe(true);
+    expect(r.handle).toBe("nomax16");
+  });
+
+  it("does not match an innocent digit/letter blob", () => {
+    expect(evaluateImageText("catalogue model no. abcl6 back in stock", config).matched).toBe(false);
+  });
+
+  it("the loose handle path still respects the right boundary (no match inside a longer token)", () => {
+    expect(evaluateImageText("buy nomax168 gadgets today", config).matched).toBe(false);
   });
 });
 

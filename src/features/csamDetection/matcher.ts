@@ -67,21 +67,49 @@ function firstMatch(folded: string, foldedSpaced: string, terms: string[]): stri
   return terms.find((t) => termMatches(folded, foldedSpaced, t));
 }
 
-// OCR-noise tolerance for image keywords only. Short tokens are excluded because a
-// 1-edit window around them collides with common words (e.g. "cd video" ≈ "cpvideo").
+/**
+ * Handle hit for OCR'd image text: the strict boundaried match, OR — for a
+ * distinctive digit-bearing handle — a left-unanchored match so a misread "@"
+ * fused to the front ("@Nomax16" → "Onomax16") still counts. Restricted to
+ * digit-bearing single tokens so it can't fire inside an ordinary word; the bio
+ * tier never uses this looser path.
+ */
+function imageHandleMatch(folded: string, foldedSpaced: string, handle: string): boolean {
+  if (termMatches(folded, foldedSpaced, handle)) return true;
+  const needle = collapseSpaces(normalize(handle));
+  if (!needle || /\s/.test(needle) || !/[0-9]/.test(needle)) return false;
+  return buildFuzzyRegex(needle, false).test(folded);
+}
+
+function firstImageHandle(folded: string, foldedSpaced: string, handles: string[]): string | undefined {
+  return handles.find((h) => imageHandleMatch(folded, foldedSpaced, h));
+}
+
+// OCR-noise tolerance thresholds. Solicitation/negation stay conservative (a 1-edit
+// window around a short common word collides too easily, e.g. "cd video" ≈ "cpvideo").
+// The keyword list is the explicit CSAM lexicon — specific enough to tolerate shorter
+// tokens, and it only ever triggers SILENCE-for-review, so a near-miss is cheap. This
+// recovers real OCR garble like "cp gei" → "cplgei"/"tpgeil" (one edit from "cpgei").
 const APPROX_MIN_LEN = 9;
+const KEYWORD_APPROX_MIN_LEN = 5;
 const approxBudget = (len: number): number => (len >= 13 ? 2 : 1);
 
 /**
- * Keyword hit for OCR'd image text: the strict fuzzy path (leet/separators) OR,
- * for long-enough tokens, a bounded edit-distance match that survives single
- * mis-read characters. Image keywords only ever trigger SILENCE-for-review, so a
- * near-miss is cheap; handles and bios never use this looser path.
+ * Term hit for OCR'd image text: the strict fuzzy path (leet/separators) OR, for
+ * tokens at least `minLen` long, a bounded edit-distance match that survives single
+ * mis-read characters. Only the image tier uses this looser path; handles and bios
+ * never do.
  */
-function imageKeywordMatch(folded: string, foldedSpaced: string, compact: string, term: string): boolean {
+function imageKeywordMatch(
+  folded: string,
+  foldedSpaced: string,
+  compact: string,
+  term: string,
+  minLen: number = APPROX_MIN_LEN
+): boolean {
   if (termMatches(folded, foldedSpaced, term)) return true;
   const needle = compactAlnum(normalize(term));
-  if (needle.length < APPROX_MIN_LEN) return false;
+  if (needle.length < minLen) return false;
   return approxContains(compact, needle, approxBudget(needle.length));
 }
 
@@ -110,8 +138,10 @@ export function evaluateImageText(text: string, config: WatchConfig): ImageResul
   const foldedSpaced = collapseSpaces(folded);
   const compact = compactAlnum(folded);
 
-  const handle = firstMatch(folded, foldedSpaced, config.handles);
-  const keyword = (config.keywords ?? []).find((t) => imageKeywordMatch(folded, foldedSpaced, compact, t));
+  const handle = firstImageHandle(folded, foldedSpaced, config.handles);
+  const keyword = (config.keywords ?? []).find((t) =>
+    imageKeywordMatch(folded, foldedSpaced, compact, t, KEYWORD_APPROX_MIN_LEN)
+  );
   const solicitation = config.solicitation.filter((t) => imageKeywordMatch(folded, foldedSpaced, compact, t));
   const negation = config.negation.filter((t) => imageKeywordMatch(folded, foldedSpaced, compact, t));
 

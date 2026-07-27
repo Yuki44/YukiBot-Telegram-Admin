@@ -134,9 +134,11 @@ export function normalizeAndFold(text: string): string {
 
 // ── Fuzzy regex construction ─────────────────────────────────────────
 
-// Per-letter leet/symbol substitutions the fold step does NOT cover (ASCII
+// Per-character leet/symbol substitutions the fold step does NOT cover (ASCII
 // digits & punctuation, plus a couple of visible currency look-alikes). The
-// base letter is always included.
+// base character is always included. Digit keys are the mirror of the letter
+// classes: a needle digit tolerates the letters it is commonly mis-read as —
+// critical for OCR, where "16" comes back as "l6"/"i6" over noisy backgrounds.
 const LEET_CLASSES: Record<string, string> = {
   a: "a@4",
   b: "b8",
@@ -150,6 +152,15 @@ const LEET_CLASSES: Record<string, string> = {
   s: "s5$",
   t: "t7+",
   z: "z2",
+  "0": "0o",
+  "1": "1il|!",
+  "2": "2z",
+  "3": "3e",
+  "4": "4a",
+  "5": "5s",
+  "7": "7t",
+  "8": "8b",
+  "9": "9gq",
 };
 
 // Separators / padding allowed *between* needle characters: "c.p", "c-p",
@@ -165,10 +176,16 @@ function fuzzyCharFragment(ch: string): string {
   return `[${escapeForCharClass(members)}]+`;
 }
 
-/** Build a fuzzy, boundary-anchored regex from an already-normalized needle. */
-export function buildFuzzyRegex(needle: string): RegExp {
+/**
+ * Build a fuzzy, boundary-anchored regex from an already-normalized needle.
+ * `anchorStart=false` drops the LEFT boundary so a needle fused to a preceding
+ * glyph still matches — e.g. an OCR-misread "@" welded onto a handle ("Onomax16").
+ * The right boundary always stays, so a real word ending is never a false hit.
+ */
+export function buildFuzzyRegex(needle: string, anchorStart = true): RegExp {
   const body = Array.from(needle).map(fuzzyCharFragment).join(SEP);
-  return new RegExp(`(?<!${WORD})${body}(?!${WORD})`, "u");
+  const left = anchorStart ? `(?<!${WORD})` : "";
+  return new RegExp(`${left}${body}(?!${WORD})`, "u");
 }
 
 /** Build the whole-word (literal) regex from an already-normalized needle. */
