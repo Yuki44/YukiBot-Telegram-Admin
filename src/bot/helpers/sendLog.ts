@@ -141,7 +141,7 @@ function hashIds(target: LogUser, actor?: LogUser): string {
  * - topics, no topicId (General) → "ir al grupo" at message 1
  * - normal → "ir al grupo" at a high ID so Telegram lands near latest messages
  */
-function buildNavLine(
+export function buildNavLine(
   chatId: number,
   chatType: "topics" | "normal",
   topicId?: number,

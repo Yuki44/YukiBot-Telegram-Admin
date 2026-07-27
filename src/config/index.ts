@@ -44,6 +44,11 @@ export const CSAM_WATCH_HANDLES: string[] = process.env.CSAM_WATCH_HANDLES
       .filter((h) => h)
   : [];
 
+// Anthropic API key for languageDetection Stage 2 classification (console.anthropic.com —
+// a separate account/billing from any claude.ai subscription). Required only once the
+// languageDetection feature flag is enabled for at least one chat.
+export const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? "";
+
 // Parse TOPIC_RULES from JSON string
 // Example: TOPIC_RULES={"4":["photo","video"],"2":["video"]}
 export const TOPIC_RULES: Record<number, MessageType[]> = (() => {

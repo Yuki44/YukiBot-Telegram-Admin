@@ -54,6 +54,9 @@ const userSchema = new Schema<IUser>({
   lastBioCheckAt: {
     type: Date,
   },
+  languageGraceGivenAt: {
+    type: Date,
+  },
 });
 
 // Compound unique index on userId + chatId

@@ -19,4 +19,19 @@ export const csamRecentMessageRepository = {
       return [];
     }
   },
+
+  /** Same as findMessageIds, restricted to rows recorded since `sinceMs` (epoch ms) — feeds languageDetection's shorter bulk-delete window. */
+  async findMessageIdsSince(userId: number, chatId: number, sinceMs: number): Promise<number[]> {
+    try {
+      const rows = await CsamRecentMessage.find({
+        userId,
+        chatId,
+        createdAt: { $gte: new Date(sinceMs) },
+      }).lean();
+      return rows.map((r) => r.messageId);
+    } catch (err) {
+      logger.error({ action: "csam_recentmsg_find_since", userId, chatId, error: String(err) });
+      return [];
+    }
+  },
 };

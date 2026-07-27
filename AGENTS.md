@@ -199,6 +199,16 @@ Registered in `src/index.ts` and protected by `adminOnlyCommands` (G7). Only the
 
 Reusable agent procedures, installed once as a single canonical copy — **no per-agent duplication**. Regardless of which tool is driving (Claude Code, Copilot CLI, …), read the linked `SKILL.md` when its trigger matches the current task.
 
+**Claude Code setup note:** Claude Code only auto-discovers skills under `.claude/skills/`, not `.agents/skills/`. On a fresh clone (or new machine), bridge them with a per-skill directory junction so Claude Code can see them without duplicating content:
+
+```powershell
+Get-ChildItem ".agents\skills" -Directory | ForEach-Object {
+  New-Item -ItemType Junction -Path ".claude\skills\$($_.Name)" -Target $_.FullName
+}
+```
+
+`.claude/skills/` is gitignored (machine-local junctions, not tracked content).
+
 | Skill                      | Path                                                | When to use                                                                     |
 | -------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------- |
 | `setup-matt-pocock-skills` | `.agents/skills/setup-matt-pocock-skills/SKILL.md`  | One-time config (issue tracker, triage labels, domain docs) — run before others |

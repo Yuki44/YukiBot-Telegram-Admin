@@ -373,4 +373,9 @@ export const userRepository = {
   async markBioChecked(userId: number, when: Date = new Date()): Promise<void> {
     await User.updateMany({ userId }, { $set: { lastBioCheckAt: when } });
   },
+
+  /** Resets the languageDetection grace flag so this user's next offense is a fresh grace notice. */
+  async clearLanguageGrace(userId: number, chatId: number): Promise<void> {
+    await User.updateOne({ userId, chatId }, { $unset: { languageGraceGivenAt: "" } });
+  },
 };
