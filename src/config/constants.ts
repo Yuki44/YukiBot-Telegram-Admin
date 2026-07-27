@@ -63,8 +63,22 @@ export const CSAM_RECENT_MESSAGE_TTL_S = 48 * 60 * 60;
 
 // ── CSAM/impostor image OCR ──────────────────────────────────────────
 
-/** Longest edge (px) images are scaled TO before OCR — small ones upscaled so text is legible, large ones downscaled for cost. */
-export const CSAM_OCR_MAX_DIM = 1600;
+/**
+ * Longest-edge sizes (px) each image is OCR'd at, results unioned. Deliberately
+ * small: the attack is large overlay text ("text @handle for buy") over a busy
+ * photo collage — downscaling dissolves the fine background clutter that otherwise
+ * dominates OCR, while the big banner survives. A single size is unreliable (a
+ * given scale can miss a token another catches), so we scan a few and combine.
+ */
+export const CSAM_OCR_SCALES = [1300, 950, 720];
+
+/**
+ * OCR pipeline version. Bump whenever the OCR algorithm changes so stale cached
+ * text from an older (worse) pipeline is re-scanned instead of trusted for its full
+ * TTL — an image the buggy single-pass reader mis-read must not stay cached as safe.
+ * Admin-reviewed-safe rows are honoured regardless of version.
+ */
+export const CSAM_OCR_VERSION = 2;
 
 /** Skip OCR entirely for files larger than this (bytes) — cheap DoS guard. */
 export const CSAM_OCR_MAX_BYTES = 10 * 1024 * 1024;

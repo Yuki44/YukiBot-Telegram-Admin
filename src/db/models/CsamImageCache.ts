@@ -8,6 +8,8 @@ import { Schema, model } from "mongoose";
  *  - `reviewedSafe` : set when an admin clears a false positive; such rows are
  *                     never OCR-acted on again and never expire.
  *  - `expiresAt`    : TTL only for ordinary cache rows; unset for reviewed-safe.
+ *  - `ocrVersion`   : the OCR pipeline that produced `text`; a mismatch forces a
+ *                     re-scan so an upgraded reader isn't blocked by stale text.
  *
  * No image bytes are ever stored here (S-rules) — text + a flag only.
  */
@@ -16,6 +18,7 @@ export interface ICsamImageCache {
   text: string;
   reviewedSafe: boolean;
   expiresAt?: Date;
+  ocrVersion?: number;
 }
 
 const csamImageCacheSchema = new Schema<ICsamImageCache>({
@@ -34,6 +37,9 @@ const csamImageCacheSchema = new Schema<ICsamImageCache>({
   },
   expiresAt: {
     type: Date,
+  },
+  ocrVersion: {
+    type: Number,
   },
 });
 

@@ -1,11 +1,16 @@
 import { createWorker, Worker, PSM } from "tesseract.js";
 import sharp from "sharp";
 import { logger } from "../../utils/logger";
-import { CSAM_OCR_MAX_DIM } from "../../config/constants";
+import { CSAM_OCR_SCALES } from "../../config/constants";
 
 /** Local OCR (tesseract.js), no image/text ever leaves the process. 2-worker pool, urgent jobs jump the queue. */
 
 const MAX_WORKERS = 2;
+
+// SINGLE_BLOCK locks onto the dominant overlay banner; SPARSE_TEXT catches scattered
+// fragments. Their union across CSAM_OCR_SCALES is what makes a garbled token in one
+// pass recoverable from another.
+const OCR_MODES = [PSM.SINGLE_BLOCK, PSM.SPARSE_TEXT];
 
 interface Job {
   input: Buffer;
@@ -23,8 +28,6 @@ async function ensurePool(): Promise<void> {
     poolReady = (async () => {
       while (workers.length < MAX_WORKERS) {
         const w = await createWorker("eng+spa");
-        // SPARSE_TEXT: find text anywhere (a banner over a collage), not one assumed column.
-        await w.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT });
         workers.push(w);
         freeWorkers.push(w);
       }
@@ -33,30 +36,38 @@ async function ensurePool(): Promise<void> {
   await poolReady;
 }
 
-async function preprocess(input: Buffer): Promise<Buffer> {
-  try {
-    return await sharp(input)
-      // Upscale small images (no withoutEnlargement) so text is big enough for tesseract.
-      .resize({ width: CSAM_OCR_MAX_DIM, height: CSAM_OCR_MAX_DIM, fit: "inside" })
-      .grayscale()
-      .normalize()
-      .sharpen()
-      .toBuffer();
-  } catch (err) {
-    logger.warn({ action: "csam_ocr_preprocess", error: String(err) });
-    return input;
-  }
+/** Downscale to `dim` (upscaling small images too) and boost contrast so the overlay text survives. */
+async function preprocess(input: Buffer, dim: number): Promise<Buffer> {
+  return sharp(input)
+    .resize({ width: dim, height: dim, fit: "inside", withoutEnlargement: false })
+    .grayscale()
+    .normalize()
+    .sharpen()
+    .toBuffer();
 }
 
+/** OCR the image at every scale × mode and union the text; one failed pass never sinks the rest. */
 async function runJob(worker: Worker, job: Job): Promise<void> {
-  try {
-    const prepared = await preprocess(job.input);
-    const { data } = await worker.recognize(prepared);
-    job.resolve(data.text ?? "");
-  } catch (err) {
-    logger.error({ action: "csam_ocr_recognize", error: String(err) });
-    job.resolve("");
+  const parts: string[] = [];
+  for (const dim of CSAM_OCR_SCALES) {
+    let prepared: Buffer;
+    try {
+      prepared = await preprocess(job.input, dim);
+    } catch (err) {
+      logger.warn({ action: "csam_ocr_preprocess", dim, error: String(err) });
+      continue;
+    }
+    for (const psm of OCR_MODES) {
+      try {
+        await worker.setParameters({ tessedit_pageseg_mode: psm });
+        const { data } = await worker.recognize(prepared);
+        if (data.text) parts.push(data.text);
+      } catch (err) {
+        logger.error({ action: "csam_ocr_recognize", dim, psm, error: String(err) });
+      }
+    }
   }
+  job.resolve(parts.join("\n"));
 }
 
 /** Hands the next free worker the highest-priority waiting job, if any. */
