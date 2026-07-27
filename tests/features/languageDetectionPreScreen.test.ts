@@ -19,6 +19,8 @@ describe("isCandidate — Stage 1 gate", () => {
   it("never evaluates messages at or below LANGUAGE_MIN_WORDS (2)", () => {
     expect(isCandidate("not hard")).toBe(false);
     expect(isCandidate("hi")).toBe(false);
+    expect(isCandidate("Hey")).toBe(false);
+    expect(isCandidate("Dm")).toBe(false);
   });
 
   it("flags a 3-word message as a candidate even though it's short — Stage 2 tells loanword from genuine foreign phrase", () => {
@@ -29,13 +31,10 @@ describe("isCandidate — Stage 1 gate", () => {
     expect(isCandidate("comment ca marche")).toBe(true);
   });
 
-  it("always evaluates DM-request phrasings, overriding the word-count gate (admin policy carve-out)", () => {
-    // "dm"/"dm me" are 1-2 words and would otherwise be silently exempted — admins
-    // specifically flagged these as carrying real weight regardless of brevity.
-    expect(isCandidate("dm")).toBe(true);
-    expect(isCandidate("dm me")).toBe(true);
-    expect(isCandidate("dm me please")).toBe(true);
-    expect(isCandidate("dm pls")).toBe(true);
+  it("does not punish short DM requests — chat noise, not a language offense", () => {
+    expect(isCandidate("dm")).toBe(false);
+    expect(isCandidate("dm me")).toBe(false);
+    expect(isCandidate("dm pls")).toBe(false);
   });
 
   it("skips confidently-Spanish messages, even bad-grammar slang", () => {
