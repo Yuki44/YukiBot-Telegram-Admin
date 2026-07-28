@@ -2,13 +2,16 @@ import { Api } from "grammy";
 import { IChat } from "../../types";
 import { userRepository } from "../../db/repositories/userRepository";
 import { logger } from "../../utils/logger";
-import { esc, profileLink } from "../../bot/helpers/html";
+import { esc, profileLink, mentionHtml } from "../../bot/helpers/html";
 import { t } from "../../locales/i18n";
 
 /**
  * SangMata-style identity tracker: notices when a user changes their name or @username and
- * keeps the DB fresh. Notice ids are tap-to-copy (<code>), names link to the profile even
- * without a username (tg://user?id=). Feature-flagged (trackNameChanges), default off.
+ * keeps the DB fresh. Feature-flagged (trackNameChanges), default off.
+ *
+ * Notice: "Usuario <id> ha actualizado su perfil: <before> → <after>". The id is tap-to-copy
+ * (<code>); a value is a clickable profile link only when it is the user's *current* value,
+ * so old/replaced values stay plain and the change pops visually.
  */
 
 export interface Identity {
@@ -40,20 +43,23 @@ export function diffIdentity(stored: Identity, current: Identity): IdentityChang
   return change.nameChange || change.usernameChange ? change : null;
 }
 
+/** Renders one side ("Name (@user)"), linking each token only when it is the current value. */
+function renderSide(userId: number, id: Identity, nameCurrent: boolean, userCurrent: boolean): string {
+  const name = norm(id.name);
+  const username = norm(id.username);
+  const namePart = nameCurrent ? profileLink(userId, name) : esc(name);
+  if (!username) return namePart;
+  const userPart = userCurrent ? mentionHtml(userId, name, username) : `@${esc(username)}`;
+  return `${namePart} (${userPart})`;
+}
+
 /** Builds the one-line HTML notice (pure, testable). */
-export function buildIdentityChangeMessage(userId: number, change: IdentityChange): string {
-  const parts: string[] = [];
-  if (change.nameChange) {
-    parts.push(
-      `${profileLink(userId, change.nameChange.from)} → ${profileLink(userId, change.nameChange.to)}`
-    );
-  }
-  if (change.usernameChange) {
-    const from = change.usernameChange.from ? `@${esc(change.usernameChange.from)}` : t("nameTracker.none");
-    const to = change.usernameChange.to ? `@${esc(change.usernameChange.to)}` : t("nameTracker.none");
-    parts.push(`${from} → ${to}`);
-  }
-  return `🔄 ${parts.join(" · ")} · 🆔 <code>${userId}</code>`;
+export function buildIdentityChangeMessage(userId: number, before: Identity, after: Identity): string {
+  const nameChanged = norm(before.name) !== norm(after.name);
+  const userChanged = norm(before.username) !== norm(after.username);
+  const from = renderSide(userId, before, !nameChanged, !userChanged);
+  const to = renderSide(userId, after, true, true);
+  return t("nameTracker.profileUpdated", { id: userId, from, to });
 }
 
 async function announce(api: Api, chatConfig: IChat, chatId: number, text: string): Promise<void> {
@@ -81,10 +87,11 @@ export async function trackIdentity(
 ): Promise<void> {
   const stored = await userRepository.findByUserAndChat(userId, chatId);
   if (stored && norm(stored.name)) {
-    const change = diffIdentity({ name: stored.name, username: stored.username }, current);
+    const before: Identity = { name: stored.name, username: stored.username };
+    const change = diffIdentity(before, current);
     if (change) {
       logger.info({ action: "name_change", chatId, userId, change });
-      await announce(api, chatConfig, chatId, buildIdentityChangeMessage(userId, change));
+      await announce(api, chatConfig, chatId, buildIdentityChangeMessage(userId, before, current));
     }
   }
   await userRepository.updateIdentity(userId, chatId, current.name, current.username);

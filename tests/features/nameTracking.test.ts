@@ -39,18 +39,36 @@ describe("diffIdentity", () => {
 });
 
 describe("buildIdentityChangeMessage", () => {
-  it("renders a single line: old/new as tap-to-profile links, id as tap-to-copy", () => {
-    const msg = buildIdentityChangeMessage(7807562391, { nameChange: { from: "Simo", to: "Simon" } });
-    expect(msg).toContain('<a href="tg://user?id=7807562391">Simo</a>');
-    expect(msg).toContain('<a href="tg://user?id=7807562391">Simon</a>');
+  it("name change: old name plain, new name linked, unchanged username linked on both sides", () => {
+    const msg = buildIdentityChangeMessage(7807562391, { name: "Simo", username: "simo" }, { name: "Simon", username: "simo" });
+    expect(msg).toContain("ha actualizado su perfil");
     expect(msg).toContain("<code>7807562391</code>");
-    expect(msg).not.toContain("\n"); // one-liner — must not take vertical space
+    expect(msg).not.toContain('<a href="tg://user?id=7807562391">Simo</a>'); // old name: plain
+    expect(msg).toContain('<a href="tg://user?id=7807562391">Simon</a>'); // new name: linked
+    expect(msg).toContain('<a href="tg://user?id=7807562391">@simo</a>'); // unchanged username: linked
+    expect(msg).not.toContain("\n"); // one-liner
   });
 
-  it("renders a username change with @handles", () => {
-    const msg = buildIdentityChangeMessage(1, { usernameChange: { from: "simoo", to: "simon2" } });
-    expect(msg).toContain("@simoo");
-    expect(msg).toContain("@simon2");
+  it("username change: old @handle plain, new @handle linked, unchanged name linked on both sides", () => {
+    const msg = buildIdentityChangeMessage(1, { name: "Simo", username: "simoo" }, { name: "Simo", username: "simon2" });
+    expect(msg).toContain("(@simoo)"); // old username: plain text
+    expect(msg).not.toContain('<a href="tg://user?id=1">@simoo</a>');
+    expect(msg).toContain('<a href="tg://user?id=1">@simon2</a>'); // new username: linked
+    expect(msg).toContain('<a href="tg://user?id=1">Simo</a>'); // unchanged name: linked
+  });
+
+  it("both change: only the new values are linked", () => {
+    const msg = buildIdentityChangeMessage(5, { name: "Ana", username: "ana" }, { name: "Ana María", username: "ana_m" });
+    expect(msg).toContain("Ana ("); // old name plain
+    expect(msg).toContain("(@ana)"); // old username plain
+    expect(msg).toContain('<a href="tg://user?id=5">Ana María</a>');
+    expect(msg).toContain('<a href="tg://user?id=5">@ana_m</a>');
+  });
+
+  it("gained a username: no leftover placeholder, new side shows the linked @handle", () => {
+    const msg = buildIdentityChangeMessage(9, { name: "Ana" }, { name: "Ana María", username: "ana_m" });
+    expect(msg).not.toContain("(ninguno)");
+    expect(msg).toContain('<a href="tg://user?id=9">@ana_m</a>');
   });
 });
 
