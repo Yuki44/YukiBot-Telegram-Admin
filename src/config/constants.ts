@@ -70,8 +70,9 @@ export const CSAM_OCR_MAX_EDGE_PX = 1600;
  * OCR pipeline version. Bump on algorithm changes so stale cached text is re-scanned
  * instead of trusted for its full TTL. Reviewed-safe rows are honoured regardless.
  * v3 = tesseract multi-scale union replaced by PP-OCRv4 (onnx).
+ * v4 = discard v3 rows cached while the Alpine deploy crashed the engine (empty text).
  */
-export const CSAM_OCR_VERSION = 3;
+export const CSAM_OCR_VERSION = 4;
 
 /**
  * pHash hamming-distance gates (calibrated: re-encode ≈ 0, small text edit ≈ 4,
