@@ -34,13 +34,13 @@ export async function csamBioTrigger(ctx: BotContext, next: NextFunction): Promi
     if (csamOn) enqueueUrgentBioCheck(sender.id, msg.chat.id);
     const hasMedia = Boolean(
       msg.photo ||
-        msg.video ||
-        msg.animation ||
-        msg.document ||
-        msg.sticker ||
-        msg.video_note ||
-        msg.voice ||
-        msg.audio
+      msg.video ||
+      msg.animation ||
+      msg.document ||
+      msg.sticker ||
+      msg.video_note ||
+      msg.voice ||
+      msg.audio
     );
     void csamRecentMessageRepository.record(sender.id, msg.chat.id, msg.message_id, hasMedia);
     return await next();
