@@ -1,19 +1,24 @@
 import { CsamRecentMessage } from "../models/CsamRecentMessage";
 import { logger } from "../../utils/logger";
 
+export interface RecentMessage {
+  messageId: number;
+  hasMedia: boolean;
+}
+
 export const csamRecentMessageRepository = {
-  async record(userId: number, chatId: number, messageId: number): Promise<void> {
+  async record(userId: number, chatId: number, messageId: number, hasMedia = false): Promise<void> {
     try {
-      await CsamRecentMessage.create({ userId, chatId, messageId });
+      await CsamRecentMessage.create({ userId, chatId, messageId, hasMedia });
     } catch (err) {
       logger.error({ action: "csam_recentmsg_record", userId, chatId, error: String(err) });
     }
   },
 
-  async findMessageIds(userId: number, chatId: number): Promise<number[]> {
+  async findMessages(userId: number, chatId: number): Promise<RecentMessage[]> {
     try {
       const rows = await CsamRecentMessage.find({ userId, chatId }).lean();
-      return rows.map((r) => r.messageId);
+      return rows.map((r) => ({ messageId: r.messageId, hasMedia: Boolean(r.hasMedia) }));
     } catch (err) {
       logger.error({ action: "csam_recentmsg_find", userId, chatId, error: String(err) });
       return [];

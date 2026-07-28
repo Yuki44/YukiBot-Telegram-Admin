@@ -147,6 +147,7 @@ export async function csamImageScan(ctx: BotContext, next: NextFunction): Promis
         chatId: msg.chat.id,
         messageId: msg.message_id,
         userId: sender.id,
+        via: "image_scan",
       });
     } catch (err) {
       logger.error({

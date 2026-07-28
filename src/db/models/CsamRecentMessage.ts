@@ -6,6 +6,8 @@ export interface ICsamRecentMessage {
   userId: number;
   chatId: number;
   messageId: number;
+  /** Message carried a photo/video/document/… — lets the on-ban delete confirm the media (image) was removed. */
+  hasMedia?: boolean;
   createdAt: Date;
 }
 
@@ -13,6 +15,7 @@ const csamRecentMessageSchema = new Schema<ICsamRecentMessage>({
   userId: { type: Number, required: true },
   chatId: { type: Number, required: true },
   messageId: { type: Number, required: true },
+  hasMedia: { type: Boolean },
   createdAt: { type: Date, default: Date.now },
 });
 
