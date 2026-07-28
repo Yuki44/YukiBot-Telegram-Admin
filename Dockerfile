@@ -1,5 +1,6 @@
-# Use Node.js 20 Alpine as base image
-FROM node:20-alpine
+# Debian (glibc) base — onnxruntime-node ships glibc-only Linux binaries that
+# abort the process on Alpine/musl ("Error loading shared library ld-linux-x86-64.so.2").
+FROM node:20-bookworm-slim
 
 # Set working directory
 WORKDIR /app
