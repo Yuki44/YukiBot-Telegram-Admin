@@ -7,12 +7,12 @@ import { logger } from "../../utils/logger";
  * Image decision pipeline (pure orchestration — engine/IO injected, unit-testable).
  *
  * Cost-control order: caption → cache (reviewed-safe honoured) → pHash → OCR.
- * The pHash tier decides a near-duplicate of an already-flagged image before any
- * OCR — catching the same ad re-posted from fresh alt accounts, whose new
- * file_unique_id defeats the text cache.
+ * A tight pHash match on a stored AUTO_BAN bans before any OCR — catching the same
+ * ad re-posted from fresh alt accounts, whose new file_unique_id defeats the text
+ * cache. Any other pHash match is only a FLOOR: OCR still runs and may escalate to
+ * a ban; if it reads nothing the match still guarantees delete + silence.
  *
- * A strong hit (handle + solicitation) AUTO-BANs; a lone hit SILENCEs for review.
- * A pHash hit inherits AUTO_BAN only within the strict distance gate (G3).
+ * A strong hit (handle + solicitation/keyword) AUTO-BANs; a lone hit SILENCEs.
  */
 
 export interface ScanCandidate {
@@ -102,27 +102,34 @@ export async function scanImage(candidate: ScanCandidate, deps: ImageScanDeps): 
     return { verdict: "NONE", matched: false, text: "", solicitation: [], source: "skip" };
   }
 
+  // pHash: a tight match on a stored AUTO_BAN bans instantly. Any other match is a
+  // FLOOR, not a ceiling — the scan continues to OCR so the text tier can escalate
+  // to a ban (a stale stored SILENCE must never cap a stronger read), and if OCR
+  // reads nothing the match still guarantees delete + silence.
   const hash = await deps.hashImage(buf);
+  let hashFloor: HashMatch | null = null;
   if (hash) {
     const known = await deps.findKnownBadHash(hash);
     if (known) {
-      const verdict: BioVerdict =
-        known.verdict === "AUTO_BAN" && known.distance <= CSAM_PHASH_STRICT_MAX_DIST ? "AUTO_BAN" : "SILENCE";
+      const instantBan = known.verdict === "AUTO_BAN" && known.distance <= CSAM_PHASH_STRICT_MAX_DIST;
       logger.info({
         action: "csam_phash_match",
         fileUniqueId: candidate.fileUniqueId,
         distance: known.distance,
         storedVerdict: known.verdict,
-        verdict,
+        decision: instantBan ? "ban" : "floor",
       });
-      return {
-        verdict,
-        matched: true,
-        text: "",
-        solicitation: [],
-        source: "phash",
-        phashDistance: known.distance,
-      };
+      if (instantBan) {
+        return {
+          verdict: "AUTO_BAN",
+          matched: true,
+          text: "",
+          solicitation: [],
+          source: "phash",
+          phashDistance: known.distance,
+        };
+      }
+      hashFloor = known;
     }
   }
 
@@ -135,6 +142,17 @@ export async function scanImage(candidate: ScanCandidate, deps: ImageScanDeps): 
       fileUniqueId: candidate.fileUniqueId,
       error: String(err),
     });
+    if (hashFloor) {
+      // The visual match alone still warrants delete + silence-for-review.
+      return {
+        verdict: "SILENCE",
+        matched: true,
+        text: "",
+        solicitation: [],
+        source: "phash",
+        phashDistance: hashFloor.distance,
+      };
+    }
     return { verdict: "NONE", matched: false, text: "", solicitation: [], source: "skip" };
   }
   await deps.cacheSet(candidate.fileUniqueId, text);
@@ -149,16 +167,20 @@ export async function scanImage(candidate: ScanCandidate, deps: ImageScanDeps): 
     verdict: r.verdict,
     sample: text.replace(/\s+/g, " ").trim().slice(0, 160),
   });
-  if (r.verdict !== "NONE" && hash) {
-    await deps.storeKnownBadHash(hash, r.verdict);
+
+  const floored = r.verdict === "NONE" && hashFloor !== null;
+  const verdict: BioVerdict = floored ? "SILENCE" : r.verdict;
+  if (verdict !== "NONE" && hash) {
+    await deps.storeKnownBadHash(hash, verdict);
   }
   return {
-    verdict: r.verdict,
-    matched: r.matched,
+    verdict,
+    matched: verdict !== "NONE",
     text,
     handle: r.handle,
     keyword: r.keyword,
     solicitation: r.solicitation,
-    source: "ocr",
+    source: floored ? "phash" : "ocr",
+    phashDistance: hashFloor?.distance,
   };
 }

@@ -116,21 +116,46 @@ describe("scanImage cost-control pipeline", () => {
     expect(ocr).not.toHaveBeenCalled();
   });
 
-  it("pHash match outside the strict gate only SILENCEs, even off a stored AUTO_BAN", async () => {
+  it("pHash match outside the strict gate floors to SILENCE when OCR reads nothing", async () => {
+    const ocr = vi.fn(async () => "");
     const r = await scanImage(
       { fileId: "f", fileUniqueId: "u" },
-      makeDeps({ findKnownBadHash: async () => ({ verdict: "AUTO_BAN", distance: 9 }) })
+      makeDeps({ findKnownBadHash: async () => ({ verdict: "AUTO_BAN", distance: 9 }), ocr })
     );
-    expect(r.verdict).toBe("SILENCE"); // looser visual match ⇒ human confirms the ban (G3)
+    expect(ocr).toHaveBeenCalled(); // looser visual match does NOT short-circuit
+    expect(r.verdict).toBe("SILENCE");
     expect(r.source).toBe("phash");
+    expect(r.phashDistance).toBe(9);
   });
 
-  it("pHash match on a stored SILENCE verdict stays SILENCE at any distance", async () => {
+  it("stored SILENCE hash is a floor, not a ceiling — OCR can still escalate to AUTO_BAN", async () => {
+    const storeKnownBadHash = vi.fn(async () => undefined);
+    const r = await scanImage(
+      { fileId: "f", fileUniqueId: "recrop" },
+      makeDeps({
+        findKnownBadHash: async () => ({ verdict: "SILENCE", distance: 1 }),
+        ocr: async () => "pls text to @NOMAX16 for buy",
+        storeKnownBadHash,
+      })
+    );
+    expect(r.verdict).toBe("AUTO_BAN");
+    expect(r.source).toBe("ocr");
+    // The escalated verdict is stored so the blacklist learns.
+    expect(storeKnownBadHash).toHaveBeenCalledWith("aaaaaaaaaaaaaaaa", "AUTO_BAN");
+  });
+
+  it("pHash floor still silences when OCR itself fails", async () => {
     const r = await scanImage(
       { fileId: "f", fileUniqueId: "u" },
-      makeDeps({ findKnownBadHash: async () => ({ verdict: "SILENCE", distance: 1 }) })
+      makeDeps({
+        findKnownBadHash: async () => ({ verdict: "SILENCE", distance: 3 }),
+        ocr: async () => {
+          throw new Error("engine down");
+        },
+      })
     );
-    expect(r.verdict).toBe("SILENCE");
+    expect(r.verdict).toBe("SILENCE"); // visual match alone warrants delete + review
+    expect(r.source).toBe("phash");
   });
 
   it("stores the image hash when the OCR text tier flags it", async () => {
