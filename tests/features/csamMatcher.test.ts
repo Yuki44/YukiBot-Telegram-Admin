@@ -165,10 +165,10 @@ describe("evaluateImageText — obfuscated abuse keywords (space-free tokens)", 
   });
 });
 
-describe("evaluateImageText — OCR digit/letter handle garble (real 2026-07-27 gallery)", () => {
-  it("matches the handle when OCR reads '@Nomax16' as '@Nomax:l6' (1→l, stray colon)", () => {
-    const r = evaluateImageText("pls a to @Nomax:l6", config);
-    expect(r.matched).toBe(true);
+describe("evaluateImageText — OCR handle garble (real 2026-07-27/28 gallery)", () => {
+  it("AUTO_BANs a strict-tolerant garble '@Nomax:l6' (1→l via the leet path) + solicitation", () => {
+    const r = evaluateImageText("pls text to @Nomax:l6 for buy", config);
+    expect(r.verdict).toBe("AUTO_BAN");
     expect(r.handle).toBe("nomax16");
   });
 
@@ -179,9 +179,19 @@ describe("evaluateImageText — OCR digit/letter handle garble (real 2026-07-27 
     expect(evaluateImageText(prod, config).matched).toBe(true);
   });
 
-  it("matches when the misread '@' is fused to the front of the handle (Onomax16)", () => {
+  it("SILENCEs (never auto-bans) the edit-distance garble '@Nomax] 6' → 'nomax6' (1 dropped)", () => {
+    // The exact 2026-07-28 03:41 Railway read: OCR dropped the '1' entirely. Prod watches
+    // only "nomax16" (no bare "nomax"), so the strict path misses and the fuzzy path takes
+    // over — lower confidence, so it silences for review rather than auto-banning.
+    const prodConfig: WatchConfig = { ...config, handles: ["nomax16"] };
+    const r = evaluateImageText("=piSitextito(@Nomax] 6,for buy", prodConfig);
+    expect(r.verdict).toBe("SILENCE");
+    expect(r.handle).toBe("nomax16");
+  });
+
+  it("SILENCEs when the misread '@' is fused to the front of the handle (Onomax16)", () => {
     const r = evaluateImageText("11000 videos cp gei ONomax16 for buy", config);
-    expect(r.matched).toBe(true);
+    expect(r.verdict).toBe("SILENCE");
     expect(r.handle).toBe("nomax16");
   });
 
@@ -189,8 +199,8 @@ describe("evaluateImageText — OCR digit/letter handle garble (real 2026-07-27 
     expect(evaluateImageText("catalogue model no. abcl6 back in stock", config).matched).toBe(false);
   });
 
-  it("the loose handle path still respects the right boundary (no match inside a longer token)", () => {
-    expect(evaluateImageText("buy nomax168 gadgets today", config).matched).toBe(false);
+  it("the loose handle path stays bounded — a two-edit-away token does not match", () => {
+    expect(evaluateImageText("buy nomax999 gadgets today", config).matched).toBe(false);
   });
 });
 

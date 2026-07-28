@@ -176,16 +176,10 @@ function fuzzyCharFragment(ch: string): string {
   return `[${escapeForCharClass(members)}]+`;
 }
 
-/**
- * Build a fuzzy, boundary-anchored regex from an already-normalized needle.
- * `anchorStart=false` drops the LEFT boundary so a needle fused to a preceding
- * glyph still matches — e.g. an OCR-misread "@" welded onto a handle ("Onomax16").
- * The right boundary always stays, so a real word ending is never a false hit.
- */
-export function buildFuzzyRegex(needle: string, anchorStart = true): RegExp {
+/** Build a fuzzy, boundary-anchored regex from an already-normalized needle. */
+export function buildFuzzyRegex(needle: string): RegExp {
   const body = Array.from(needle).map(fuzzyCharFragment).join(SEP);
-  const left = anchorStart ? `(?<!${WORD})` : "";
-  return new RegExp(`${left}${body}(?!${WORD})`, "u");
+  return new RegExp(`(?<!${WORD})${body}(?!${WORD})`, "u");
 }
 
 /** Build the whole-word (literal) regex from an already-normalized needle. */
