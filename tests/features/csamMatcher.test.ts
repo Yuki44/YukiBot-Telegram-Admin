@@ -104,6 +104,21 @@ describe("evaluateImageText — verdict tiers (OCR can now AUTO_BAN, mirroring t
     expect(evaluateImageText("cp gei", config).verdict).toBe("SILENCE");
   });
 
+  it("AUTO_BANs strict handle + CSAM keyword even without a sale word (the cropped-ad case)", () => {
+    // Production-like config: "cp"/"videos" are NOT solicitation words there.
+    const prodLike: WatchConfig = { ...config, solicitation: ["buy", "for buy", "sell"] };
+    const r = evaluateImageText("964 photos, 3113 videos >11000 videos cp gei pls text to @Nomax16", prodLike);
+    expect(r.verdict).toBe("AUTO_BAN");
+    expect(r.keyword).toBeDefined();
+    expect(r.solicitation).toEqual([]);
+  });
+
+  it("keyword + LOOSE (edit-distance) handle still only SILENCEs", () => {
+    const r = evaluateImageText("cp gei text to nomux16", config);
+    expect(r.verdict).toBe("SILENCE");
+    expect(r.handle).toBeDefined();
+  });
+
   it("downgrades handle + sale word to SILENCE when a negation is present (protect the ally)", () => {
     const r = evaluateImageText("nomax16 sells cp — report him, scam", config);
     expect(r.verdict).toBe("SILENCE");
