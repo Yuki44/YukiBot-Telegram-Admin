@@ -67,24 +67,6 @@ function firstMatch(folded: string, foldedSpaced: string, terms: string[]): stri
   return terms.find((t) => termMatches(folded, foldedSpaced, t));
 }
 
-/**
- * Handle hit for OCR'd image text: the strict boundaried match, OR — for a
- * distinctive digit-bearing handle — a left-unanchored match so a misread "@"
- * fused to the front ("@Nomax16" → "Onomax16") still counts. Restricted to
- * digit-bearing single tokens so it can't fire inside an ordinary word; the bio
- * tier never uses this looser path.
- */
-function imageHandleMatch(folded: string, foldedSpaced: string, handle: string): boolean {
-  if (termMatches(folded, foldedSpaced, handle)) return true;
-  const needle = collapseSpaces(normalize(handle));
-  if (!needle || /\s/.test(needle) || !/[0-9]/.test(needle)) return false;
-  return buildFuzzyRegex(needle, false).test(folded);
-}
-
-function firstImageHandle(folded: string, foldedSpaced: string, handles: string[]): string | undefined {
-  return handles.find((h) => imageHandleMatch(folded, foldedSpaced, h));
-}
-
 // OCR-noise tolerance thresholds. Solicitation/negation stay conservative (a 1-edit
 // window around a short common word collides too easily, e.g. "cd video" ≈ "cpvideo").
 // The keyword list is the explicit CSAM lexicon — specific enough to tolerate shorter
@@ -92,7 +74,24 @@ function firstImageHandle(folded: string, foldedSpaced: string, handles: string[
 // recovers real OCR garble like "cp gei" → "cplgei"/"tpgeil" (one edit from "cpgei").
 const APPROX_MIN_LEN = 9;
 const KEYWORD_APPROX_MIN_LEN = 5;
+const HANDLE_APPROX_MIN_LEN = 6;
 const approxBudget = (len: number): number => (len >= 13 ? 2 : 1);
+
+/**
+ * A distinctive digit-bearing handle recovered from OCR noise by bounded edit
+ * distance. The handle garbles a different way every send — "@Nomax16" comes back
+ * "@Nomax:l6" (1→l), "@Nomax] 6" → compact "nomax6" (1 dropped), or "Onomax16" (@
+ * fused on) — and all land within one edit of the compacted handle. Lower-confidence
+ * than the strict path, so callers use it only to SILENCE-for-review, never to
+ * auto-ban; digit-bearing + min length keep it from firing on ordinary words.
+ */
+function looseImageHandle(compact: string, handles: string[]): string | undefined {
+  return handles.find((h) => {
+    const needle = compactAlnum(normalize(h));
+    if (needle.length < HANDLE_APPROX_MIN_LEN || !/[0-9]/.test(needle)) return false;
+    return approxContains(compact, needle, approxBudget(needle.length));
+  });
+}
 
 /**
  * Term hit for OCR'd image text: the strict fuzzy path (leet/separators) OR, for
@@ -132,13 +131,20 @@ export function evaluateBio(bio: string, config: WatchConfig): BioResult {
   return { verdict, handle, solicitation, negation };
 }
 
-/** Mirrors evaluateBio: AUTO_BAN on handle + solicitation (no negation), else SILENCE on a lone handle/keyword. */
+/**
+ * Mirrors evaluateBio: AUTO_BAN on handle + solicitation (no negation), else SILENCE
+ * on a lone handle/keyword. Only a STRICT handle (leet/separator/homoglyph tolerant,
+ * boundaried) may auto-ban; an OCR-fuzzy handle recovered by edit distance is lower
+ * confidence and only ever silences for human review — a false positive there is cheap,
+ * a false auto-ban is not (G3: bans never revert).
+ */
 export function evaluateImageText(text: string, config: WatchConfig): ImageResult {
   const folded = normalizeAndFold(text ?? "");
   const foldedSpaced = collapseSpaces(folded);
   const compact = compactAlnum(folded);
 
-  const handle = firstImageHandle(folded, foldedSpaced, config.handles);
+  const strictHandle = firstMatch(folded, foldedSpaced, config.handles);
+  const handle = strictHandle ?? looseImageHandle(compact, config.handles);
   const keyword = (config.keywords ?? []).find((t) =>
     imageKeywordMatch(folded, foldedSpaced, compact, t, KEYWORD_APPROX_MIN_LEN)
   );
@@ -146,7 +152,7 @@ export function evaluateImageText(text: string, config: WatchConfig): ImageResul
   const negation = config.negation.filter((t) => imageKeywordMatch(folded, foldedSpaced, compact, t));
 
   let verdict: BioVerdict = "NONE";
-  if (handle && solicitation.length > 0 && negation.length === 0) {
+  if (strictHandle && solicitation.length > 0 && negation.length === 0) {
     verdict = "AUTO_BAN";
   } else if (handle || keyword) {
     verdict = "SILENCE";
