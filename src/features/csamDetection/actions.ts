@@ -215,7 +215,7 @@ export async function deleteMessagesConfirmed(
 }
 
 /** Deletes this user's known messages in one chat + records a confirmed-delete row. */
-async function deleteRecentMessages(
+export async function deleteRecentMessages(
   api: Api,
   chatId: number,
   userId: number,
@@ -223,20 +223,33 @@ async function deleteRecentMessages(
   target: CsamTarget,
   reason: string
 ): Promise<void> {
-  const ids = await csamRecentMessageRepository.findMessageIds(userId, chatId);
-  if (ids.length === 0) {
-    logger.info({ action: "csam_bulk_delete", chatId, userId, found: 0, deleted: 0 });
+  const msgs = await csamRecentMessageRepository.findMessages(userId, chatId);
+  if (msgs.length === 0) {
+    logger.info({ action: "csam_bulk_delete", chatId, userId, found: 0, deleted: 0, deletedMedia: 0 });
     return;
   }
-  const res = await deleteMessagesConfirmed(api, chatId, ids);
+  const mediaIds = new Set(msgs.filter((m) => m.hasMedia).map((m) => m.messageId));
+  const res = await deleteMessagesConfirmed(
+    api,
+    chatId,
+    msgs.map((m) => m.messageId)
+  );
+  const deletedMedia = res.deleted.filter((id) => mediaIds.has(id));
   logger.info({
     action: "csam_bulk_delete",
     chatId,
     userId,
-    found: ids.length,
+    found: msgs.length,
     deleted: res.deleted.length,
     failed: res.failed.length,
+    deletedMedia: deletedMedia.length,
+    deletedIds: res.deleted.slice(0, 50),
   });
+  // Same signal the OCR path emits, so an image removed on the bio-scan ban is just as
+  // unmistakable in the logs — `via` says which path pulled the trigger.
+  for (const messageId of deletedMedia) {
+    logger.info({ action: "csam_image_deleted", chatId, messageId, userId, via: "bio_bulk_delete" });
+  }
   if (res.failed.length > 0) {
     logger.warn({ action: "csam_bulk_delete_failed", chatId, userId, failed: res.failed.slice(0, 20) });
   }

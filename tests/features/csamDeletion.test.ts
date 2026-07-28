@@ -1,8 +1,14 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../../src/utils/logger", () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
+vi.mock("../../src/utils/activityLog", () => ({ recordActivity: vi.fn() }));
+vi.mock("../../src/db/repositories/csamRecentMessageRepository", () => ({
+  csamRecentMessageRepository: { findMessages: vi.fn() },
+}));
 
-import { deleteMessagesConfirmed } from "../../src/features/csamDetection/actions";
+import { deleteMessagesConfirmed, deleteRecentMessages } from "../../src/features/csamDetection/actions";
+import { csamRecentMessageRepository } from "../../src/db/repositories/csamRecentMessageRepository";
+import { logger } from "../../src/utils/logger";
 
 // Minimal grammy Api stub — only the two delete methods matter here.
 function makeApi(over: Record<string, unknown> = {}) {
@@ -55,5 +61,42 @@ describe("deleteMessagesConfirmed", () => {
     expect(res.deleted).toEqual([]);
     expect(res.failed).toEqual([]);
     expect(api.deleteMessages).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleteRecentMessages — on-ban bulk delete logs the image removal", () => {
+  const actor = { id: 1, name: "YukiBot" };
+  const target = { userId: 555, name: "bad actor" };
+
+  beforeEach(() => {
+    vi.mocked(logger.info).mockClear();
+  });
+
+  it("emits csam_image_deleted for each media message removed (not for text ones)", async () => {
+    vi.mocked(csamRecentMessageRepository.findMessages).mockResolvedValue([
+      { messageId: 10, hasMedia: true }, // the CSAM image
+      { messageId: 11, hasMedia: false }, // a text message
+    ]);
+    const api = makeApi();
+    await deleteRecentMessages(api, -100, 555, actor, target, "CP/impostor");
+
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "csam_image_deleted", messageId: 10, via: "bio_bulk_delete" })
+    );
+    expect(logger.info).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: "csam_image_deleted", messageId: 11 })
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "csam_bulk_delete", deleted: 2, deletedMedia: 1 })
+    );
+  });
+
+  it("reports zero media when the user's tracked messages were all text", async () => {
+    vi.mocked(csamRecentMessageRepository.findMessages).mockResolvedValue([{ messageId: 20, hasMedia: false }]);
+    await deleteRecentMessages(makeApi(), -100, 555, actor, target, "CP/impostor");
+    expect(logger.info).not.toHaveBeenCalledWith(expect.objectContaining({ action: "csam_image_deleted" }));
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "csam_bulk_delete", deletedMedia: 0 })
+    );
   });
 });
