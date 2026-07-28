@@ -1,16 +1,18 @@
 import { WatchConfig, evaluateImageText, BioVerdict } from "./matcher";
+import { HashMatch } from "./imageHash";
+import { CSAM_PHASH_STRICT_MAX_DIST } from "../../config/constants";
 import { logger } from "../../utils/logger";
 
 /**
- * Image OCR decision pipeline (pure orchestration — engine/IO injected so it
- * is fully unit-testable without tesseract, sharp, or Telegram).
+ * Image decision pipeline (pure orchestration — engine/IO injected, unit-testable).
  *
- * Cost-control order (cheap → expensive):
- *   1. caption-first  — if the visible caption already matches, skip OCR.
- *   2. cache lookup   — reuse prior OCR text; honour the reviewed-safe allowlist.
- *   3. OCR            — download + OCR only when the above didn't decide.
+ * Cost-control order: caption → cache (reviewed-safe honoured) → pHash → OCR.
+ * The pHash tier decides a near-duplicate of an already-flagged image before any
+ * OCR — catching the same ad re-posted from fresh alt accounts, whose new
+ * file_unique_id defeats the text cache.
  *
  * A strong hit (handle + solicitation) AUTO-BANs; a lone hit SILENCEs for review.
+ * A pHash hit inherits AUTO_BAN only within the strict distance gate (G3).
  */
 
 export interface ScanCandidate {
@@ -21,7 +23,7 @@ export interface ScanCandidate {
   fileSize?: number;
 }
 
-export type ScanSource = "caption" | "cache" | "ocr" | "skip";
+export type ScanSource = "caption" | "cache" | "phash" | "ocr" | "skip";
 
 export interface ImageScanResult {
   verdict: BioVerdict;
@@ -31,6 +33,8 @@ export interface ImageScanResult {
   keyword?: string;
   solicitation: string[];
   source: ScanSource;
+  /** Hamming distance to the stored hash when source === "phash". */
+  phashDistance?: number;
 }
 
 export interface ImageScanDeps {
@@ -40,6 +44,12 @@ export interface ImageScanDeps {
   ocr: (image: Buffer, urgent: boolean) => Promise<string>;
   cacheGet: (fileUniqueId: string) => Promise<{ text: string; reviewedSafe: boolean } | null>;
   cacheSet: (fileUniqueId: string, text: string) => Promise<void>;
+  /** 64-bit pHash of the downloaded bytes; null when hashing fails (scan continues). */
+  hashImage: (image: Buffer) => Promise<string | null>;
+  /** Closest known-bad hash within the review distance, if any. */
+  findKnownBadHash: (hash: string) => Promise<HashMatch | null>;
+  /** Record a hash the text tier just flagged, so re-uploads are caught instantly. */
+  storeKnownBadHash: (hash: string, verdict: "AUTO_BAN" | "SILENCE") => Promise<void>;
 }
 
 export async function scanImage(candidate: ScanCandidate, deps: ImageScanDeps): Promise<ImageScanResult> {
@@ -79,12 +89,47 @@ export async function scanImage(candidate: ScanCandidate, deps: ImageScanDeps): 
     };
   }
 
+  let buf: Buffer;
+  try {
+    buf = await deps.download(candidate.fileId);
+  } catch (err) {
+    // G10/G11 — must not be silent, or a real failure reads as "scan ran, no match".
+    logger.error({
+      action: "csam_image_scan_failed",
+      fileUniqueId: candidate.fileUniqueId,
+      error: String(err),
+    });
+    return { verdict: "NONE", matched: false, text: "", solicitation: [], source: "skip" };
+  }
+
+  const hash = await deps.hashImage(buf);
+  if (hash) {
+    const known = await deps.findKnownBadHash(hash);
+    if (known) {
+      const verdict: BioVerdict =
+        known.verdict === "AUTO_BAN" && known.distance <= CSAM_PHASH_STRICT_MAX_DIST ? "AUTO_BAN" : "SILENCE";
+      logger.info({
+        action: "csam_phash_match",
+        fileUniqueId: candidate.fileUniqueId,
+        distance: known.distance,
+        storedVerdict: known.verdict,
+        verdict,
+      });
+      return {
+        verdict,
+        matched: true,
+        text: "",
+        solicitation: [],
+        source: "phash",
+        phashDistance: known.distance,
+      };
+    }
+  }
+
   let text: string;
   try {
-    const buf = await deps.download(candidate.fileId);
     text = await deps.ocr(buf, !caption);
   } catch (err) {
-    // G10/G11 — must not be silent, or a real failure reads as "OCR ran, no match".
     logger.error({
       action: "csam_image_scan_failed",
       fileUniqueId: candidate.fileUniqueId,
@@ -104,6 +149,9 @@ export async function scanImage(candidate: ScanCandidate, deps: ImageScanDeps): 
     verdict: r.verdict,
     sample: text.replace(/\s+/g, " ").trim().slice(0, 160),
   });
+  if (r.verdict !== "NONE" && hash) {
+    await deps.storeKnownBadHash(hash, r.verdict);
+  }
   return {
     verdict: r.verdict,
     matched: r.matched,

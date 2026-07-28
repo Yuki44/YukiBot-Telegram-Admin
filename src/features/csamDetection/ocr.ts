@@ -1,108 +1,82 @@
-import { createWorker, Worker, PSM } from "tesseract.js";
 import sharp from "sharp";
 import { logger } from "../../utils/logger";
-import { CSAM_OCR_SCALES } from "../../config/constants";
+import { CSAM_OCR_MAX_EDGE_PX } from "../../config/constants";
+import { createOcrEngine, OcrEngine } from "./paddle";
 
-/** Local OCR (tesseract.js), no image/text ever leaves the process. 2-worker pool, urgent jobs jump the queue. */
+/**
+ * Local scene-text OCR (PP-OCRv4 via onnxruntime, CPU) — no image/text ever leaves
+ * the process. One shared engine, up to MAX_CONCURRENT in-flight reads (the onnx
+ * session is safe for concurrent run()); urgent jobs jump the queue.
+ */
 
-const MAX_WORKERS = 2;
-
-// SINGLE_BLOCK locks onto the dominant overlay banner; SPARSE_TEXT catches scattered
-// fragments. Their union across CSAM_OCR_SCALES is what makes a garbled token in one
-// pass recoverable from another.
-const OCR_MODES = [PSM.SINGLE_BLOCK, PSM.SPARSE_TEXT];
+const MAX_CONCURRENT = 2;
 
 interface Job {
   input: Buffer;
   resolve: (text: string) => void;
 }
 
-let workers: Worker[] = [];
-let freeWorkers: Worker[] = [];
-let poolReady: Promise<void> | null = null;
+let enginePromise: Promise<OcrEngine> | null = null;
+let running = 0;
 const urgentJobs: Job[] = [];
 const normalJobs: Job[] = [];
 
-async function ensurePool(): Promise<void> {
-  if (!poolReady) {
-    poolReady = (async () => {
-      while (workers.length < MAX_WORKERS) {
-        const w = await createWorker("eng+spa");
-        workers.push(w);
-        freeWorkers.push(w);
-      }
-    })();
+async function ensureEngine(): Promise<OcrEngine> {
+  if (!enginePromise) {
+    enginePromise = createOcrEngine().catch((err) => {
+      enginePromise = null; // a failed load must not poison every later scan
+      throw err;
+    });
   }
-  await poolReady;
+  return enginePromise;
 }
 
-/** Downscale to `dim` (upscaling small images too) and boost contrast so the overlay text survives. */
-async function preprocess(input: Buffer, dim: number): Promise<Buffer> {
+/** Cap the longest edge so an outsized document upload can't blow the latency budget. */
+async function preprocess(input: Buffer): Promise<Buffer> {
+  const meta = await sharp(input).metadata();
+  const maxEdge = Math.max(meta.width ?? 0, meta.height ?? 0);
+  if (maxEdge <= CSAM_OCR_MAX_EDGE_PX) return input;
   return sharp(input)
-    .resize({ width: dim, height: dim, fit: "inside", withoutEnlargement: false })
-    .grayscale()
-    .normalize()
-    .sharpen()
+    .resize({ width: CSAM_OCR_MAX_EDGE_PX, height: CSAM_OCR_MAX_EDGE_PX, fit: "inside" })
     .toBuffer();
 }
 
-/** OCR the image at every scale × mode and union the text; one failed pass never sinks the rest. */
-async function runJob(worker: Worker, job: Job): Promise<void> {
-  const parts: string[] = [];
-  for (const dim of CSAM_OCR_SCALES) {
-    let prepared: Buffer;
-    try {
-      prepared = await preprocess(job.input, dim);
-    } catch (err) {
-      logger.warn({ action: "csam_ocr_preprocess", dim, error: String(err) });
-      continue;
-    }
-    for (const psm of OCR_MODES) {
-      try {
-        await worker.setParameters({ tessedit_pageseg_mode: psm });
-        const { data } = await worker.recognize(prepared);
-        if (data.text) parts.push(data.text);
-      } catch (err) {
-        logger.error({ action: "csam_ocr_recognize", dim, psm, error: String(err) });
-      }
-    }
+async function runJob(job: Job): Promise<void> {
+  let text = "";
+  try {
+    const engine = await ensureEngine();
+    const prepared = await preprocess(job.input);
+    const lines = await engine.detect(prepared);
+    text = lines.map((l) => l.text).join("\n");
+  } catch (err) {
+    logger.error({ action: "csam_ocr_recognize", error: String(err) });
   }
-  job.resolve(parts.join("\n"));
+  job.resolve(text);
 }
 
-/** Hands the next free worker the highest-priority waiting job, if any. */
 function dispatch(): void {
-  if (freeWorkers.length === 0) return;
-  const job = urgentJobs.shift() ?? normalJobs.shift();
-  if (!job) return;
-  const worker = freeWorkers.pop()!;
-  void runJob(worker, job).finally(() => {
-    freeWorkers.push(worker);
-    dispatch();
-  });
+  while (running < MAX_CONCURRENT) {
+    const job = urgentJobs.shift() ?? normalJobs.shift();
+    if (!job) return;
+    running += 1;
+    void runJob(job).finally(() => {
+      running -= 1;
+      dispatch();
+    });
+  }
 }
 
 /** Extract text from an image buffer. `urgent` jumps ahead of already-queued normal jobs. */
 export async function ocrImage(input: Buffer, urgent = false): Promise<string> {
-  await ensurePool();
   return new Promise<string>((resolve) => {
     (urgent ? urgentJobs : normalJobs).push({ input, resolve });
     dispatch();
   });
 }
 
-/** Tear down the worker pool (used on shutdown / after tests). */
+/** Drop queued jobs and the engine reference (used on shutdown / after tests). */
 export async function terminateOcr(): Promise<void> {
-  for (const w of workers) {
-    try {
-      await w.terminate();
-    } catch {
-      /* silent */
-    }
-  }
-  workers = [];
-  freeWorkers = [];
-  poolReady = null;
+  enginePromise = null;
   urgentJobs.length = 0;
   normalJobs.length = 0;
 }

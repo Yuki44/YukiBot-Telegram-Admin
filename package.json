@@ -30,6 +30,9 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "overrides": {
+    "sharp": "$sharp"
+  },
   "bugs": {
     "url": "https://github.com/Yuki44/YukiBot-Telegram-Admin/issues"
   },
@@ -37,6 +40,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
     "@grammyjs/auto-retry": "^2.0.2",
+    "@gutenye/ocr-node": "^1.4.8",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.3.1",
@@ -45,7 +49,6 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^9.3.1",
     "sharp": "^0.35.3",
-    "tesseract.js": "^7.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

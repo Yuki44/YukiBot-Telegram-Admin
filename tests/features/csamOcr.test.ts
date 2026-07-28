@@ -1,43 +1,45 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { CSAM_OCR_SCALES } from "../../src/config/constants";
 
-/** Passes per image = every scale run through both page-seg modes. */
-const PASSES_PER_JOB = CSAM_OCR_SCALES.length * 2;
-
-interface RecogCall {
+interface DetectCall {
   input: string;
   resolved: boolean;
   resolve: () => void;
+  reject: (err: Error) => void;
 }
-const recognizeCalls: RecogCall[] = [];
+const detectCalls: DetectCall[] = [];
+let createFailures = 0;
 
-vi.mock("tesseract.js", () => ({
-  PSM: { SPARSE_TEXT: "11", SINGLE_BLOCK: "6" },
-  createWorker: vi.fn(async () => ({
-    setParameters: vi.fn(async () => {}),
-    // Each recognize parks itself (labelled by the job's original buffer, which the
-    // sharp stub passes straight through) until the test releases it, so we can drive
-    // completion order across the two workers.
-    recognize: vi.fn(
-      (img: Buffer) =>
-        new Promise((resolve) => {
+vi.mock("../../src/features/csamDetection/paddle", () => ({
+  createOcrEngine: vi.fn(async () => {
+    if (createFailures > 0) {
+      createFailures -= 1;
+      throw new Error("model load failed");
+    }
+    return {
+      // Each detect parks itself (labelled by the job's original buffer, which the
+      // sharp stub passes straight through) until the test releases it, so we can
+      // drive completion order across the two slots.
+      detect: (img: Buffer) =>
+        new Promise((resolve, reject) => {
           const input = img.toString();
-          recognizeCalls.push({ input, resolved: false, resolve: () => resolve({ data: { text: input } }) });
-        })
-    ),
-    terminate: vi.fn(async () => {}),
-  })),
+          detectCalls.push({
+            input,
+            resolved: false,
+            resolve: () => resolve([{ text: input }, { text: input + "-2" }]),
+            reject,
+          });
+        }),
+    };
+  }),
 }));
 
 vi.mock("sharp", () => {
-  // Chainable stub; toBuffer passes the ORIGINAL input through so each recognize call
-  // is identifiable by its job label.
-  const make = (input: Buffer) => {
-    const chain: Record<string, unknown> = {};
-    for (const m of ["resize", "grayscale", "normalize", "sharpen"]) chain[m] = () => chain;
-    chain.toBuffer = async () => input;
-    return chain;
-  };
+  // Small metadata → preprocess passes the ORIGINAL buffer through untouched,
+  // so each detect call is identifiable by its job label.
+  const make = (input: Buffer) => ({
+    metadata: async () => ({ width: 100, height: 100 }),
+    resize: () => ({ toBuffer: async () => input }),
+  });
   return { default: (input: Buffer) => make(input) };
 });
 
@@ -46,14 +48,15 @@ vi.mock("../../src/utils/logger", () => ({
 }));
 
 import { ocrImage, terminateOcr } from "../../src/features/csamDetection/ocr";
+import { logger } from "../../src/utils/logger";
 
-/** Release every not-yet-resolved recognize call, repeatedly, until `promises` all settle. */
+/** Release every not-yet-resolved detect call, repeatedly, until `promises` all settle. */
 async function drain(promises: Promise<unknown>[]): Promise<void> {
   let pending = promises.length;
   promises.forEach((p) => void p.finally(() => (pending -= 1)));
   const start = Date.now();
   while (pending > 0) {
-    for (const c of recognizeCalls) {
+    for (const c of detectCalls) {
       if (!c.resolved) {
         c.resolved = true;
         c.resolve();
@@ -64,13 +67,13 @@ async function drain(promises: Promise<unknown>[]): Promise<void> {
   }
 }
 
-/** Release only the passes of the job labelled `label`, until `promise` settles. */
+/** Release only the detect call labelled `label`, until `promise` settles. */
 async function completeJob(label: string, promise: Promise<unknown>): Promise<void> {
   let done = false;
   void promise.finally(() => (done = true));
   const start = Date.now();
   while (!done) {
-    for (const c of recognizeCalls) {
+    for (const c of detectCalls) {
       if (c.input === label && !c.resolved) {
         c.resolved = true;
         c.resolve();
@@ -83,49 +86,66 @@ async function completeJob(label: string, promise: Promise<unknown>): Promise<vo
 
 describe("ocrImage", () => {
   beforeEach(() => {
-    recognizeCalls.length = 0;
+    detectCalls.length = 0;
+    createFailures = 0;
   });
 
   afterEach(async () => {
     await terminateOcr();
   });
 
-  it("unions every scale × mode pass into one text blob", async () => {
+  it("joins every detected line into one text blob", async () => {
     const p = ocrImage(Buffer.from("photo"));
     await drain([p]);
-    const text = await p;
-    // Same label came back from every pass; the union keeps them all.
-    expect(text.split(/\s+/).filter((t) => t === "photo")).toHaveLength(PASSES_PER_JOB);
+    expect(await p).toBe("photo\nphoto-2");
   });
 
-  it("runs two jobs concurrently on the two-worker pool", async () => {
+  it("runs two jobs concurrently on the two slots", async () => {
     const a = ocrImage(Buffer.from("a"));
     const b = ocrImage(Buffer.from("b"));
 
-    // If only one worker existed, only one job's first pass would have registered.
-    await vi.waitFor(() => expect(recognizeCalls.length).toBe(2));
-    expect(recognizeCalls.map((c) => c.input).sort()).toEqual(["a", "b"]);
+    // If only one slot existed, only one job's detect would have registered.
+    await vi.waitFor(() => expect(detectCalls.length).toBe(2));
+    expect(detectCalls.map((c) => c.input).sort()).toEqual(["a", "b"]);
 
     await drain([a, b]);
   });
 
   it("dispatches an urgent (captionless) job ahead of an already-queued normal one", async () => {
-    // Both workers busy on their first pass.
+    // Both slots busy.
     const busy1 = ocrImage(Buffer.from("busy1"));
     const busy2 = ocrImage(Buffer.from("busy2"));
-    await vi.waitFor(() => expect(recognizeCalls.length).toBe(2));
+    await vi.waitFor(() => expect(detectCalls.length).toBe(2));
 
-    // Queue a normal job, then an urgent one — urgent must win the first freed worker.
+    // Queue a normal job, then an urgent one — urgent must win the first freed slot.
     const normal = ocrImage(Buffer.from("normal"), false);
     const urgent = ocrImage(Buffer.from("urgent"), true);
 
-    // Free exactly one worker by finishing busy1 (busy2 stays parked).
+    // Free exactly one slot by finishing busy1 (busy2 stays parked).
     await completeJob("busy1", busy1);
 
-    // The freed worker picked up the urgent job, not the normal one queued before it.
-    await vi.waitFor(() => expect(recognizeCalls.some((c) => c.input === "urgent")).toBe(true));
-    expect(recognizeCalls.some((c) => c.input === "normal")).toBe(false);
+    await vi.waitFor(() => expect(detectCalls.some((c) => c.input === "urgent")).toBe(true));
+    expect(detectCalls.some((c) => c.input === "normal")).toBe(false);
 
     await drain([busy2, urgent, normal]);
+  });
+
+  it("resolves empty text and logs when the engine fails to load, then recovers", async () => {
+    vi.mocked(logger.error).mockClear();
+    createFailures = 1;
+
+    // Failed load → empty text, error logged, job still resolves (never throws).
+    expect(await ocrImage(Buffer.from("first"))).toBe("");
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "csam_ocr_recognize",
+        error: expect.stringContaining("model load failed"),
+      })
+    );
+
+    // A failed load must not poison later scans — the next job loads fresh and succeeds.
+    const retry = ocrImage(Buffer.from("retry"));
+    await drain([retry]);
+    expect(await retry).toBe("retry\nretry-2");
   });
 });
