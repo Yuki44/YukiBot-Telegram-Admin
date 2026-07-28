@@ -113,10 +113,22 @@ describe("evaluateImageText — verdict tiers (OCR can now AUTO_BAN, mirroring t
     expect(r.solicitation).toEqual([]);
   });
 
-  it("keyword + LOOSE (edit-distance) handle still only SILENCEs", () => {
+  it("AUTO_BANs CSAM keyword + LOOSE (edit-distance) handle — the cropped/garbled-ad case", () => {
     const r = evaluateImageText("cp gei text to nomux16", config);
+    expect(r.verdict).toBe("AUTO_BAN");
+    expect(r.handle).toBeDefined();
+  });
+
+  it("LOOSE handle with only a generic sale word (no CSAM keyword) still only SILENCEs", () => {
+    const r = evaluateImageText("text to nomux16 for buy", config);
     expect(r.verdict).toBe("SILENCE");
     expect(r.handle).toBeDefined();
+  });
+
+  it("LOOSE handle + keyword is still blocked by a negation (ally screenshot)", () => {
+    const r = evaluateImageText("cuidado: cp gei scam, report nomux16", config);
+    expect(r.verdict).toBe("SILENCE");
+    expect(r.negation.length).toBeGreaterThan(0);
   });
 
   it("downgrades handle + sale word to SILENCE when a negation is present (protect the ally)", () => {
@@ -204,9 +216,9 @@ describe("evaluateImageText — OCR handle garble (real 2026-07-27/28 gallery)",
     expect(r.handle).toBe("nomax16");
   });
 
-  it("SILENCEs when the misread '@' is fused to the front of the handle (Onomax16)", () => {
+  it("AUTO_BANs when the misread '@' is fused to the front of the handle (Onomax16) next to the keyword", () => {
     const r = evaluateImageText("11000 videos cp gei ONomax16 for buy", config);
-    expect(r.verdict).toBe("SILENCE");
+    expect(r.verdict).toBe("AUTO_BAN");
     expect(r.handle).toBe("nomax16");
   });
 

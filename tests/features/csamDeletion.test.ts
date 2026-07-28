@@ -5,9 +5,20 @@ vi.mock("../../src/utils/activityLog", () => ({ recordActivity: vi.fn() }));
 vi.mock("../../src/db/repositories/csamRecentMessageRepository", () => ({
   csamRecentMessageRepository: { findMessages: vi.fn() },
 }));
+vi.mock("../../src/db/repositories/chatRepository", () => ({
+  chatRepository: { listAll: vi.fn() },
+}));
+vi.mock("../../src/db/repositories/userRepository", () => ({
+  userRepository: { upsert: vi.fn(async () => undefined) },
+}));
 
-import { deleteMessagesConfirmed, deleteRecentMessages } from "../../src/features/csamDetection/actions";
+import {
+  deleteMessagesConfirmed,
+  deleteRecentMessages,
+  silenceAcrossChats,
+} from "../../src/features/csamDetection/actions";
 import { csamRecentMessageRepository } from "../../src/db/repositories/csamRecentMessageRepository";
+import { chatRepository } from "../../src/db/repositories/chatRepository";
 import { logger } from "../../src/utils/logger";
 
 // Minimal grammy Api stub — only the two delete methods matter here.
@@ -92,11 +103,49 @@ describe("deleteRecentMessages — on-ban bulk delete logs the image removal", (
   });
 
   it("reports zero media when the user's tracked messages were all text", async () => {
-    vi.mocked(csamRecentMessageRepository.findMessages).mockResolvedValue([{ messageId: 20, hasMedia: false }]);
+    vi.mocked(csamRecentMessageRepository.findMessages).mockResolvedValue([
+      { messageId: 20, hasMedia: false },
+    ]);
     await deleteRecentMessages(makeApi(), -100, 555, actor, target, "CP/impostor");
     expect(logger.info).not.toHaveBeenCalledWith(expect.objectContaining({ action: "csam_image_deleted" }));
     expect(logger.info).toHaveBeenCalledWith(
       expect.objectContaining({ action: "csam_bulk_delete", deletedMedia: 0 })
     );
+  });
+});
+
+describe("silenceAcrossChats — image-tier message purge", () => {
+  const actor = { id: 1, name: "YukiBot" };
+  const target = { userId: 555, name: "bad actor" };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const chat = { chatId: -100, name: "test chat", features: { csamDetection: true } } as any;
+
+  function makeSilenceApi() {
+    return makeApi({
+      restrictChatMember: vi.fn(async () => true),
+      sendMessage: vi.fn(async () => ({ message_id: 1 })),
+    });
+  }
+
+  beforeEach(() => {
+    vi.mocked(chatRepository.listAll).mockResolvedValue([chat]);
+    vi.mocked(csamRecentMessageRepository.findMessages).mockResolvedValue([
+      { messageId: 30, hasMedia: false },
+      { messageId: 31, hasMedia: true },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ] as any);
+  });
+
+  it("deleteMessages=true purges the user's recorded messages in the silenced chat", async () => {
+    const api = makeSilenceApi();
+    await silenceAcrossChats(api, chat, target, "nomax16, cpgei", actor, true);
+    expect(api.deleteMessages).toHaveBeenCalledWith(-100, [30, 31]);
+  });
+
+  it("default (bio-tier) silence leaves the user's messages alone", async () => {
+    const api = makeSilenceApi();
+    await silenceAcrossChats(api, chat, target, "nomax16", actor);
+    expect(api.deleteMessages).not.toHaveBeenCalled();
+    expect(api.deleteMessage).not.toHaveBeenCalled();
   });
 });
