@@ -63,22 +63,23 @@ export const CSAM_RECENT_MESSAGE_TTL_S = 48 * 60 * 60;
 
 // ── CSAM/impostor image OCR ──────────────────────────────────────────
 
-/**
- * Longest-edge sizes (px) each image is OCR'd at, results unioned. Deliberately
- * small: the attack is large overlay text ("text @handle for buy") over a busy
- * photo collage — downscaling dissolves the fine background clutter that otherwise
- * dominates OCR, while the big banner survives. A single size is unreliable (a
- * given scale can miss a token another catches), so we scan a few and combine.
- */
-export const CSAM_OCR_SCALES = [1300, 950, 720];
+/** Longest edge (px) an image is capped to before OCR — bounds inference latency only. */
+export const CSAM_OCR_MAX_EDGE_PX = 1600;
 
 /**
- * OCR pipeline version. Bump whenever the OCR algorithm changes so stale cached
- * text from an older (worse) pipeline is re-scanned instead of trusted for its full
- * TTL — an image the buggy single-pass reader mis-read must not stay cached as safe.
- * Admin-reviewed-safe rows are honoured regardless of version.
+ * OCR pipeline version. Bump on algorithm changes so stale cached text is re-scanned
+ * instead of trusted for its full TTL. Reviewed-safe rows are honoured regardless.
+ * v3 = tesseract multi-scale union replaced by PP-OCRv4 (onnx).
  */
-export const CSAM_OCR_VERSION = 2;
+export const CSAM_OCR_VERSION = 3;
+
+/**
+ * pHash hamming-distance gates (calibrated: re-encode ≈ 0, small text edit ≈ 4,
+ * unrelated image ≈ 20+). REVIEW ⇒ match (delete + at least silence); STRICT ⇒ a
+ * stored AUTO_BAN verdict is inherited outright.
+ */
+export const CSAM_PHASH_STRICT_MAX_DIST = 6;
+export const CSAM_PHASH_REVIEW_MAX_DIST = 12;
 
 /** Skip OCR entirely for files larger than this (bytes) — cheap DoS guard. */
 export const CSAM_OCR_MAX_BYTES = 10 * 1024 * 1024;

@@ -20,6 +20,9 @@ function makeDeps(over: Partial<ImageScanDeps> = {}): ImageScanDeps {
     ocr: async () => "",
     cacheGet: async () => null,
     cacheSet: async () => undefined,
+    hashImage: async () => "aaaaaaaaaaaaaaaa",
+    findKnownBadHash: async () => null,
+    storeKnownBadHash: async () => undefined,
     ...over,
   };
 }
@@ -99,6 +102,69 @@ describe("scanImage cost-control pipeline", () => {
     );
     expect(r.matched).toBe(true);
     expect(r.verdict).toBe("SILENCE");
+  });
+
+  it("pHash strict match inherits AUTO_BAN and never runs OCR", async () => {
+    const ocr = vi.fn(async () => "");
+    const r = await scanImage(
+      { fileId: "f", fileUniqueId: "reupload" },
+      makeDeps({ findKnownBadHash: async () => ({ verdict: "AUTO_BAN", distance: 3 }), ocr })
+    );
+    expect(r.verdict).toBe("AUTO_BAN");
+    expect(r.source).toBe("phash");
+    expect(r.phashDistance).toBe(3);
+    expect(ocr).not.toHaveBeenCalled();
+  });
+
+  it("pHash match outside the strict gate only SILENCEs, even off a stored AUTO_BAN", async () => {
+    const r = await scanImage(
+      { fileId: "f", fileUniqueId: "u" },
+      makeDeps({ findKnownBadHash: async () => ({ verdict: "AUTO_BAN", distance: 9 }) })
+    );
+    expect(r.verdict).toBe("SILENCE"); // looser visual match ⇒ human confirms the ban (G3)
+    expect(r.source).toBe("phash");
+  });
+
+  it("pHash match on a stored SILENCE verdict stays SILENCE at any distance", async () => {
+    const r = await scanImage(
+      { fileId: "f", fileUniqueId: "u" },
+      makeDeps({ findKnownBadHash: async () => ({ verdict: "SILENCE", distance: 1 }) })
+    );
+    expect(r.verdict).toBe("SILENCE");
+  });
+
+  it("stores the image hash when the OCR text tier flags it", async () => {
+    const storeKnownBadHash = vi.fn(async () => undefined);
+    const r = await scanImage(
+      { fileId: "f", fileUniqueId: "u" },
+      makeDeps({ ocr: async () => "pls text to @NOMAX16 for buy", storeKnownBadHash })
+    );
+    expect(r.verdict).toBe("AUTO_BAN");
+    expect(storeKnownBadHash).toHaveBeenCalledWith("aaaaaaaaaaaaaaaa", "AUTO_BAN");
+  });
+
+  it("does not store a hash for clean images", async () => {
+    const storeKnownBadHash = vi.fn(async () => undefined);
+    await scanImage(
+      { fileId: "f", fileUniqueId: "u" },
+      makeDeps({ ocr: async () => "a lovely photo of the beach", storeKnownBadHash })
+    );
+    expect(storeKnownBadHash).not.toHaveBeenCalled();
+  });
+
+  it("hash failure (null) skips the pHash tier but still OCRs", async () => {
+    const findKnownBadHash = vi.fn(async () => null);
+    const r = await scanImage(
+      { fileId: "f", fileUniqueId: "u" },
+      makeDeps({
+        hashImage: async () => null,
+        findKnownBadHash,
+        ocr: async () => ">11000 videos cp gei",
+      })
+    );
+    expect(findKnownBadHash).not.toHaveBeenCalled();
+    expect(r.verdict).toBe("SILENCE");
+    expect(r.source).toBe("ocr");
   });
 
   it("download failure degrades to skip (never throws) but logs the error", async () => {

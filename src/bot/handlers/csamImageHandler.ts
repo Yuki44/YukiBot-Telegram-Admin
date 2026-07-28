@@ -12,9 +12,11 @@ import {
   ImageScanResult,
 } from "../../features/csamDetection/imageScan";
 import { ocrImage } from "../../features/csamDetection/ocr";
+import { computeImageHash, findNearestHash } from "../../features/csamDetection/imageHash";
+import { csamImageHashRepository } from "../../db/repositories/csamImageHashRepository";
 import { executeCsamAutoBan, executeCsamSilence, CsamTarget } from "../../features/csamDetection/actions";
 import { logger } from "../../utils/logger";
-import { CSAM_OCR_MAX_BYTES } from "../../config/constants";
+import { CSAM_OCR_MAX_BYTES, CSAM_PHASH_REVIEW_MAX_DIST } from "../../config/constants";
 
 /**
  * Extract a SINGLE STILL image to OCR from a message. Never a video stream —
@@ -65,8 +67,11 @@ function extractStill(msg: NonNullable<BotContext["message"]>): ScanCandidate | 
   return null;
 }
 
-/** e.g. "imagen (ocr): nomax16 + videos, for buy". */
+/** e.g. "imagen (ocr): nomax16 + videos, for buy" / "imagen (phash): duplicado visual (d=3)". */
 function summarizeImageMatch(r: ImageScanResult): string {
+  if (r.source === "phash") {
+    return `imagen (phash): duplicado visual (d=${r.phashDistance ?? "?"})`;
+  }
   const parts = [r.handle, ...r.solicitation];
   if (r.keyword) parts.push(r.keyword);
   const detail = parts.filter(Boolean).join(", ") || r.keyword || "cp";
@@ -126,6 +131,18 @@ export async function csamImageScan(ctx: BotContext, next: NextFunction): Promis
       ocr: ocrImage,
       cacheGet: (fuid) => csamImageCacheRepository.get(fuid),
       cacheSet: (fuid, text) => csamImageCacheRepository.setText(fuid, text),
+      hashImage: async (image) => {
+        try {
+          return await computeImageHash(image);
+        } catch (err) {
+          logger.warn({ action: "csam_phash_compute", error: String(err) });
+          return null; // only costs the fast path — OCR still runs
+        }
+      },
+      findKnownBadHash: async (hash) =>
+        findNearestHash(hash, await csamImageHashRepository.listAll(), CSAM_PHASH_REVIEW_MAX_DIST),
+      storeKnownBadHash: (hash, verdict) =>
+        csamImageHashRepository.add(hash, verdict, candidate.fileUniqueId),
     };
 
     const result = await scanImage(candidate, deps);
