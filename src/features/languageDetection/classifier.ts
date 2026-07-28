@@ -29,7 +29,7 @@ Critical: judge which language the message is FUNDAMENTALLY written in — its g
 
 A key distinction: universally-adopted chat/internet slang and short loanwords (e.g. "ok", "lol", "wtf", a bare "hi"/"hello") are NOT a violation even when every word is technically foreign-origin — they're used as-is by Spanish/Catalan speakers regardless of the base language, so treat them as ES_CA (or UNSURE if genuinely unclear), never FOREIGN_BLATANT. This is different from a short but grammatically real sentence in another language that a Spanish/Catalan speaker would not understand at all (e.g. "comment ca marche", "wie geht es dir") — those ARE blatant regardless of length, because they carry actual foreign-language content rather than being an assimilated loanword.
 
-Explicit exception to that exception: "dm" / "dm me" / requests to be messaged privately are NEVER covered by the loanword allowance, no matter how short or common the phrasing — treat these as FOREIGN_BLATANT like any other coherent non-Spanish/Catalan phrase. This chat's admins have specifically flagged DM requests as carrying real weight regardless of brevity, unlike generic filler slang.
+Explicit exception to that exception: "dm" / "dm me" / requests to be messaged privately do NOT get the harmless-loanword pass — a message that is ITSELF just a foreign DM request ("dm me please", "pm me", "message me privately") is FOREIGN_BLATANT despite being short and common, because this chat's admins have flagged DM requests as carrying real weight. But this only removes the loanword pass; it does NOT override the fundamental-language rule above. When "dm" appears inside a message that is otherwise a genuine Spanish/Catalan attempt, the message is still ES_CA — the bare token "dm" does not turn an otherwise-Spanish/Catalan sentence foreign, exactly as any other loanword wouldn't.
 
 Examples:
 - "Alguien vende una PS5 aca barata mamen" -> ES_CA (terrible grammar and slang, but genuinely Spanish)
@@ -39,7 +39,8 @@ Examples:
 - "How old are you" -> FOREIGN_BLATANT (coherent English, no ambiguity)
 - "Trade offers only, no scams please, thanks" -> FOREIGN_BLATANT (fully coherent English)
 - "comment ca marche" -> FOREIGN_BLATANT (a real French sentence, incomprehensible to non-French speakers, no Spanish/Catalan attempt — short but not a loanword)
-- "dm me please" -> FOREIGN_BLATANT (DM requests are explicitly excluded from the loanword exception, per admin policy — not treated as harmless slang despite being short and common)
+- "dm me please" -> FOREIGN_BLATANT (the whole message is a foreign DM request — excluded from the loanword pass per admin policy, despite being short and common)
+- "Yo hetero curioso dm 🥵🔥🔥" -> ES_CA (a genuine Spanish sentence; "dm" is embedded in Spanish, so the DM carve-out does NOT apply — only a message that is itself a foreign DM request is blatant)
 - "I want to go to the beach with pruebas tomorrow, it will be fun" -> FOREIGN_BLATANT (fundamentally an English sentence; one incidental Spanish word does not make it a Spanish attempt — do not classify this as UNSURE or ES_CA just because a Spanish word is present)
 - Short fragments too brief to judge, or text genuinely balanced between two languages with no clear dominant one -> UNSURE
 
