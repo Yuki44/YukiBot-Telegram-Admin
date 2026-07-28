@@ -42,6 +42,7 @@ import { csamCallbackHandler } from "./bot/handlers/csamCallbackHandler";
 import { languageCallbackHandler } from "./bot/handlers/languageCallbackHandler";
 import { startCsamScanner } from "./features/csamDetection/scanner";
 import { csamImageScan } from "./bot/handlers/csamImageHandler";
+import { warmupOcr } from "./features/csamDetection/ocr";
 import { csamBioTrigger } from "./bot/handlers/csamBioTrigger";
 import { nameChangeTracker } from "./bot/handlers/nameChangeTracker";
 import { promoSpamDetection } from "./features/promoSpamDetection";
@@ -216,6 +217,7 @@ async function start() {
       logger.info({ action: "startup", status: "YukiBot is running" });
       // botInfo is populated by now — safe to boot the rolling CSAM bio scanner.
       startCsamScanner(bot);
+      warmupOcr();
     },
   });
 }

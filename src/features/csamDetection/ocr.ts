@@ -66,6 +66,13 @@ function dispatch(): void {
   }
 }
 
+/** Load the engine at boot so the first real scan doesn't pay the cold start. */
+export function warmupOcr(): void {
+  void ensureEngine().catch((err) => {
+    logger.warn({ action: "csam_ocr_warmup", error: String(err) });
+  });
+}
+
 /** Extract text from an image buffer. `urgent` jumps ahead of already-queued normal jobs. */
 export async function ocrImage(input: Buffer, urgent = false): Promise<string> {
   return new Promise<string>((resolve) => {

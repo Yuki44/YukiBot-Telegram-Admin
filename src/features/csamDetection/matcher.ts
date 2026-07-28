@@ -135,10 +135,10 @@ export function evaluateBio(bio: string, config: WatchConfig): BioResult {
  * Mirrors evaluateBio: AUTO_BAN on handle + (solicitation OR explicit CSAM keyword),
  * no negation; else SILENCE on a lone handle/keyword. The keyword counts because a
  * watched handle next to "cp gei"/"childporn" IS the ad, even when the sale phrase
- * didn't survive OCR. Only a STRICT handle (leet/separator/homoglyph tolerant,
- * boundaried) may auto-ban; an OCR-fuzzy handle recovered by edit distance is lower
- * confidence and only ever silences for human review — a false positive there is cheap,
- * a false auto-ban is not (G3: bans never revert).
+ * didn't survive OCR. A STRICT handle (leet/separator/homoglyph tolerant, boundaried)
+ * bans with either companion signal; an OCR-fuzzy handle recovered by edit distance
+ * is lower confidence and needs the explicit CSAM keyword beside it — with only a
+ * generic sale word (or nothing) it silences for human review (G3: bans never revert).
  */
 export function evaluateImageText(text: string, config: WatchConfig): ImageResult {
   const folded = normalizeAndFold(text ?? "");
@@ -153,8 +153,10 @@ export function evaluateImageText(text: string, config: WatchConfig): ImageResul
   const solicitation = config.solicitation.filter((t) => imageKeywordMatch(folded, foldedSpaced, compact, t));
   const negation = config.negation.filter((t) => imageKeywordMatch(folded, foldedSpaced, compact, t));
 
+  const banWorthy = strictHandle ? solicitation.length > 0 || Boolean(keyword) : Boolean(handle && keyword);
+
   let verdict: BioVerdict = "NONE";
-  if (strictHandle && (solicitation.length > 0 || keyword) && negation.length === 0) {
+  if (banWorthy && negation.length === 0) {
     verdict = "AUTO_BAN";
   } else if (handle || keyword) {
     verdict = "SILENCE";

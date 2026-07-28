@@ -198,7 +198,9 @@ export async function csamImageScan(ctx: BotContext, next: NextFunction): Promis
     if (result.verdict === "AUTO_BAN") {
       await executeCsamAutoBan(ctx.api, chatConfig, target, summary, actor);
     } else {
-      await executeCsamSilence(ctx.api, chatConfig, target, summary, actor);
+      // Image-tier silence still purges the poster's messages: the flagged ad itself
+      // is confirmed content, only the ban awaits human review.
+      await executeCsamSilence(ctx.api, chatConfig, target, summary, actor, true);
     }
 
     logger.info({

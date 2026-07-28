@@ -381,13 +381,19 @@ const UNRESTRICTED = {
   can_pin_messages: true,
 } as const;
 
-/** Silence an id in every active CSAM-protected chat, alerting per chat. Returns chats touched. */
+/**
+ * Silence an id in every active CSAM-protected chat, alerting per chat. Returns chats
+ * touched. `deleteMessages` also bulk-deletes the user's recorded messages per chat —
+ * used by the image tier, where the flagged content itself is confirmed and the rest
+ * of the user's messages must not linger while a human reviews the ban.
+ */
 export async function silenceAcrossChats(
   api: Api,
   originChat: IChat,
   target: CsamTarget,
   matchSummary: string,
-  actor: ActivityActor
+  actor: ActivityActor,
+  deleteMessages = false
 ): Promise<number> {
   let chats: IChat[] = [];
   try {
@@ -399,6 +405,16 @@ export async function silenceAcrossChats(
 
   for (const c of chats) {
     await silenceInChat(api, c.chatId, target);
+    if (deleteMessages) {
+      await deleteRecentMessages(
+        api,
+        c.chatId,
+        target.userId,
+        actor,
+        target,
+        `CP/impostor (revisión): ${matchSummary}`
+      );
+    }
     recordActivity({
       chatId: c.chatId,
       type: "csam_silence",
@@ -480,13 +496,15 @@ export async function executeCsamAutoBan(
 /**
  * Image OCR / uncertain bio ⇒ silence across every CSAM-protected chat, recording
  * and alerting per chat so each qsil button only clears the silence in its own chat.
+ * `deleteMessages` (image tier) also purges the user's recorded messages per chat.
  */
 export async function executeCsamSilence(
   api: Api,
   chatConfig: IChat,
   target: CsamTarget,
   matchSummary: string,
-  actor: ActivityActor
+  actor: ActivityActor,
+  deleteMessages = false
 ): Promise<void> {
-  await silenceAcrossChats(api, chatConfig, target, matchSummary, actor);
+  await silenceAcrossChats(api, chatConfig, target, matchSummary, actor, deleteMessages);
 }
