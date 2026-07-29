@@ -3,6 +3,7 @@ import { BotContext } from "../../types";
 import { adminRepository } from "../../db/repositories/adminRepository";
 import { csamRecentMessageRepository } from "../../db/repositories/csamRecentMessageRepository";
 import { enqueueUrgentBioCheck } from "../../features/csamDetection/scanner";
+import { logger } from "../../utils/logger";
 
 /**
  * On every message in a csamDetection OR languageDetection chat: queue a priority bio
@@ -31,7 +32,6 @@ export async function csamBioTrigger(ctx: BotContext, next: NextFunction): Promi
       /* continue */
     }
 
-    if (csamOn) enqueueUrgentBioCheck(sender.id, msg.chat.id);
     const hasMedia = Boolean(
       msg.photo ||
       msg.video ||
@@ -42,6 +42,11 @@ export async function csamBioTrigger(ctx: BotContext, next: NextFunction): Promi
       msg.voice ||
       msg.audio
     );
+    if (csamOn) {
+      enqueueUrgentBioCheck(sender.id, msg.chat.id);
+      // Receipt trail: proves the urgent bio check was queued even if the image is deleted mid-scan.
+      if (hasMedia) logger.info({ action: "csam_bio_enqueued", chatId: msg.chat.id, userId: sender.id });
+    }
     void csamRecentMessageRepository.record(sender.id, msg.chat.id, msg.message_id, hasMedia);
     return await next();
   } catch {
