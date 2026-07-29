@@ -1,6 +1,7 @@
 import { Filter } from "grammy";
 import { BotContext } from "../../types";
 import { handleUserJoin } from "../helpers/handleJoin";
+import { fullName } from "../helpers/fullName";
 import { logger } from "../../utils/logger";
 
 /**
@@ -36,7 +37,7 @@ export async function newChatMembersHandler(
         id: u.id,
         username: u.username,
         name: u.first_name,
-        fullName: [u.first_name, u.last_name].filter(Boolean).join(" "),
+        fullName: fullName(u),
       });
     }
 

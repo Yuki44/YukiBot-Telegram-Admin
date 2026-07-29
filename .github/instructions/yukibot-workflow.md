@@ -43,13 +43,21 @@ Stored in `Chat.features`. **All default to `false`** (G8).
 
 Toggled via `/togglefeature` (owner only), MongoDB Compass, or the dashboard's Features screen.
 
-Current flags: `topicFiltering`, `autoBan`, `autoWarnSpam`, `promoSpamDetection`, `bannedWordsEnforcement`, `languageDetection` (reserved).
+For the full, current flag list and the **handler each flag gates** (the blast-radius map), see the Feature Flags table in [AGENTS.md](../../AGENTS.md#feature-flags-chatfeatures-default-false--g8). Don't re-list flags here — that copy goes stale.
 
 Feature handlers must guard on the flag before acting:
 
 ```ts
 if (!ctx.chatConfig?.features.topicFiltering) return next();
 ```
+
+### Feature isolation & shared handlers (G16 · G17 · G18)
+
+Each flag switches **only its own feature**. Turning one feature off must never disable another — **verify by toggling each flag alone before you ship.**
+
+- **Independent degradation (G16).** When one handler serves several features, branch each on its OWN flag. `csamBioTrigger` runs for `csamDetection` *or* `languageDetection`, and each path is gated separately, so disabling one leaves the other working. Piggy-backing on an existing handler to avoid a duplicate is allowed *only* while every rider stays independently switchable. (`trackNameChanges` is a **separate** handler and shares no path with CSAM — disabling name tracking cannot disable CP_ALERTA.)
+- **One canonical derivation per stored field (G17).** A persisted value computed from input must come from a single shared function used by every writer *and* every comparator. The name tracker shipped fake "perfil actualizado" notices because `trackUser` stored `name = first_name` while `trackIdentity` compared `first_name + " " + last_name`: two writers, one field, a phantom diff on every bot restart for every user who has a last name. Compose a user's display name in ONE helper and use it in `trackUser`, `trackIdentity`, and the CSAM target builder alike.
+- **Strict pre-merge review for coupling (G18).** Bundling several features in one PR is allowed — #39 shipped CSAM + the name tracker + a language exemption, and that's fine. What's *not* allowed is features depending on each other. Every PR gets a review that lists each flag the diff touches (use the AGENTS.md table) and **proves each toggles independently** — turning one off must never disable another. Verify it; don't assume it.
 
 ## Adding a New Command
 

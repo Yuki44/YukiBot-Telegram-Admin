@@ -4,6 +4,7 @@ import { userRepository } from "../../db/repositories/userRepository";
 import { adminRepository } from "../../db/repositories/adminRepository";
 import { sendLog, LogUser } from "../helpers/sendLog";
 import { handleUserJoin } from "../helpers/handleJoin";
+import { fullName } from "../helpers/fullName";
 import { clearRecentWelcome } from "../helpers/welcomeTracker";
 import { isKickInProgress, clearKick } from "../helpers/kickTracker";
 import { logger } from "../../utils/logger";
@@ -15,7 +16,7 @@ type TgUserLike = { id: number; first_name: string; last_name?: string; username
 function toLogUser(u: TgUserLike): LogUser {
   return {
     id: u.id,
-    name: [u.first_name, u.last_name].filter(Boolean).join(" "),
+    name: fullName(u),
     username: u.username,
   };
 }
@@ -58,7 +59,7 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
         .catch(logErr("chatMember_adminUpsert", userId, chatId));
 
       userRepository
-        .findOrCreate(userId, chatId, username, firstName)
+        .findOrCreate(userId, chatId, username, target.name)
         .catch(logErr("chatMember_userUpsert", userId, chatId));
 
       void userRepository.syncIdentityAcrossChats(userId, {
@@ -86,7 +87,7 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
             userId,
             chatId,
             username,
-            name: firstName,
+            name: target.name,
             isBanned: true,
             wasBanned: true,
           });

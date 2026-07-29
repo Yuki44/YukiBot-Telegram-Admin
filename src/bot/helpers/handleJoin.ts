@@ -59,7 +59,9 @@ export async function handleUserJoin(
 
   let record;
   try {
-    record = await userRepository.findOrCreate(userId, chatId, username, name);
+    // Persist the full name (first+last) so it agrees with what nameTracking compares against (G17);
+    // `name` (first-only) is the welcome-address fallback below, not what we store.
+    record = await userRepository.findOrCreate(userId, chatId, username, user.fullName);
   } catch (err) {
     logger.error({ action: "handleUserJoin_findOrCreate", userId, chatId, error: String(err) });
     return { ok: false, autobanned: false };
