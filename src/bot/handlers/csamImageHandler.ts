@@ -111,8 +111,25 @@ export async function csamImageScan(ctx: BotContext, next: NextFunction): Promis
       /* continue */
     }
 
+    // Receipt trail before extractStill: a post deleted mid-scan (Bot API never tells us) still proves it reached us.
+    const hasMedia = Boolean(
+      msg.photo || msg.video || msg.animation || msg.document || msg.sticker || msg.video_note
+    );
+    if (hasMedia) {
+      logger.info({
+        action: "csam_image_received",
+        chatId: msg.chat.id,
+        userId: sender.id,
+        messageId: msg.message_id,
+      });
+    }
+
     const candidate = extractStill(msg);
-    if (!candidate) return await next();
+    if (!candidate) {
+      if (hasMedia)
+        logger.warn({ action: "csam_image_no_candidate", chatId: msg.chat.id, userId: sender.id });
+      return await next();
+    }
     if (candidate.fileSize && candidate.fileSize > CSAM_OCR_MAX_BYTES) {
       // An oversized file bypassing OCR must never be silent.
       logger.warn({
