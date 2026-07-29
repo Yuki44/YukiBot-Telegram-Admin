@@ -112,6 +112,9 @@ loadChat → trackUser → trackTopic → isAdmin → adminOnlyCommands → feat
 | G13 | Every change must pass `tsc --noEmit`, `npm run format:check`, `npm run lint`, and `npm test` before being considered done                                                                                                                                                                                                                                         |
 | G14 | NEVER re-implement a capability the bot already has — reuse the shared helper. Log-channel posts go through `sendLog`, dashboard records through `recordActivity`, warnings through `applyWarn`, joins through `handleUserJoin`. The web panel calls the same helpers (`userActions.ts`); it never duplicates a bot flow.                                          |
 | G15 | Before merging a PR: the branch has **no merge conflicts** with `main` AND CI is **green on the PR's latest commit** (`gh pr checks`). A green local run is not enough — `main` auto-deploys to Railway, so a red merge is a production outage. See [docs/agents/pull-requests.md](docs/agents/pull-requests.md#remote-verification-do-not-merge-until-both-pass). |
+| G16 | **Feature isolation — turning feature B off MUST NEVER disable feature A.** A flag switches only its own feature. When one handler serves several features (e.g. `csamBioTrigger` fires for `csamDetection` *and* `languageDetection`), gate each feature's behaviour on that feature's **own** flag and let each degrade independently. Piggy-backing on an existing handler to avoid duplication is allowed **only** while every rider stays independently switchable — prove it by toggling each flag alone. See the Feature Flags table for the shared-handler map. |
+| G17 | **One canonical derivation per stored field.** A value derived from input and persisted (e.g. a user's display name from `first_name`/`last_name`) is produced by **one** shared function, used by every writer **and** every comparator. Two paths computing "the same" value differently manufacture phantom diffs — the name tracker announced fake profile changes because `trackUser` stored `first_name` while `trackIdentity` compared `first_name + " " + last_name`. |
+| G18 | **Strict pre-merge review for feature coupling.** Bundling several features in one PR is fine (#39 shipped CSAM + the name tracker + a language exemption — allowed). Features *depending on* each other is **not**. Every PR gets a review that names each feature flag the diff touches and **verifies each toggles independently** — turning one off must never disable another (G16). Don't assume isolation; check it. |
 
 ## Environment Variables
 
@@ -184,16 +187,23 @@ Registered in `src/index.ts` and protected by `adminOnlyCommands` (G7). Only the
 | ------- | ----------------------------------------- |
 | `/com`  | Show the full command list (auto-deletes) |
 
-## Feature Flags (`Chat.features`, default `false`)
+## Feature Flags (`Chat.features`, default `false` — G8)
 
-| Flag                     | Description                                                                               |
-| ------------------------ | ----------------------------------------------------------------------------------------- |
-| `topicFiltering`         | Per-topic message-type enforcement (deletes content that doesn't match `allowedMsgTypes`) |
-| `autoBan`                | Auto-reban users with `wasBanned: true` on rejoin                                         |
-| `autoWarnSpam`           | Auto-warn when spam is detected by Group Help bot (legacy)                                |
-| `promoSpamDetection`     | Heuristic link analysis + learned patterns (`/spam` to teach, `/nospam` to forget)        |
-| `bannedWordsEnforcement` | Enforce `BannedWord` rules (delete/warn/silence/kick)                                     |
-| `languageDetection`      | Reserved for future AI-powered language detection                                         |
+Toggle via `/togglefeature` (owner), the dashboard Features screen (`PUT /:chatId/features` → `patchFeatures`, a **per-key `$set`** that never clobbers other flags), or Compass. Every flag is **independently switchable (G16)** — turning one off never disables another. Keep this table in sync when adding a flag; it is the blast-radius map.
+
+| Flag                     | Description                                                                                | Gated entry points                                                                                                     |
+| ------------------------ | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `topicFiltering`         | Per-topic message-type enforcement (deletes content that doesn't match `allowedMsgTypes`) | `topicFiltering` message handler                                                                                     |
+| `autoBan`                | Auto-reban users with `wasBanned: true` on rejoin                                         | join / `chatMember` handler                                                                                          |
+| `autoWarnSpam`           | Auto-warn when spam is detected by Group Help bot (legacy)                                | spam callback handler                                                                                                |
+| `promoSpamDetection`     | Heuristic link analysis + learned patterns (`/spam` to teach, `/nospam` to forget)        | `promoSpamDetection` message handler                                                                                 |
+| `bannedWordsEnforcement` | Enforce `BannedWord` rules (delete/warn/silence/kick)                                     | `bannedWordsEnforcement` message handler                                                                             |
+| `welcomeMessage`         | Greet new joiners                                                                         | join / welcome handler                                                                                               |
+| `csamDetection`          | CSAM/impostor detection (**CP_ALERTA**) — bio + image                                     | **3 paths:** `csamBioTrigger` (urgent bio queue) · `csamImageScan` (image OCR) · rolling `scanner` (bio sweep)      |
+| `languageDetection`      | Off-language warnings (AI classifier, grace/escalation)                                    | `languageDetection` message handler · **also** `csamBioTrigger` (recent-message recording for bulk-delete)          |
+| `trackNameChanges`       | SangMata-style name/@username change notices                                              | `nameChangeTracker` message handler **only** — shares no runtime path with CSAM                                     |
+
+**Shared handlers (read before touching one):** `csamBioTrigger` fires when `csamDetection` **or** `languageDetection` is on and records recent messages for either — each branch gates on its own flag, so one being off never breaks the other (G16). `trackNameChanges` is a **separate** handler that does not gate or feed any CSAM path: disabling it cannot disable CP_ALERTA. When you edit a shared handler, re-verify every flag in its row.
 
 ## Skills (`.agents/skills/`)
 

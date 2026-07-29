@@ -2,6 +2,7 @@ import { MessageEntity } from "grammy/types";
 import { BotContext } from "../../types";
 import { userRepository } from "../../db/repositories/userRepository";
 import { adminRepository } from "../../db/repositories/adminRepository";
+import { fullName } from "./fullName";
 import { logger } from "../../utils/logger";
 
 type TextMentionEntity = Extract<MessageEntity, { type: "text_mention" }>;
@@ -41,7 +42,7 @@ export async function resolveTarget(ctx: BotContext, args: string[]): Promise<Re
     return {
       userId: u.id,
       username: u.username,
-      name: u.first_name,
+      name: fullName(u),
       resolvedFromArgs: false,
     };
   }
@@ -55,7 +56,7 @@ export async function resolveTarget(ctx: BotContext, args: string[]): Promise<Re
     return {
       userId: mention.user.id,
       username: mention.user.username,
-      name: mention.user.first_name,
+      name: fullName(mention.user),
       resolvedFromArgs: true,
     };
   }

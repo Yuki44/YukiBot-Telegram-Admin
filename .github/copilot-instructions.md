@@ -26,6 +26,10 @@ All code, variable names, and logs are in **English**. User-facing bot strings i
 | G12| Comments must explain **why**, not restate what the code says — omit obvious comments entirely |
 | G13| Every change must pass `tsc --noEmit`, `npm run format:check`, and `npm run lint` before being considered done |
 | G14| NEVER re-implement a capability the bot already has — reuse the shared helper (`sendLog`, `recordActivity`, `applyWarn`, `handleUserJoin`, …). The web panel calls the same helpers via `userActions.ts`; it never duplicates a bot flow |
+| G15| Before merging a PR: no conflicts with `main` AND green CI on the PR's latest commit (`gh pr checks`) — `main` auto-deploys to Railway |
+| G16| Feature isolation — a flag toggles only its own feature; turning one off NEVER disables another; shared handlers gate each feature on its own flag (verify by toggling each alone) |
+| G17| One canonical function per derived-and-stored field (e.g. display name), used by every writer AND comparator — two paths deriving it differently manufacture phantom diffs |
+| G18| Strict pre-merge review for feature coupling — bundling features in one PR is fine, but each flag MUST toggle independently (turning one off never disables another); the review verifies this, never assumes it |
 
 ## Agent Safety
 

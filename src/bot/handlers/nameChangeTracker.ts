@@ -1,6 +1,7 @@
 import { NextFunction } from "grammy";
 import { BotContext } from "../../types";
 import { trackIdentity } from "../../features/nameTracking";
+import { fullName } from "../helpers/fullName";
 import { logger } from "../../utils/logger";
 
 /** On every message in a trackNameChanges chat: detect name/@username changes, announce, refresh the DB. */
@@ -14,7 +15,7 @@ export async function nameChangeTracker(ctx: BotContext, next: NextFunction): Pr
     if (!msg || !from || from.is_bot) return await next();
 
     const current = {
-      name: [from.first_name, from.last_name].filter(Boolean).join(" "),
+      name: fullName(from),
       username: from.username,
     };
     await trackIdentity(ctx.api, chatConfig, from.id, msg.chat.id, current);
