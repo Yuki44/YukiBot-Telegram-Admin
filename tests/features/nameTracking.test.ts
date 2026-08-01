@@ -14,6 +14,7 @@ import {
   trackIdentity,
 } from "../../src/features/nameTracking";
 import { userRepository } from "../../src/db/repositories/userRepository";
+import { fullName } from "../../src/bot/helpers/fullName";
 import { IChat } from "../../src/types";
 
 describe("diffIdentity", () => {
@@ -104,5 +105,22 @@ describe("trackIdentity", () => {
 
     expect((api as { sendMessage: ReturnType<typeof vi.fn> }).sendMessage).not.toHaveBeenCalled();
     expect(userRepository.updateIdentity).toHaveBeenCalledWith(42, -100111, "Simon", "simon");
+  });
+});
+
+describe("identity captured from the CSAM rotation", () => {
+  // G17: the scanner derives the name from a getChat response, the message path from
+  // ctx.from. Both must use fullName or the rotation invents phantom profile changes.
+  it("derives the same name from a getChat payload as from a message sender", () => {
+    const fromMessage = { first_name: "Shane", last_name: "H", username: "shanehbd" };
+    const fromGetChat = { first_name: "Shane", last_name: "H", username: "shanehbd", bio: "x" };
+    expect(fullName(fromGetChat)).toBe(fullName(fromMessage));
+    expect(diffIdentity({ name: fullName(fromMessage) }, { name: fullName(fromGetChat) })).toBeNull();
+  });
+
+  it("still reports a real change seen only by the rotation", () => {
+    const stored = { name: "Shane", username: "shanehbd" };
+    const scanned = { name: fullName({ first_name: "Nomax", last_name: "16" }), username: "nomax16" };
+    expect(diffIdentity(stored, scanned)).not.toBeNull();
   });
 });

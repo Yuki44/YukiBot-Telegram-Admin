@@ -5,13 +5,16 @@ import { userRepository } from "../../db/repositories/userRepository";
 import { csamWatchlistRepository } from "../../db/repositories/csamWatchlistRepository";
 import { evaluateBio, BioResult, WatchConfig } from "./matcher";
 import { executeCsamAutoBan, executeCsamSilence, CsamTarget } from "./actions";
+import { trackIdentity } from "../nameTracking";
+import { fullName } from "../../bot/helpers/fullName";
 import { logger } from "../../utils/logger";
 import { ActivityActor } from "../../utils/activityLog";
 import {
   CSAM_SCAN_SPACING_MS,
   CSAM_SCAN_BATCH,
   CSAM_SCAN_IDLE_MS,
-  CSAM_SCAN_RECHECK_MS,
+  CSAM_SCAN_MIN_INTERVAL_MS,
+  CSAM_SCAN_HEARTBEAT_MS,
   CSAM_URGENT_COOLDOWN_MS,
 } from "../../config/constants";
 
@@ -23,10 +26,10 @@ import {
  *  - AUTO_BAN → ban across all chats (the only unattended ban path).
  *  - SILENCE  → silence in the origin chat + alert for human review.
  *
- * A single sequential worker with fixed spacing keeps well under Telegram's
- * rate limits, and `lastBioCheckAt` gives never-checked users priority while
- * still re-checking everyone every CSAM_SCAN_RECHECK_MS (the "clean bio at
- * join, sales pitch later" trick).
+ * This rotation is the feature's only trigger independent of the message update:
+ * OCR and the urgent queue both die when another bot deletes the message first. So
+ * the loop never idles while anyone is past CSAM_SCAN_MIN_INTERVAL_MS, and adding
+ * chats lengthens the cycle without raising the call rate.
  *
  * A small urgent queue lets a user who just posted jump the line, spending
  * this same rate-limited loop's next tick on them instead of extra API calls.
@@ -75,14 +78,36 @@ export function dequeueUrgentBioCheck(): UrgentEntry | undefined {
   return entry;
 }
 
-async function fetchBio(bot: Bot<BotContext>, userId: number): Promise<string | null> {
+interface Profile {
+  bio: string;
+  name: string;
+  username?: string;
+}
+
+async function fetchProfile(bot: Bot<BotContext>, userId: number): Promise<Profile | null> {
   try {
     const chat = await bot.api.getChat(userId);
-    return chat.bio ?? "";
-  } catch {
+    const p = chat as { bio?: string; first_name?: string; last_name?: string; username?: string };
+    return { bio: p.bio ?? "", name: fullName(p), username: p.username };
+  } catch (err) {
     // User can't be resolved (never shared a resolvable chat / deleted account).
+    logger.error({ action: "csam_bio_fetch_failed", userId, error: String(err) });
     return null;
   }
+}
+
+/** Rotation counters for the heartbeat. */
+const stats = { checked: 0, urgent: 0, failed: 0, hits: 0, identity: 0 };
+
+/** Snapshot + reset of the heartbeat counters (exported for testing). */
+export function takeScanStats(): typeof stats {
+  const snapshot = { ...stats };
+  stats.checked = 0;
+  stats.urgent = 0;
+  stats.failed = 0;
+  stats.hits = 0;
+  stats.identity = 0;
+  return snapshot;
 }
 
 /** Fetch + evaluate one user's bio and act on the verdict. Shared by both queues. */
@@ -93,14 +118,34 @@ async function checkUserBio(
   config: WatchConfig,
   actor: ActivityActor
 ): Promise<void> {
-  const bio = await fetchBio(bot, target.userId);
-  // Stamp first so a mid-action failure never wedges the scanner on one user.
+  const profile = await fetchProfile(bot, target.userId);
+  // Stamp first: a mid-action failure must not wedge the scanner, and an account that
+  // can never be resolved must not starve the rotation by retrying forever.
   await userRepository.markBioChecked(target.userId);
-  if (!bio) return;
+  stats.checked += 1;
+  if (profile === null) {
+    stats.failed += 1;
+    return;
+  }
 
-  const result = evaluateBio(bio, config);
+  // The same getChat response carries the display name and @username, so the rotation
+  // catches a lurker's profile change for free. Gated on its own flag (G16).
+  if (chatConfig.features?.trackNameChanges) {
+    try {
+      await trackIdentity(bot.api, chatConfig, target.userId, chatConfig.chatId, {
+        name: profile.name,
+        username: profile.username,
+      });
+      stats.identity += 1;
+    } catch (err) {
+      logger.error({ action: "csam_scan_identity", userId: target.userId, error: String(err) });
+    }
+  }
+
+  const result = evaluateBio(profile.bio, config);
   if (result.verdict === "NONE") return;
 
+  stats.hits += 1;
   const summary = summarizeBioMatch(result);
   try {
     if (result.verdict === "AUTO_BAN") {
@@ -150,7 +195,7 @@ export async function runBioScanBatch(bot: Bot<BotContext>, actor: ActivityActor
   const chatById = new Map(chats.map((c) => [c.chatId, c]));
   const chatIds = chats.map((c) => c.chatId);
   const config = await csamWatchlistRepository.getConfig();
-  const staleBefore = new Date(Date.now() - CSAM_SCAN_RECHECK_MS);
+  const staleBefore = new Date(Date.now() - CSAM_SCAN_MIN_INTERVAL_MS);
 
   let processed = 0;
 
@@ -158,6 +203,7 @@ export async function runBioScanBatch(bot: Bot<BotContext>, actor: ActivityActor
     const didUrgent = await drainOneUrgent(bot, chatById, config, actor);
     if (didUrgent) {
       processed += 1;
+      stats.urgent += 1;
       await sleep(CSAM_SCAN_SPACING_MS);
       continue;
     }
@@ -192,11 +238,16 @@ export function startCsamScanner(bot: Bot<BotContext>): void {
     name: bot.botInfo.first_name,
     username: bot.botInfo.username,
   };
-  logger.info({ action: "csam_scanner_start" });
+  logger.info({ action: "csam_scanner_start", minIntervalMs: CSAM_SCAN_MIN_INTERVAL_MS });
   void (async () => {
+    let lastHeartbeat = Date.now();
     for (;;) {
       try {
         const processed = await runBioScanBatch(bot, actor);
+        if (Date.now() - lastHeartbeat >= CSAM_SCAN_HEARTBEAT_MS) {
+          lastHeartbeat = Date.now();
+          logger.info({ action: "csam_scan_heartbeat", ...takeScanStats() });
+        }
         if (processed === 0) await sleep(CSAM_SCAN_IDLE_MS);
       } catch (err) {
         logger.error({ action: "csam_scan_loop", error: String(err) });

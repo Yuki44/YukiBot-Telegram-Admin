@@ -65,4 +65,7 @@ userSchema.index({ userId: 1, chatId: 1 }, { unique: true });
 // TTL index — auto-deletes documents 6 months after the user left with active warnings
 userSchema.index({ leftWithWarningsAt: 1 }, { expireAfterSeconds: LEFT_WITH_WARNINGS_TTL_S, sparse: true });
 
+// Serves the CSAM scanner's due-for-scan query, which now runs every rotation tick.
+userSchema.index({ chatId: 1, isBanned: 1, lastBioCheckAt: 1 });
+
 export const User = model<IUser>("User", userSchema);
