@@ -1,5 +1,7 @@
 import { Topic } from "../models/Topic";
-import { ITopic } from "../../types";
+import { ITopic, VALID_CONTENT_TYPES } from "../../types";
+import { TOPIC_TYPES_VERSION } from "../../config/constants";
+import { placeholderTopicName } from "../../utils/topicName";
 
 export const topicRepository = {
   async findByChatAndTopic(chatId: number, topicId: number): Promise<ITopic | null> {
@@ -22,7 +24,7 @@ export const topicRepository = {
     // honours `allowedMsgTypes` instead of falling back to "allow everything".
     const result = await Topic.findOneAndUpdate(
       { chatId: data.chatId, topicId: data.topicId },
-      { $set: { ...data, isUserConfigured: true } },
+      { $set: { ...data, isUserConfigured: true, typesVersion: TOPIC_TYPES_VERSION } },
       { upsert: true, returnDocument: "after" }
     );
     return result!;
@@ -34,7 +36,11 @@ export const topicRepository = {
       { chatId, topicId },
       {
         $set: { name },
-        $setOnInsert: { allowedMsgTypes: [], isUserConfigured: false },
+        $setOnInsert: {
+          allowedMsgTypes: [...VALID_CONTENT_TYPES],
+          isUserConfigured: false,
+          typesVersion: TOPIC_TYPES_VERSION,
+        },
       },
       { upsert: true }
     );
@@ -47,16 +53,18 @@ export const topicRepository = {
    * this is the only way to surface a topic that hasn't had explicit rules saved.
    *
    * Uses $setOnInsert: existing rows (with real names from forum_topic_created or
-   * user-saved rules) are never overwritten.
+   * user-saved rules) are never overwritten. New rows start allowing everything,
+   * so a topic is never filtered before an admin has configured it.
    */
   async recordSeen(chatId: number, topicId: number): Promise<void> {
     await Topic.findOneAndUpdate(
       { chatId, topicId },
       {
         $setOnInsert: {
-          name: `Tema #${topicId}`,
-          allowedMsgTypes: [],
+          name: placeholderTopicName(topicId),
+          allowedMsgTypes: [...VALID_CONTENT_TYPES],
           isUserConfigured: false,
+          typesVersion: TOPIC_TYPES_VERSION,
         },
       },
       { upsert: true }
@@ -86,6 +94,59 @@ export const topicRepository = {
       configured: configuredRes.modifiedCount ?? 0,
       unconfigured: unconfiguredRes.modifiedCount ?? 0,
     };
+  },
+
+  /**
+   * One-shot startup migration — legacy auto-discovered rows stored an empty
+   * allowedMsgTypes and relied on the filter's now-removed allow-all fallback.
+   * Without this they would delete every message in their topic.
+   */
+  async backfillAllowedMsgTypes(): Promise<number> {
+    const res = await Topic.updateMany(
+      { "allowedMsgTypes.0": { $exists: false } },
+      { $set: { allowedMsgTypes: [...VALID_CONTENT_TYPES] } }
+    );
+    return res.modifiedCount ?? 0;
+  },
+
+  /** Returns the new consecutive-miss count for this topic. */
+  async recordMissing(chatId: number, topicId: number): Promise<number> {
+    const doc = await Topic.findOneAndUpdate(
+      { chatId, topicId },
+      { $inc: { missingStrikes: 1 } },
+      { returnDocument: "after" }
+    );
+    return doc?.missingStrikes ?? 0;
+  },
+
+  async clearMissing(chatId: number, topicId: number): Promise<void> {
+    await Topic.updateOne({ chatId, topicId, missingStrikes: { $gt: 0 } }, { $set: { missingStrikes: 0 } });
+  },
+
+  /**
+   * One-shot migration — grants types added to VALID_CONTENT_TYPES after a topic
+   * was configured. Version-stamped per row so turning one off later sticks.
+   */
+  async backfillNewMsgTypes(): Promise<number> {
+    const res = await Topic.updateMany(
+      { $or: [{ typesVersion: { $exists: false } }, { typesVersion: { $lt: TOPIC_TYPES_VERSION } }] },
+      {
+        $addToSet: { allowedMsgTypes: { $each: [...VALID_CONTENT_TYPES] } },
+        $set: { typesVersion: TOPIC_TYPES_VERSION },
+      }
+    );
+    return res.modifiedCount ?? 0;
+  },
+
+  /**
+   * Purge rows that don't belong to a known forum chat: non-forum chats (where
+   * message_thread_id is just a reply thread) and chats the bot has since left.
+   * No-ops on an empty list so a failed read can never wipe the collection.
+   */
+  async deleteOutsideChats(forumChatIds: number[]): Promise<number> {
+    if (forumChatIds.length === 0) return 0;
+    const res = await Topic.deleteMany({ chatId: { $nin: forumChatIds } });
+    return res.deletedCount ?? 0;
   },
 
   async deleteOne(chatId: number, topicId: number): Promise<void> {

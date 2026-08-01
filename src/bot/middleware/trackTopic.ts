@@ -19,7 +19,9 @@ export const trackTopic: Middleware<BotContext> = async (ctx, next) => {
   const chatId = ctx.chat?.id;
   const topicId = ctx.message?.message_thread_id;
 
-  if (chatId && topicId) {
+  // Normal supergroups set message_thread_id on ordinary reply threads, which are
+  // not forum topics — recording those bloats the collection with junk rows.
+  if (chatId && topicId && ctx.chatConfig?.type === "topics") {
     const key = `${chatId}:${topicId}`;
     if (!seen.has(key)) {
       seen.add(key);

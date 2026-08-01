@@ -114,4 +114,10 @@ export const bannedWordRepository = {
     const result = await BannedWord.deleteOne(query);
     return result.deletedCount === 1;
   },
+
+  /** Cascade for a topic that no longer exists in Telegram. */
+  async removeByTopic(chatId: number, topicId: number): Promise<number> {
+    const result = await BannedWord.deleteMany({ chatId, scope: "topic", topicId });
+    return result.deletedCount ?? 0;
+  },
 };

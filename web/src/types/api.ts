@@ -134,9 +134,34 @@ export interface AdminsResponse {
   delegatedOwnerId: number | null;
 }
 
-export type MsgType = "photo" | "video" | "sticker" | "audio" | "voice" | "document" | "text";
+export type MsgType =
+  | "photo"
+  | "video"
+  | "sticker"
+  | "audio"
+  | "voice"
+  | "document"
+  | "text"
+  | "animation"
+  | "poll"
+  | "video_note"
+  | "contact"
+  | "location";
 
-export const ALL_MSG_TYPES: MsgType[] = ["text", "photo", "video", "sticker", "voice", "audio", "document"];
+export const ALL_MSG_TYPES: MsgType[] = [
+  "text",
+  "photo",
+  "video",
+  "sticker",
+  "voice",
+  "audio",
+  "document",
+  "animation",
+  "poll",
+  "video_note",
+  "contact",
+  "location",
+];
 
 export interface Topic {
   chatId: number;

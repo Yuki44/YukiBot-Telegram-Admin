@@ -42,6 +42,7 @@ import { spamCallbackHandler } from "./bot/handlers/spamCallbackHandler";
 import { csamCallbackHandler } from "./bot/handlers/csamCallbackHandler";
 import { languageCallbackHandler } from "./bot/handlers/languageCallbackHandler";
 import { startCsamScanner } from "./features/csamDetection/scanner";
+import { startTopicSweep } from "./features/topicSync/sweep";
 import { csamImageScan } from "./bot/handlers/csamImageHandler";
 import { warmupOcr } from "./features/csamDetection/ocr";
 import { csamBioTrigger } from "./bot/handlers/csamBioTrigger";
@@ -53,6 +54,7 @@ import { nospamHandler } from "./bot/commands/nospam";
 import { wladdHandler, wldelHandler, wlsHandler } from "./bot/commands/wlLinks";
 import { wluaddHandler, wludelHandler, wlusHandler } from "./bot/commands/wlUsers";
 import { topicRepository } from "./db/repositories/topicRepository";
+import { chatRepository } from "./db/repositories/chatRepository";
 import { logger } from "./utils/logger";
 
 const token = process.env.BOT_TOKEN;
@@ -191,15 +193,33 @@ async function start() {
   logger.info({ action: "startup", status: "connecting to DB..." });
   await connectDB();
 
-  // Backfill isUserConfigured on Topic rows created before the field existed.
-  // Idempotent — only touches rows where the field is missing. See topicRepository.
+  // Backfill Topic rows created before their fields existed. Idempotent.
   try {
     const result = await topicRepository.backfillIsUserConfigured();
-    if (result.configured > 0 || result.unconfigured > 0) {
-      logger.info({ action: "startup.topic_backfill", ...result });
+    const allowed = await topicRepository.backfillAllowedMsgTypes();
+    const granted = await topicRepository.backfillNewMsgTypes();
+    if (result.configured > 0 || result.unconfigured > 0 || allowed > 0 || granted > 0) {
+      logger.info({
+        action: "startup.topic_backfill",
+        ...result,
+        allowedMsgTypes: allowed,
+        newTypes: granted,
+      });
     }
   } catch (err) {
     logger.error({ action: "startup.topic_backfill", error: String(err) });
+  }
+
+  // Junk rows from before trackTopic ignored non-forum chats, plus rows left
+  // behind by chats the bot no longer serves.
+  try {
+    const forumChatIds = (await chatRepository.listAll())
+      .filter((c) => c.type === "topics")
+      .map((c) => c.chatId);
+    const purged = await topicRepository.deleteOutsideChats(forumChatIds);
+    if (purged > 0) logger.info({ action: "startup.topic_purge", purged });
+  } catch (err) {
+    logger.error({ action: "startup.topic_purge", error: String(err) });
   }
 
   const app = createApiServer(bot);
@@ -219,6 +239,7 @@ async function start() {
       logger.info({ action: "startup", status: "YukiBot is running" });
       // botInfo is populated by now — safe to boot the rolling CSAM bio scanner.
       startCsamScanner(bot);
+      startTopicSweep(bot);
       warmupOcr();
     },
   });

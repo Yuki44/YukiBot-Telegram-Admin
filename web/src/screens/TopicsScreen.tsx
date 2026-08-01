@@ -7,6 +7,7 @@ import { clearSession } from "../lib/auth";
 import { useChat } from "../lib/useChat";
 import { normalizeHttpUrl } from "../lib/url";
 import type { Topic } from "../types/api";
+import { ALL_MSG_TYPES } from "../types/api";
 
 export function TopicsScreen() {
   const { chatId } = useParams<{ chatId: string }>();
@@ -250,7 +251,9 @@ export function TopicsScreen() {
                     <div className="yk-row-sub">
                       {t.allowedMsgTypes.length === 0
                         ? "Sin tipos permitidos (todo se borra)"
-                        : `${t.allowedMsgTypes.length} tipo${t.allowedMsgTypes.length === 1 ? "" : "s"} permitido${t.allowedMsgTypes.length === 1 ? "" : "s"}`}
+                        : t.allowedMsgTypes.length >= ALL_MSG_TYPES.length
+                          ? "Todos los tipos permitidos"
+                          : `${t.allowedMsgTypes.length} tipo${t.allowedMsgTypes.length === 1 ? "" : "s"} permitido${t.allowedMsgTypes.length === 1 ? "" : "s"}`}
                       {t.adminOnly ? " · Solo admins" : ""}
                       {t.reminder?.enabled ? " · Recordatorio" : ""}
                     </div>

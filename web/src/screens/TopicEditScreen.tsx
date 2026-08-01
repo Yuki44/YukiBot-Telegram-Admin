@@ -24,6 +24,11 @@ const MSG_TYPE_META: MsgTypeMeta[] = [
   { id: "voice", label: "Audios de voz", icon: () => I.mic({ size: 14 }) },
   { id: "audio", label: "Música", icon: () => I.mic({ size: 14 }) },
   { id: "document", label: "Archivos", icon: () => I.file({ size: 14 }) },
+  { id: "animation", label: "GIFs", icon: () => I.gif({ size: 14 }) },
+  { id: "poll", label: "Encuestas", icon: () => I.poll({ size: 14 }) },
+  { id: "video_note", label: "Notas de vídeo", icon: () => I.videoNote({ size: 14 }) },
+  { id: "contact", label: "Contactos", icon: () => I.contact({ size: 14 }) },
+  { id: "location", label: "Ubicaciones", icon: () => I.location({ size: 14 }) },
 ];
 
 export function TopicEditScreen() {
@@ -39,9 +44,8 @@ export function TopicEditScreen() {
           chatId: Number(chatId),
           topicId: 0,
           name: "",
-          // New topics default to ALL message types allowed — admin disables what they
-          // don't want rather than enabling what they do. Matches the spirit of "give
-          // me a working topic, I'll restrict it later" (issue #3, v2.0.1).
+          // New topics default to ALL message types allowed — the admin disables
+          // what they don't want rather than enabling what they do.
           allowedMsgTypes: [...ALL_MSG_TYPES],
           adminOnly: false,
           isUserConfigured: false,
@@ -82,13 +86,7 @@ export function TopicEditScreen() {
         }
         setTopic(found);
         setName(found.name);
-        // Auto-discovered topics (isUserConfigured=false) display with everything
-        // enabled — the stored empty array doesn't reflect intent. Once the user
-        // saves, the backend flips isUserConfigured=true and honours the selection.
-        const seed = found.isUserConfigured
-          ? new Set<string>(found.allowedMsgTypes)
-          : new Set<string>(ALL_MSG_TYPES);
-        setAllowed(seed);
+        setAllowed(new Set<string>(found.allowedMsgTypes));
         setAdminOnly(!!found.adminOnly);
         setReminderEnabled(!!found.reminder?.enabled);
         setReminderText(found.reminder?.text ?? "");

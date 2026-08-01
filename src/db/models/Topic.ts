@@ -26,6 +26,14 @@ const topicSchema = new Schema<ITopic>({
     type: Boolean,
     default: false,
   },
+  missingStrikes: {
+    type: Number,
+    default: 0,
+  },
+  typesVersion: {
+    type: Number,
+    default: 0,
+  },
   reminder: {
     enabled: { type: Boolean, default: false },
     text: { type: String, default: "" },

@@ -1,5 +1,5 @@
 import { Middleware } from "grammy";
-import { BotContext } from "../../types";
+import { BotContext, MessageType } from "../../types";
 import { topicRepository } from "../../db/repositories/topicRepository";
 import { detectMessageType } from "../../bot/helpers/detectMessageType";
 import { logger } from "../../utils/logger";
@@ -19,12 +19,8 @@ export const topicFiltering: Middleware<BotContext> = async (ctx, next) => {
     const topic = await topicRepository.findByChatAndTopic(chatId, threadId);
     if (!topic) return await next();
 
-    // Auto-discovered topics (passive recordSeen or forum_topic_created cache) are
-    // surfaced in the dashboard for selection but not yet authoritative — until the
-    // user explicitly saves rules for the topic, all content types are allowed.
-    // Without this, brand-new forum topics with allowedMsgTypes=[] would nuke every
-    // message before the admin even gets a chance to configure them.
-    if (!topic.isUserConfigured) return await next();
+    // Auto-discovered topics now store the full type list at discovery, so the
+    // stored list is authoritative regardless of isUserConfigured.
 
     if (topic.adminOnly) {
       logger.info({ action: "topicFilter_adminOnly_delete", chatId, topicId: threadId });
@@ -38,6 +34,8 @@ export const topicFiltering: Middleware<BotContext> = async (ctx, next) => {
 
     const messageType = ctx.message ? detectMessageType(ctx.message) : null;
     if (!messageType) return await next();
+    // Never delete what an admin can't see or deselect in the dashboard.
+    if (messageType === MessageType.Other) return await next();
 
     if (!topic.allowedMsgTypes.includes(messageType)) {
       logger.info({ action: "topicFilter_delete", chatId, topicId: threadId, messageType });

@@ -420,7 +420,7 @@ Stored in `Chat.features`. All default to `false`.
 | **Chat** | chatId, name, type, isActive, whitelist, features, linkWhitelist, spamUserWhitelist, hiddenAdminIds, delegatedOwnerId, logsTo, forwardsTo, logFlags | `chatId` |
 | **Admin** | userId, username, name, chatId, chatName, role | `userId + chatId` |
 | **User** | userId, chatId, warnings, warningReasons, isMuted, muteUntil, isBanned, wasBanned, photoFileId | `userId + chatId` |
-| **Topic** | chatId, topicId, name, allowedMsgTypes, adminOnly, isUserConfigured | `chatId + topicId` |
+| **Topic** | chatId, topicId, name, allowedMsgTypes, adminOnly, isUserConfigured, missingStrikes | `chatId + topicId` |
 | **Message** | userId, chatId, fingerprint, timestamp | TTL 48 h auto-delete |
 | **SpamPattern** | chatId, pattern, fingerprint, learnedBy, createdAt | per-chat patterns |
 | **BannedWord** | chatId, word, severity, actions, kick, flag, exactMatch, scope, topicId | per chat or topic |
@@ -490,7 +490,7 @@ The Telegram Bot API allows **only one polling instance per bot token**. To deve
 7. **Global error handler** — `bot.catch()` prevents unhandled Grammy errors from crashing the process.
 8. **One process, two surfaces** — Running the bot and API in the same Node process keeps deployment trivial on a single Railway service.
 9. **Activity log is additive** — The bot still streams real-time logs to `logsTo` on Telegram; the `ActivityLog` collection only exists to power the dashboard's queryable history.
-10. **Topic auto-discovery + `isUserConfigured`** — Newly discovered forum topics are treated as "allow everything" until an owner explicitly saves them in the dashboard, so the bot never silently nukes a new topic.
+10. **Topic auto-discovery** — Newly discovered forum topics are stored allowing every message type, so the bot never silently nukes a new topic. Content types with no dashboard pill (dado, juego, factura) are never deleted.
 
 ---
 
