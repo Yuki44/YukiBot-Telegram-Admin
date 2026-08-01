@@ -5,8 +5,9 @@ import {
   dequeueUrgentBioCheck,
   isBioCheckStale,
 } from "../../src/features/csamDetection/scanner";
-import { BioResult } from "../../src/features/csamDetection/matcher";
-import { CSAM_URGENT_COOLDOWN_MS } from "../../src/config/constants";
+import { BioResult, evaluateBio } from "../../src/features/csamDetection/matcher";
+import { buildWatchConfig } from "../../src/features/csamDetection/config";
+import { CSAM_URGENT_COOLDOWN_MS, CSAM_SCAN_MIN_INTERVAL_MS } from "../../src/config/constants";
 
 describe("summarizeBioMatch", () => {
   it("joins handle + solicitation terms", () => {
@@ -83,5 +84,33 @@ describe("isBioCheckStale", () => {
 
   it("is NOT stale for a just-now check", () => {
     expect(isBioCheckStale(now, now)).toBe(false);
+  });
+});
+
+describe("rotation re-check window", () => {
+  // Regression: joined clean, flipped the bio ~6h later, posted. The image was deleted
+  // before the bot saw it, so the rotation was the only remaining trigger.
+  it("re-checks a bio well within the lurk-then-flip window", () => {
+    const joinCheck = new Date("2026-07-31T20:51:29Z");
+    const postedAt = new Date("2026-08-01T03:32:00Z");
+    const dueBefore = new Date(postedAt.getTime() - CSAM_SCAN_MIN_INTERVAL_MS);
+    expect(joinCheck.getTime()).toBeLessThan(dueBefore.getTime());
+  });
+
+  it("keeps a floor so a tiny population is not re-fetched in a tight spin", () => {
+    expect(CSAM_SCAN_MIN_INTERVAL_MS).toBeGreaterThanOrEqual(15 * 60 * 1000);
+  });
+});
+
+describe("evaluateBio on the bio that was missed", () => {
+  const config = buildWatchConfig(null, ["nomax16"]);
+
+  it("auto-bans the real bio that went undetected", () => {
+    const bio = "pls text to my main account @nomax16 - ae ib cc chính @nomax16";
+    expect(evaluateBio(bio, config).verdict).toBe("AUTO_BAN");
+  });
+
+  it("leaves an unrelated bio alone", () => {
+    expect(evaluateBio("just here for the memes", config).verdict).toBe("NONE");
   });
 });

@@ -68,10 +68,15 @@ export const CSAM_SCAN_BATCH = 25;
 export const CSAM_SCAN_IDLE_MS = 60_000;
 
 /**
- * A bio is re-checked once it is older than this (ms). Catches the "clean bio at
- * join, swap in the sales pitch days later" trick without re-fetching constantly.
+ * Floor (ms) on how often the same user's bio may be re-fetched. Not a period: the
+ * scanner rotates continuously, so the real re-check gap is population ÷ rate budget
+ * (~78 min today). The floor only bites on a small population, where the rotation
+ * would otherwise spin on the same few users.
  */
-export const CSAM_SCAN_RECHECK_MS = 12 * 60 * 60 * 1000;
+export const CSAM_SCAN_MIN_INTERVAL_MS = 30 * 60 * 1000;
+
+/** How often the scanner reports its rotation stats, so a silent stall is visible. */
+export const CSAM_SCAN_HEARTBEAT_MS = 30 * 60 * 1000;
 
 /**
  * Minimum gap (ms) before a user who just posted can jump the rotation queue
