@@ -30,6 +30,23 @@ export const WELCOME_DEDUP_TTL_MS = 15_000;
  */
 export const TOPIC_REMINDER_INTERVAL_MS = 4 * 60 * 60 * 1000;
 
+// ── Deleted-topic reconciliation sweep ───────────────────────────────
+
+/** How often every cached topic is probed against Telegram. */
+export const TOPIC_SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+/** Gap between probes, keeping the sweep well under Telegram's rate limits. */
+export const TOPIC_SWEEP_SPACING_MS = 500;
+
+/** Consecutive sweeps a topic must be missing before its row is deleted. */
+export const TOPIC_SWEEP_STRIKES = 2;
+
+/**
+ * Bump when new entries are added to VALID_CONTENT_TYPES: existing topics are
+ * granted the new types once, without re-granting ones an admin later removed.
+ */
+export const TOPIC_TYPES_VERSION = 2;
+
 /** TTL for User docs with `leftWithWarningsAt` (seconds — 6 months). */
 export const LEFT_WITH_WARNINGS_TTL_S = 15_552_000;
 

@@ -278,6 +278,7 @@ erDiagram
     array allowedMsgTypes
     boolean adminOnly
     boolean isUserConfigured
+    number missingStrikes
   }
 
   MESSAGE {

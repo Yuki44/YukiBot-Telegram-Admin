@@ -65,7 +65,7 @@ web/                        ← Vite + React SPA (built into web/dist by `build:
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
 | Chat                | chatId, name, type, isActive, whitelist, features, linkWhitelist, spamUserWhitelist, hiddenAdminIds, delegatedOwnerId, logsTo, forwardsTo, logFlags, welcome, topicReminder | chatId               |
 | Admin               | userId, username, name, chatId, chatName, role (owner \| admin)                                                                                     | userId + chatId      |
-| Topic               | chatId, topicId, name, allowedMsgTypes[], adminOnly, isUserConfigured, reminder{enabled,text,lastSentAt,lastMessageId}                              | chatId + topicId     |
+| Topic               | chatId, topicId, name, allowedMsgTypes[], adminOnly, isUserConfigured, missingStrikes, reminder{enabled,text,lastSentAt,lastMessageId}                              | chatId + topicId     |
 | User                | userId, chatId, username, name, warnings, warningReasons, isMuted, muteUntil, isBanned, wasBanned, photoFileId                                      | userId + chatId      |
 | Message             | userId, chatId, fingerprint, timestamp                                                                                                              | TTL 48 h auto-delete |
 | Credential          | username, passwordHash, userId, name                                                                                                                | username             |
@@ -86,6 +86,7 @@ loadChat → trackUser → trackTopic → isAdmin → adminOnlyCommands → feat
 
 - A **single Node process** runs Grammy long-polling **and** the Express API + static SPA.
 - `BOT_ENABLED=false` keeps the API up but skips bot polling — useful for local web work and migrations.
+- Two background workers boot with polling: the CSAM rolling bio scanner and the **deleted-topic reconciliation sweep** (`src/features/topicSync/sweep.ts`, every 6 h). Telegram sends no `forum_topic_deleted` update, so the sweep probes each cached topic with `editForumTopic` using its own stored name — `TOPIC_ID_INVALID` means deleted, `TOPIC_NOT_MODIFIED` means alive. It has no feature flag by design.
 - `src/api/server.ts` mounts:
   - `GET /health`
   - `GET /api/public/config` → `{ botUsername, botLoginDomain }`

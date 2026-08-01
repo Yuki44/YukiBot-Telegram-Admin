@@ -97,7 +97,7 @@ When adding YukiBot to a new Telegram group:
 1. Add the bot to the group; grant **Delete Messages** + **Ban Users** permissions.
 2. Group owner sends `/setup` — creates a Chat doc with `whitelist: false`.
 3. In MongoDB Compass (or the dashboard, if you have super-admin access), set `whitelist: true` on the new Chat document.
-4. For topics-type groups: configure topics from the dashboard ("Topics" screen) or via `/addtopic` so `isUserConfigured` flips to `true` and `allowedMsgTypes` becomes authoritative.
+4. For topics-type groups: configure topics from the dashboard ("Topics" screen) or via `/addtopic`. Newly discovered topics already allow every message type; restrict them from there.
 5. Use `/togglefeature` (or the dashboard's Features screen) to enable desired features (all default `false`).
 
 ### Why manual whitelist?

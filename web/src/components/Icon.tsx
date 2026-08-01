@@ -185,6 +185,35 @@ export const I = {
       <path d="M3 12a9 9 0 119 9c0-5 4-9 9-9" />
     </Icon>
   ),
+  gif: (p?: IP) => (
+    <Icon {...p}>
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="M11 9H8.5A1.5 1.5 0 007 10.5v3A1.5 1.5 0 008.5 15H11v-2.5M14 9v6M17 15V9h3" />
+    </Icon>
+  ),
+  poll: (p?: IP) => (
+    <Icon {...p}>
+      <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+    </Icon>
+  ),
+  videoNote: (p?: IP) => (
+    <Icon {...p}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M10 8.5l5 3.5-5 3.5z" />
+    </Icon>
+  ),
+  contact: (p?: IP) => (
+    <Icon {...p}>
+      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </Icon>
+  ),
+  location: (p?: IP) => (
+    <Icon {...p}>
+      <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z" />
+      <circle cx="12" cy="10" r="3" />
+    </Icon>
+  ),
   trash: (p?: IP) => (
     <Icon {...p}>
       <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />

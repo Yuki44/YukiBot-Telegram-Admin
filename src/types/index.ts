@@ -9,18 +9,31 @@ export enum MessageType {
   Voice = "voice",
   Document = "document",
   Text = "text",
+  Animation = "animation",
+  Poll = "poll",
+  VideoNote = "video_note",
+  Contact = "contact",
+  Location = "location",
   Other = "other",
 }
 
-/** Content types that can be used in topic filtering rules (excludes "other"). */
+/**
+ * Content types selectable in topic filtering rules. "other" is deliberately
+ * absent: the filter may only delete types an admin can see and deselect.
+ */
 export const VALID_CONTENT_TYPES: MessageType[] = [
+  MessageType.Text,
   MessageType.Photo,
   MessageType.Video,
   MessageType.Sticker,
-  MessageType.Audio,
   MessageType.Voice,
+  MessageType.Audio,
   MessageType.Document,
-  MessageType.Text,
+  MessageType.Animation,
+  MessageType.Poll,
+  MessageType.VideoNote,
+  MessageType.Contact,
+  MessageType.Location,
 ];
 
 // MongoDB interfaces
@@ -153,13 +166,18 @@ export interface ITopic extends Document {
   /** When true, only chat admins may post in this topic — non-admin messages are deleted. */
   adminOnly?: boolean;
   /**
-   * False = topic was auto-discovered (via forum_topic_created event or passive recordSeen),
-   * the user has never opened it in the dashboard. The filter middleware treats these as
-   * "allow everything" regardless of allowedMsgTypes — required so a brand-new forum topic
-   * doesn't silently nuke every message until someone manually configures it.
-   * True = topic was explicitly saved via the dashboard; allowedMsgTypes is authoritative.
+   * False = topic was auto-discovered (via forum_topic_created event or passive
+   * recordSeen), the user has never saved it in the dashboard. Purely
+   * informational: allowedMsgTypes is authoritative either way.
    */
   isUserConfigured?: boolean;
+  /**
+   * Consecutive reconciliation sweeps that found this topic missing in Telegram.
+   * A single failure is never trusted — transient API errors would delete live rows.
+   */
+  missingStrikes?: number;
+  /** Highest VALID_CONTENT_TYPES revision already granted to this topic. */
+  typesVersion?: number;
   /**
    * Per-topic rules reminder. `text` is plain (escaped on send). `lastSentAt` is
    * both the interval gate and the concurrency claim, persisted so a redeploy
