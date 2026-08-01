@@ -24,6 +24,12 @@ export const KICK_TRACKER_TTL_MS = 30_000;
  */
 export const WELCOME_DEDUP_TTL_MS = 15_000;
 
+/**
+ * Minimum gap between two reminders in the same topic. Triggered by activity,
+ * never by a timer, so this is a floor rather than a schedule.
+ */
+export const TOPIC_REMINDER_INTERVAL_MS = 4 * 60 * 60 * 1000;
+
 /** TTL for User docs with `leftWithWarningsAt` (seconds — 6 months). */
 export const LEFT_WITH_WARNINGS_TTL_S = 15_552_000;
 

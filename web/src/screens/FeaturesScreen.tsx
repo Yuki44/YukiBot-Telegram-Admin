@@ -64,6 +64,12 @@ const FEATURE_META: FeatureMeta[] = [
     name: "Seguimiento de nombres",
     desc: "Avisa (en el grupo y en el canal de registro) cuando alguien cambia su nombre o @usuario, y mantiene sus datos al día.",
   },
+  {
+    id: "topicReminders",
+    name: "Recordatorio de normas por tema",
+    desc: "Republica las normas de cada tema (como máximo cada 4 horas y solo si hay actividad), borrando el recordatorio anterior. Configura el texto de cada tema y el botón en Reglas por tema.",
+    topicsOnly: true,
+  },
 ];
 
 export function FeaturesScreen() {

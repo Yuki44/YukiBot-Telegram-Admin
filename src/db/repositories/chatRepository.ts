@@ -144,6 +144,13 @@ export const chatRepository = {
     return await Chat.findOneAndUpdate({ chatId }, { $set: { welcome } }, { returnDocument: "after" });
   },
 
+  async updateTopicReminder(
+    chatId: number,
+    topicReminder: NonNullable<IChat["topicReminder"]>
+  ): Promise<IChat | null> {
+    return await Chat.findOneAndUpdate({ chatId }, { $set: { topicReminder } }, { returnDocument: "after" });
+  },
+
   async addLinkWhitelist(chatId: number, domain: string): Promise<IChat | null> {
     return await Chat.findOneAndUpdate(
       { chatId },

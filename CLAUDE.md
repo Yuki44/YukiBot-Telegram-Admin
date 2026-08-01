@@ -32,6 +32,10 @@ See [AGENTS.md](AGENTS.md) for full architecture, entities, and commands.
 - `src/cli/credentials.ts` — `cred:add` / `cred:list` / `cred:rm` for dashboard logins
 - `web/src/` — React/Vite SPA served from `web/dist`
 
+## Scratch memory
+
+**Start every session by reading `.scratch/memory/INDEX.md`** (gitignored; absent means nothing to resume). It indexes the open **threads** — one file per effort in flight, holding its decisions, rejected options, constraints, and next step. Maintain it **unprompted**: capture decisions as they land, archive a thread when its PR merges, purge archives after 7 days, ask before dropping a live thread untouched for 7 days. Protocol: [.agents/skills/scratch-memory/SKILL.md](.agents/skills/scratch-memory/SKILL.md).
+
 ## Skills
 
 Reusable agent procedures live under `.agents/skills/` — one canonical copy shared across every agent (no per-agent duplication). See [AGENTS.md#skills](AGENTS.md#skills-agentsskills) for the full index; read a skill's `SKILL.md` when its trigger matches the task (e.g. `tdd` before writing code test-first, `code-review` before a commit).

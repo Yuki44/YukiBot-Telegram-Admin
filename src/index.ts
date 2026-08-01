@@ -15,6 +15,7 @@ import { trackUser } from "./bot/middleware/trackUser";
 import { trackTopic } from "./bot/middleware/trackTopic";
 import { topicFiltering } from "./features/topicFiltering";
 import { bannedWordsEnforcement } from "./features/bannedWordsEnforcement";
+import { topicReminders } from "./features/topicReminders";
 import { setupHandler } from "./bot/commands/setup";
 import { migrarHandler } from "./bot/commands/migrar";
 import { addTopicHandler } from "./bot/commands/addTopic";
@@ -165,6 +166,7 @@ bot.on("message", topicFiltering);
 bot.on("message", bannedWordsEnforcement);
 bot.on("message", promoSpamDetection);
 bot.on("message", languageDetection);
+bot.on("message", topicReminders);
 
 let httpServer: HttpServer | null = null;
 

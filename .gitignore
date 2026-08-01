@@ -145,6 +145,9 @@ vite.config.ts.timestamp-*
 .idea/
 *.iml
 
+# Agent scratch memory — decisions of work in flight (see .agents/skills/scratch-memory)
+.scratch/
+
 # Claude Code
 .claude/memory/
 .claude/worktrees/
@@ -157,3 +160,5 @@ web/.design-reference/
 # Web — tsc build artifacts emitted by `tsc -b` for vite.config.ts
 web/vite.config.d.ts
 web/vite.config.js
+
+.claude/settings.local.json

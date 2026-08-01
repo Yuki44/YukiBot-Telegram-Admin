@@ -44,6 +44,8 @@ export interface IChat extends Document {
     welcomeMessage?: boolean;
     /** When true, name/@username changes are announced (group + logsTo) and the DB is kept fresh. */
     trackNameChanges?: boolean;
+    /** When true, each topic with a configured reminder reposts it (at most every TOPIC_REMINDER_INTERVAL_MS) on activity. */
+    topicReminders?: boolean;
   };
   /** Domains/URLs exempt from link spam detection (e.g. "example.com") */
   linkWhitelist: string[];
@@ -80,6 +82,17 @@ export interface IChat extends Document {
    */
   welcome?: {
     message: string;
+    button: {
+      enabled: boolean;
+      text: string;
+      url: string;
+    };
+  };
+  /**
+   * Chat-wide part of the per-topic rules reminder; only the button is shared,
+   * the text lives on each Topic.
+   */
+  topicReminder?: {
     button: {
       enabled: boolean;
       text: string;
@@ -147,6 +160,17 @@ export interface ITopic extends Document {
    * True = topic was explicitly saved via the dashboard; allowedMsgTypes is authoritative.
    */
   isUserConfigured?: boolean;
+  /**
+   * Per-topic rules reminder. `text` is plain (escaped on send). `lastSentAt` is
+   * both the interval gate and the concurrency claim, persisted so a redeploy
+   * can't orphan `lastMessageId`.
+   */
+  reminder?: {
+    enabled: boolean;
+    text: string;
+    lastSentAt?: Date | null;
+    lastMessageId?: number | null;
+  };
 }
 
 export interface IUser extends Document {

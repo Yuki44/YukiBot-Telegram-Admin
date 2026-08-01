@@ -45,6 +45,7 @@ src/
 ├── features/
 │   ├── topicFiltering/
 │   ├── promoSpamDetection/    ← linkAnalyzer + patternMatcher
+│   ├── topicReminders/        ← per-topic rules reminder (activity-gated repost)
 │   └── bannedWordsEnforcement/← matcher + cache
 ├── api/
 │   ├── server.ts           ← Express app factory (mounted by index.ts)
@@ -62,9 +63,9 @@ web/                        ← Vite + React SPA (built into web/dist by `build:
 
 | Entity              | Key fields                                                                                                                                          | Unique index         |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| Chat                | chatId, name, type, isActive, whitelist, features, linkWhitelist, spamUserWhitelist, hiddenAdminIds, delegatedOwnerId, logsTo, forwardsTo, logFlags | chatId               |
+| Chat                | chatId, name, type, isActive, whitelist, features, linkWhitelist, spamUserWhitelist, hiddenAdminIds, delegatedOwnerId, logsTo, forwardsTo, logFlags, welcome, topicReminder | chatId               |
 | Admin               | userId, username, name, chatId, chatName, role (owner \| admin)                                                                                     | userId + chatId      |
-| Topic               | chatId, topicId, name, allowedMsgTypes[], adminOnly, isUserConfigured                                                                               | chatId + topicId     |
+| Topic               | chatId, topicId, name, allowedMsgTypes[], adminOnly, isUserConfigured, reminder{enabled,text,lastSentAt,lastMessageId}                              | chatId + topicId     |
 | User                | userId, chatId, username, name, warnings, warningReasons, isMuted, muteUntil, isBanned, wasBanned, photoFileId                                      | userId + chatId      |
 | Message             | userId, chatId, fingerprint, timestamp                                                                                                              | TTL 48 h auto-delete |
 | Credential          | username, passwordHash, userId, name                                                                                                                | username             |
@@ -89,7 +90,7 @@ loadChat → trackUser → trackTopic → isAdmin → adminOnlyCommands → feat
   - `GET /health`
   - `GET /api/public/config` → `{ botUsername, botLoginDomain }`
   - `POST /api/auth/...` → Telegram-widget + username/password login
-  - `/api/chats`, `/api/chats/:chatId/{topics,users,whitelist,banned-words,logs,admins,spam-detections}`
+  - `/api/chats`, `/api/chats/:chatId/{topics,users,whitelist,banned-words,logs,admins,spam-detections,topic-reminder}`
   - `/api/photos`
   - Static `web/dist/` + SPA fallback for React Router.
 
@@ -202,8 +203,17 @@ Toggle via `/togglefeature` (owner), the dashboard Features screen (`PUT /:chatI
 | `csamDetection`          | CSAM/impostor detection (**CP_ALERTA**) — bio + image                                     | **3 paths:** `csamBioTrigger` (urgent bio queue) · `csamImageScan` (image OCR) · rolling `scanner` (bio sweep)      |
 | `languageDetection`      | Off-language warnings (AI classifier, grace/escalation)                                    | `languageDetection` message handler · **also** `csamBioTrigger` (recent-message recording for bulk-delete)          |
 | `trackNameChanges`       | SangMata-style name/@username change notices                                              | `nameChangeTracker` message handler **only** — shares no runtime path with CSAM                                     |
+| `topicReminders`         | Per-topic rules reminder, reposted on activity (≥4h gap), replacing the previous one      | `topicReminders` message handler (last in the chain) — topics chats only, ignores General                           |
 
 **Shared handlers (read before touching one):** `csamBioTrigger` fires when `csamDetection` **or** `languageDetection` is on and records recent messages for either — each branch gates on its own flag, so one being off never breaks the other (G16). `trackNameChanges` is a **separate** handler that does not gate or feed any CSAM path: disabling it cannot disable CP_ALERTA. When you edit a shared handler, re-verify every flag in its row.
+
+## Scratch Memory (`.scratch/memory/` — gitignored)
+
+**Every session starts by reading `.scratch/memory/INDEX.md`** (absent on a fresh clone — that just means nothing to resume). It indexes the open **threads**: one small markdown file per effort in flight, holding that effort's decisions, rejected options, constraints, and next step — the _why_ that neither the diff nor a compacted context window keeps.
+
+This is the single point of truth for work being discussed but not yet shipped, shared by every agent and tool driving this repo. It exists so that a compaction, a reboot, a model switch, or a jump to another CLI costs no decisions and no re-prompting — the human types "continue" and the agent knows where things stand.
+
+The agent maintains it **unprompted**: capture each decision as it lands, archive a thread once its PR merges, purge archives after 7 days, and ask before dropping a live thread untouched for 7 days. Full protocol and file templates: [.agents/skills/scratch-memory/SKILL.md](.agents/skills/scratch-memory/SKILL.md).
 
 ## Skills (`.agents/skills/`)
 
@@ -230,6 +240,7 @@ Get-ChildItem ".agents\skills" -Directory | ForEach-Object {
 | `wayfinder`                | `.agents/skills/wayfinder/SKILL.md`                 | Planning multi-session work as a shared map of decision tickets                |
 | `writing-great-skills`     | `.agents/skills/writing-great-skills/SKILL.md`      | Reference for writing/editing skills predictably                               |
 | `caveman`                  | `.agents/skills/caveman/SKILL.md`                   | Terse/compressed responses on request ("caveman mode", `/caveman`)             |
+| `scratch-memory`           | `.agents/skills/scratch-memory/SKILL.md`            | Persisting/resuming decisions of work in flight — fires automatically every session |
 
 ## Topic Files
 

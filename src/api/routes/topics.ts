@@ -8,6 +8,8 @@ import { VALID_CONTENT_TYPES } from "../../types";
 
 const VALID_SET = new Set<string>(VALID_CONTENT_TYPES.map(String));
 
+const TOPIC_REMINDER_MAX_LEN = 1024;
+
 interface TopicBody {
   topicId?: number;
   name?: string;
@@ -45,6 +47,10 @@ export function createTopicsRouter(): Router {
             allowedMsgTypes: t.allowedMsgTypes,
             adminOnly: t.adminOnly ?? false,
             isUserConfigured: t.isUserConfigured ?? false,
+            reminder: {
+              enabled: t.reminder?.enabled ?? false,
+              text: t.reminder?.text ?? "",
+            },
           }))
           .sort((a, b) => a.topicId - b.topicId)
       );
@@ -179,6 +185,66 @@ export function createTopicsRouter(): Router {
       res.status(500).json({ error: "internal_error" });
     }
   });
+
+  // Separate from the rules endpoints so saving one can't clobber the other.
+  router.put(
+    "/:topicId/reminder",
+    requireChatAdmin({ ownerOnly: true }),
+    async (req: Request, res: Response) => {
+      const chatId = Number(req.params.chatId);
+      const topicId = Number(req.params.topicId);
+      if (!Number.isFinite(topicId)) {
+        res.status(400).json({ error: "invalid_topic_id" });
+        return;
+      }
+
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      if (typeof body.text !== "string") {
+        res.status(400).json({ error: "invalid_text" });
+        return;
+      }
+      if (body.text.length > TOPIC_REMINDER_MAX_LEN) {
+        res.status(400).json({ error: "text_too_long" });
+        return;
+      }
+      if (typeof body.enabled !== "boolean") {
+        res.status(400).json({ error: "invalid_enabled" });
+        return;
+      }
+      if (body.enabled && body.text.trim().length === 0) {
+        res.status(400).json({ error: "text_required" });
+        return;
+      }
+
+      try {
+        const updated = await topicRepository.setReminder(chatId, topicId, {
+          enabled: body.enabled,
+          text: body.text,
+        });
+        if (!updated) {
+          res.status(404).json({ error: "topic_not_found" });
+          return;
+        }
+        logger.info({ action: "topics.reminder.update", chatId, topicId, userId: req.user!.userId });
+        recordActivity({
+          chatId,
+          type: "topic_rule_change",
+          source: "panel",
+          actor: { id: req.user!.userId, name: req.user!.name, username: req.user!.username },
+          targetRef: updated.name?.trim() || `Tema #${topicId}`,
+          topicId,
+          reason: `recordatorio ${body.enabled ? "activado" : "desactivado"}`,
+        });
+        res.json({
+          enabled: updated.reminder?.enabled ?? false,
+          text: updated.reminder?.text ?? "",
+        });
+      } catch (err) {
+        logger.error({ action: "topics.reminder.update", error: String(err), chatId, topicId });
+        res.status(500).json({ error: "internal_error" });
+      }
+    }
+  );
 
   router.delete("/:topicId", requireChatAdmin({ ownerOnly: true }), async (req: Request, res: Response) => {
     const chatId = Number(req.params.chatId);

@@ -46,10 +46,20 @@ export interface ChatFeatures {
   welcomeMessage: boolean;
   csamDetection: boolean;
   trackNameChanges: boolean;
+  topicReminders: boolean;
 }
 
 export interface WelcomeConfig {
   message: string;
+  button: {
+    enabled: boolean;
+    text: string;
+    url: string;
+  };
+}
+
+/** Chat-wide part of the per-topic rules reminder; the text lives on each Topic. */
+export interface TopicReminderConfig {
   button: {
     enabled: boolean;
     text: string;
@@ -141,6 +151,11 @@ export interface Topic {
    * new topics default to "all allowed" until saved.
    */
   isUserConfigured?: boolean;
+  /** Per-topic rules reminder (see the `topicReminders` feature flag). */
+  reminder?: {
+    enabled: boolean;
+    text: string;
+  };
 }
 
 export type UserStatus = "active" | "warned" | "silenced" | "banned";

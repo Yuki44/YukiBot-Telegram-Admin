@@ -5,6 +5,7 @@ import { I } from "../components/Icon";
 import { ApiError, api } from "../lib/api";
 import { clearSession } from "../lib/auth";
 import { useChat } from "../lib/useChat";
+import { normalizeHttpUrl } from "../lib/url";
 
 const MAX_LEN = 1024;
 
@@ -25,32 +26,6 @@ function errorMessage(err: unknown): string {
     }
   }
   return err instanceof Error ? err.message : "error";
-}
-
-/**
- * Mirror of src/utils/url.ts — a bare "t.me/x" is accepted (the server prepends
- * https://); only a non-http(s) scheme or unparseable input is rejected.
- */
-function normalizeHttpUrl(raw: string): string | null {
-  const s = raw.trim();
-  if (!s) return null;
-  const schemeMatch = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(s);
-  let candidate: string;
-  if (schemeMatch) {
-    const scheme = schemeMatch[1].toLowerCase();
-    if (scheme !== "http" && scheme !== "https") return null;
-    candidate = s;
-  } else {
-    candidate = `https://${s}`;
-  }
-  try {
-    const u = new URL(candidate);
-    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
-    if (!u.hostname) return null;
-    return u.toString();
-  } catch {
-    return null;
-  }
 }
 
 export function WelcomeScreen() {
