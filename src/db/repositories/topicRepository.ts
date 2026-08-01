@@ -91,4 +91,46 @@ export const topicRepository = {
   async deleteOne(chatId: number, topicId: number): Promise<void> {
     await Topic.deleteOne({ chatId, topicId });
   },
+
+  /** Field-level $set so saving rules and saving the reminder can't clobber each other. */
+  async setReminder(
+    chatId: number,
+    topicId: number,
+    reminder: { enabled: boolean; text: string }
+  ): Promise<ITopic | null> {
+    return await Topic.findOneAndUpdate(
+      { chatId, topicId },
+      { $set: { "reminder.enabled": reminder.enabled, "reminder.text": reminder.text } },
+      { returnDocument: "after" }
+    );
+  },
+
+  /**
+   * Atomically claim the right to post this topic's reminder: the filter is the
+   * interval check and the update is the claim, so of N simultaneous messages
+   * exactly one wins. Returns the doc *before* the update — we need the outgoing
+   * `lastMessageId` to delete it.
+   */
+  async claimReminderSend(chatId: number, topicId: number, cutoff: Date): Promise<ITopic | null> {
+    return await Topic.findOneAndUpdate(
+      {
+        chatId,
+        topicId,
+        "reminder.enabled": true,
+        $or: [{ "reminder.lastSentAt": null }, { "reminder.lastSentAt": { $lte: cutoff } }],
+      },
+      { $set: { "reminder.lastSentAt": new Date() } },
+      { returnDocument: "before" }
+    );
+  },
+
+  /** Store the id of the reminder just posted, so the next one can delete it. */
+  async recordReminderSent(chatId: number, topicId: number, messageId: number): Promise<void> {
+    await Topic.updateOne({ chatId, topicId }, { $set: { "reminder.lastMessageId": messageId } });
+  },
+
+  /** Undo a claim whose send failed, so the next message retries immediately. */
+  async releaseReminderClaim(chatId: number, topicId: number, previousSentAt: Date | null): Promise<void> {
+    await Topic.updateOne({ chatId, topicId }, { $set: { "reminder.lastSentAt": previousSentAt } });
+  },
 };

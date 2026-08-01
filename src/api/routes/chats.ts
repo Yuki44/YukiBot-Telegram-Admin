@@ -23,12 +23,44 @@ const FEATURE_KEYS: ReadonlyArray<keyof IChat["features"]> = [
   "welcomeMessage",
   "csamDetection",
   "trackNameChanges",
+  "topicReminders",
 ];
 
 const WELCOME_MAX_LEN = 1024;
 
+type InlineButton = { enabled: boolean; text: string; url: string };
+
+/**
+ * Validate + normalize an inline URL button. Shared by the welcome and
+ * topic-reminder endpoints. text/url are kept even when disabled so toggling
+ * back on restores them; when enabled, a bare "t.me/x" gains the scheme.
+ */
+function parseInlineButton(raw: unknown): { button: InlineButton } | { error: string } {
+  if (typeof raw !== "object" || raw === null) return { error: "invalid_button" };
+  const b = raw as Record<string, unknown>;
+  if (typeof b.enabled !== "boolean") return { error: "invalid_button" };
+
+  const text = b.text === undefined ? "" : b.text;
+  const rawUrl = b.url === undefined ? "" : b.url;
+  if (typeof text !== "string" || typeof rawUrl !== "string") return { error: "invalid_button" };
+
+  let url = rawUrl;
+  if (b.enabled) {
+    if (text.trim().length === 0) return { error: "button_text_required" };
+    const normalizedUrl = normalizeHttpUrl(rawUrl);
+    if (!normalizedUrl) return { error: "invalid_button_url" };
+    url = normalizedUrl;
+  }
+
+  return { button: { enabled: b.enabled, text, url } };
+}
+
 const EMPTY_WELCOME: NonNullable<IChat["welcome"]> = {
   message: "",
+  button: { enabled: false, text: "", url: "" },
+};
+
+const EMPTY_TOPIC_REMINDER: NonNullable<IChat["topicReminder"]> = {
   button: { enabled: false, text: "", url: "" },
 };
 
@@ -293,44 +325,15 @@ export function createChatsRouter(bot: Bot<BotContext>): Router {
         return;
       }
 
-      const button = body.button;
-      if (typeof button !== "object" || button === null) {
-        res.status(400).json({ error: "invalid_button" });
+      const parsed = parseInlineButton(body.button);
+      if ("error" in parsed) {
+        res.status(400).json({ error: parsed.error });
         return;
-      }
-      const b = button as Record<string, unknown>;
-      if (typeof b.enabled !== "boolean") {
-        res.status(400).json({ error: "invalid_button" });
-        return;
-      }
-      // text/url may be absent (default "") but, if present, must be strings —
-      // we persist them even when disabled so toggling back on restores them.
-      const text = b.text === undefined ? "" : b.text;
-      const rawUrl = b.url === undefined ? "" : b.url;
-      if (typeof text !== "string" || typeof rawUrl !== "string") {
-        res.status(400).json({ error: "invalid_button" });
-        return;
-      }
-      // When the button is on we normalize the link (a bare "t.me/x" becomes
-      // "https://t.me/x") so the admin never has to type the scheme. When it's
-      // off we keep whatever was typed so toggling back on restores it.
-      let url = rawUrl;
-      if (b.enabled) {
-        if (text.trim().length === 0) {
-          res.status(400).json({ error: "button_text_required" });
-          return;
-        }
-        const normalizedUrl = normalizeHttpUrl(rawUrl);
-        if (!normalizedUrl) {
-          res.status(400).json({ error: "invalid_button_url" });
-          return;
-        }
-        url = normalizedUrl;
       }
 
       const normalized: NonNullable<IChat["welcome"]> = {
         message,
-        button: { enabled: b.enabled, text, url },
+        button: parsed.button,
       };
 
       try {
@@ -351,6 +354,72 @@ export function createChatsRouter(bot: Bot<BotContext>): Router {
         res.json(normalized);
       } catch (err) {
         logger.error({ action: "chats.welcome.update", error: String(err), chatId });
+        res.status(500).json({ error: "internal_error" });
+      }
+    }
+  );
+
+  // Chat-wide part of the reminder: only the button, since it points at the
+  // same place for every topic. Text lives per topic; the switch is the flag.
+  router.get("/:chatId/topic-reminder", requireChatAdmin(), async (req: Request, res: Response) => {
+    const chatId = Number(req.params.chatId);
+    try {
+      const chat = await chatRepository.findByChatId(chatId);
+      if (!chat) {
+        res.status(404).json({ error: "chat_not_found" });
+        return;
+      }
+      const btn = chat.topicReminder?.button;
+      res.json(
+        btn
+          ? {
+              button: {
+                enabled: !!btn.enabled,
+                text: btn.text ?? "",
+                url: btn.url ?? "",
+              },
+            }
+          : EMPTY_TOPIC_REMINDER
+      );
+    } catch (err) {
+      logger.error({ action: "chats.topicReminder.get", error: String(err), chatId });
+      res.status(500).json({ error: "internal_error" });
+    }
+  });
+
+  router.put(
+    "/:chatId/topic-reminder",
+    requireChatAdmin({ ownerOnly: true }),
+    async (req: Request, res: Response) => {
+      const chatId = Number(req.params.chatId);
+      const body = (req.body ?? {}) as Record<string, unknown>;
+
+      const parsed = parseInlineButton(body.button);
+      if ("error" in parsed) {
+        res.status(400).json({ error: parsed.error });
+        return;
+      }
+
+      const normalized: NonNullable<IChat["topicReminder"]> = { button: parsed.button };
+
+      try {
+        const updated = await chatRepository.updateTopicReminder(chatId, normalized);
+        if (!updated) {
+          res.status(404).json({ error: "chat_not_found" });
+          return;
+        }
+        logger.info({ action: "chats.topicReminder.update", chatId, userId: req.user!.userId });
+        recordActivity({
+          chatId,
+          type: "feature_toggle",
+          source: "panel",
+          actor: { id: req.user!.userId, name: req.user!.name, username: req.user!.username },
+          targetRef: "topicReminder",
+          reason: "configuración actualizada",
+        });
+        res.json(normalized);
+      } catch (err) {
+        logger.error({ action: "chats.topicReminder.update", error: String(err), chatId });
         res.status(500).json({ error: "internal_error" });
       }
     }

@@ -20,6 +20,7 @@ import type {
   CsamWatchCategory,
   TelegramAuthData,
   Topic,
+  TopicReminderConfig,
   UserDomainAllowance,
   UserListFilter,
   UserRecord,
@@ -152,6 +153,16 @@ export const api = {
     ): Promise<Topic> => request<Topic>("PUT", `/chats/${chatId}/topics/${topicId}`, body),
     remove: (chatId: number | string, topicId: number): Promise<void> =>
       request<void>("DELETE", `/chats/${chatId}/topics/${topicId}`),
+    setReminder: (
+      chatId: number | string,
+      topicId: number,
+      body: { enabled: boolean; text: string }
+    ): Promise<{ enabled: boolean; text: string }> =>
+      request<{ enabled: boolean; text: string }>(
+        "PUT",
+        `/chats/${chatId}/topics/${topicId}/reminder`,
+        body
+      ),
   },
   users: {
     list: (
@@ -228,6 +239,12 @@ export const api = {
       request<WelcomeConfig>("GET", `/chats/${chatId}/welcome`),
     update: (chatId: number | string, body: WelcomeConfig): Promise<WelcomeConfig> =>
       request<WelcomeConfig>("PUT", `/chats/${chatId}/welcome`, body),
+  },
+  topicReminder: {
+    get: (chatId: number | string): Promise<TopicReminderConfig> =>
+      request<TopicReminderConfig>("GET", `/chats/${chatId}/topic-reminder`),
+    update: (chatId: number | string, body: TopicReminderConfig): Promise<TopicReminderConfig> =>
+      request<TopicReminderConfig>("PUT", `/chats/${chatId}/topic-reminder`, body),
   },
   bannedWords: {
     list: (chatId: number | string): Promise<BannedWord[]> =>

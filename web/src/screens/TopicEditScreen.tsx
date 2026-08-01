@@ -8,6 +8,8 @@ import { useChat } from "../lib/useChat";
 import type { BannedWord, MsgType, Topic } from "../types/api";
 import { ALL_MSG_TYPES } from "../types/api";
 
+const REMINDER_MAX_LEN = 1024;
+
 interface MsgTypeMeta {
   id: MsgType;
   label: string;
@@ -59,6 +61,8 @@ export function TopicEditScreen() {
   const [newWord, setNewWord] = useState("");
   const [wordBusy, setWordBusy] = useState(false);
   const [wordError, setWordError] = useState<string | null>(null);
+  const [reminderEnabled, setReminderEnabled] = useState(false);
+  const [reminderText, setReminderText] = useState("");
 
   useEffect(() => {
     if (isNew) {
@@ -86,6 +90,8 @@ export function TopicEditScreen() {
           : new Set<string>(ALL_MSG_TYPES);
         setAllowed(seed);
         setAdminOnly(!!found.adminOnly);
+        setReminderEnabled(!!found.reminder?.enabled);
+        setReminderText(found.reminder?.text ?? "");
       })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) {
@@ -186,6 +192,15 @@ export function TopicEditScreen() {
         await api.topics.update(chatId, numericTopicId, {
           allowedMsgTypes: allowedArr,
           adminOnly,
+        });
+        if (reminderEnabled && reminderText.trim().length === 0) {
+          setError("Escribe el texto del recordatorio o desactívalo.");
+          setSaving(false);
+          return;
+        }
+        await api.topics.setReminder(chatId, numericTopicId, {
+          enabled: reminderEnabled,
+          text: reminderText,
         });
       }
       navigate(`/chats/${chatId}/topics`);
@@ -330,6 +345,63 @@ export function TopicEditScreen() {
             </div>
           </div>
         </div>
+
+        {!isNew && (
+          <div className="yk-section">
+            <div className="yk-section-label">RECORDATORIO DE NORMAS</div>
+            <div className="yk-card" style={{ padding: 14 }}>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  marginBottom: 12,
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={reminderEnabled}
+                  onChange={(e) => setReminderEnabled(e.target.checked)}
+                />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>Activar en este tema</div>
+                  <div style={{ fontSize: 12, color: "var(--ink-500)" }}>
+                    Se publica como máximo cada 4 horas, y solo si hay actividad.
+                  </div>
+                </div>
+              </label>
+              <div className="yk-field">
+                <label className="yk-label" htmlFor="tr-text">
+                  Texto
+                </label>
+                <textarea
+                  id="tr-text"
+                  className="yk-textarea"
+                  rows={5}
+                  value={reminderText}
+                  onChange={(e) => setReminderText(e.target.value)}
+                  placeholder="Normas de este tema…"
+                  maxLength={REMINDER_MAX_LEN}
+                />
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "var(--ink-500)",
+                    marginTop: 4,
+                    textAlign: "right",
+                  }}
+                >
+                  {reminderText.length}/{REMINDER_MAX_LEN}
+                </div>
+              </div>
+              <div className="yk-help" style={{ marginTop: 8 }}>
+                El recordatorio anterior de este tema se borra al publicar el nuevo, así que
+                nunca se acumulan. El botón se configura una sola vez en Reglas por tema.
+              </div>
+            </div>
+          </div>
+        )}
 
         {!isNew && (
           <div className="yk-section">

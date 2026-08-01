@@ -45,6 +45,7 @@ src/
 ├── features/
 │   ├── topicFiltering/
 │   ├── promoSpamDetection/    ← linkAnalyzer + patternMatcher
+│   ├── topicReminders/        ← per-topic rules reminder (activity-gated repost)
 │   └── bannedWordsEnforcement/← matcher + cache
 ├── api/
 │   ├── server.ts           ← Express app factory (mounted by index.ts)
@@ -62,9 +63,9 @@ web/                        ← Vite + React SPA (built into web/dist by `build:
 
 | Entity              | Key fields                                                                                                                                          | Unique index         |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| Chat                | chatId, name, type, isActive, whitelist, features, linkWhitelist, spamUserWhitelist, hiddenAdminIds, delegatedOwnerId, logsTo, forwardsTo, logFlags | chatId               |
+| Chat                | chatId, name, type, isActive, whitelist, features, linkWhitelist, spamUserWhitelist, hiddenAdminIds, delegatedOwnerId, logsTo, forwardsTo, logFlags, welcome, topicReminder | chatId               |
 | Admin               | userId, username, name, chatId, chatName, role (owner \| admin)                                                                                     | userId + chatId      |
-| Topic               | chatId, topicId, name, allowedMsgTypes[], adminOnly, isUserConfigured                                                                               | chatId + topicId     |
+| Topic               | chatId, topicId, name, allowedMsgTypes[], adminOnly, isUserConfigured, reminder{enabled,text,lastSentAt,lastMessageId}                              | chatId + topicId     |
 | User                | userId, chatId, username, name, warnings, warningReasons, isMuted, muteUntil, isBanned, wasBanned, photoFileId                                      | userId + chatId      |
 | Message             | userId, chatId, fingerprint, timestamp                                                                                                              | TTL 48 h auto-delete |
 | Credential          | username, passwordHash, userId, name                                                                                                                | username             |
@@ -89,7 +90,7 @@ loadChat → trackUser → trackTopic → isAdmin → adminOnlyCommands → feat
   - `GET /health`
   - `GET /api/public/config` → `{ botUsername, botLoginDomain }`
   - `POST /api/auth/...` → Telegram-widget + username/password login
-  - `/api/chats`, `/api/chats/:chatId/{topics,users,whitelist,banned-words,logs,admins,spam-detections}`
+  - `/api/chats`, `/api/chats/:chatId/{topics,users,whitelist,banned-words,logs,admins,spam-detections,topic-reminder}`
   - `/api/photos`
   - Static `web/dist/` + SPA fallback for React Router.
 
@@ -202,6 +203,7 @@ Toggle via `/togglefeature` (owner), the dashboard Features screen (`PUT /:chatI
 | `csamDetection`          | CSAM/impostor detection (**CP_ALERTA**) — bio + image                                     | **3 paths:** `csamBioTrigger` (urgent bio queue) · `csamImageScan` (image OCR) · rolling `scanner` (bio sweep)      |
 | `languageDetection`      | Off-language warnings (AI classifier, grace/escalation)                                    | `languageDetection` message handler · **also** `csamBioTrigger` (recent-message recording for bulk-delete)          |
 | `trackNameChanges`       | SangMata-style name/@username change notices                                              | `nameChangeTracker` message handler **only** — shares no runtime path with CSAM                                     |
+| `topicReminders`         | Per-topic rules reminder, reposted on activity (≥4h gap), replacing the previous one      | `topicReminders` message handler (last in the chain) — topics chats only, ignores General                           |
 
 **Shared handlers (read before touching one):** `csamBioTrigger` fires when `csamDetection` **or** `languageDetection` is on and records recent messages for either — each branch gates on its own flag, so one being off never breaks the other (G16). `trackNameChanges` is a **separate** handler that does not gate or feed any CSAM path: disabling it cannot disable CP_ALERTA. When you edit a shared handler, re-verify every flag in its row.
 

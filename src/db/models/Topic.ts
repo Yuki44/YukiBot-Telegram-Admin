@@ -26,6 +26,12 @@ const topicSchema = new Schema<ITopic>({
     type: Boolean,
     default: false,
   },
+  reminder: {
+    enabled: { type: Boolean, default: false },
+    text: { type: String, default: "" },
+    lastSentAt: { type: Date, default: null },
+    lastMessageId: { type: Number, default: null },
+  },
 });
 
 // Compound unique index on chatId + topicId

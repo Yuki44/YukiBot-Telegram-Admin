@@ -61,6 +61,10 @@ const chatSchema = new Schema<IChat>({
       type: Boolean,
       default: false,
     },
+    topicReminders: {
+      type: Boolean,
+      default: false,
+    },
   },
   linkWhitelist: {
     type: [String],
@@ -133,6 +137,13 @@ const chatSchema = new Schema<IChat>({
   },
   welcome: {
     message: { type: String, default: "" },
+    button: {
+      enabled: { type: Boolean, default: false },
+      text: { type: String, default: "" },
+      url: { type: String, default: "" },
+    },
+  },
+  topicReminder: {
     button: {
       enabled: { type: Boolean, default: false },
       text: { type: String, default: "" },
