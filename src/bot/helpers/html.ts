@@ -32,3 +32,19 @@ export function mentionHtml(id: number, name: string, username?: string): string
 export function profileLink(id: number, label: string): string {
   return `<a href="tg://user?id=${id}">${esc(label)}</a>`;
 }
+
+/**
+ * Canonical mention for user-facing notices: clickable full name plus the clickable
+ * `(@username)` when there is one. `idFallback` adds a tap-to-copy `(id)` instead when
+ * the user has no username — used in admin notifications where the ID is actionable.
+ */
+export function mentionFullHtml(
+  id: number,
+  name: string,
+  username?: string,
+  options?: { idFallback?: boolean }
+): string {
+  const link = profileLink(id, name);
+  if (username) return `${link} (<a href="tg://user?id=${id}">@${esc(username)}</a>)`;
+  return options?.idFallback ? `${link} (<code>${id}</code>)` : link;
+}

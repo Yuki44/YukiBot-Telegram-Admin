@@ -62,7 +62,7 @@
   "language": {
     "graceNotice": "{user} En este chat hablamos solo Español y/o Catalán.",
     "warnReason": "En este chat hablamos solo Español y/o Catalán.",
-    "adminNotifyWarn": "elsilav a {user} por idioma {current}/{max} en {chat} @edjoker",
+    "adminNotifyWarn": "elav a {user} por idioma {current}/{max} en {chat} @edjoker",
     "adminNotifyBanned": "{user} ha sido baneado por {max}/{max} avisos por idioma en {chat} @edjoker"
   },
   "commands": {
@@ -108,4 +108,3 @@
     "logPostFailed": "⚠️ La migración desde el chat {sourceChatId} a {destChatId} falló. Revisa los registros."
   }
 }
-
