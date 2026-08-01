@@ -51,6 +51,10 @@ All code, variable names, and logs are in **English**. User-facing bot strings i
 - User-facing Spanish strings live in `src/locales/es.json` — do not inline them
 - Bot polling can be skipped locally with `BOT_ENABLED=false` while keeping the API + dashboard up
 
+## Scratch Memory
+
+**Start every session by reading `.scratch/memory/INDEX.md`** (gitignored; absent means nothing to resume). It indexes the open **threads** — one file per effort in flight, holding its decisions, rejected options, constraints, and next step, so a compaction, reboot, or switch of model/tool costs no decisions. Maintain it **unprompted**: capture decisions as they land, archive a thread when its PR merges, purge archives after 7 days, ask before dropping a live thread untouched for 7 days. Protocol: [.agents/skills/scratch-memory/SKILL.md](../.agents/skills/scratch-memory/SKILL.md).
+
 ## Skills
 
 Reusable agent procedures live under `.agents/skills/` (single canonical copy, shared with Claude Code and other agents — no duplication). See [AGENTS.md#skills](../AGENTS.md#skills-agentsskills) for the full index; read a skill's `SKILL.md` when its trigger matches the task at hand.

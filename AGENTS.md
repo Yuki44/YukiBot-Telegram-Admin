@@ -205,6 +205,14 @@ Toggle via `/togglefeature` (owner), the dashboard Features screen (`PUT /:chatI
 
 **Shared handlers (read before touching one):** `csamBioTrigger` fires when `csamDetection` **or** `languageDetection` is on and records recent messages for either — each branch gates on its own flag, so one being off never breaks the other (G16). `trackNameChanges` is a **separate** handler that does not gate or feed any CSAM path: disabling it cannot disable CP_ALERTA. When you edit a shared handler, re-verify every flag in its row.
 
+## Scratch Memory (`.scratch/memory/` — gitignored)
+
+**Every session starts by reading `.scratch/memory/INDEX.md`** (absent on a fresh clone — that just means nothing to resume). It indexes the open **threads**: one small markdown file per effort in flight, holding that effort's decisions, rejected options, constraints, and next step — the _why_ that neither the diff nor a compacted context window keeps.
+
+This is the single point of truth for work being discussed but not yet shipped, shared by every agent and tool driving this repo. It exists so that a compaction, a reboot, a model switch, or a jump to another CLI costs no decisions and no re-prompting — the human types "continue" and the agent knows where things stand.
+
+The agent maintains it **unprompted**: capture each decision as it lands, archive a thread once its PR merges, purge archives after 7 days, and ask before dropping a live thread untouched for 7 days. Full protocol and file templates: [.agents/skills/scratch-memory/SKILL.md](.agents/skills/scratch-memory/SKILL.md).
+
 ## Skills (`.agents/skills/`)
 
 Reusable agent procedures, installed once as a single canonical copy — **no per-agent duplication**. Regardless of which tool is driving (Claude Code, Copilot CLI, …), read the linked `SKILL.md` when its trigger matches the current task.
@@ -230,6 +238,7 @@ Get-ChildItem ".agents\skills" -Directory | ForEach-Object {
 | `wayfinder`                | `.agents/skills/wayfinder/SKILL.md`                 | Planning multi-session work as a shared map of decision tickets                |
 | `writing-great-skills`     | `.agents/skills/writing-great-skills/SKILL.md`      | Reference for writing/editing skills predictably                               |
 | `caveman`                  | `.agents/skills/caveman/SKILL.md`                   | Terse/compressed responses on request ("caveman mode", `/caveman`)             |
+| `scratch-memory`           | `.agents/skills/scratch-memory/SKILL.md`            | Persisting/resuming decisions of work in flight — fires automatically every session |
 
 ## Topic Files
 
