@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { esc, displayName, mention, mentionHtml } from "../../src/bot/helpers/html";
+import { esc, displayName, mention, mentionHtml, mentionFullHtml } from "../../src/bot/helpers/html";
 
 describe("esc", () => {
   it("escapes ampersands", () => {
@@ -54,5 +54,26 @@ describe("mentionHtml", () => {
 
   it("falls back to the escaped name, still wrapped in a clickable link, without a username", () => {
     expect(mentionHtml(42, "<b>John</b>")).toBe('<a href="tg://user?id=42">&lt;b&gt;John&lt;/b&gt;</a>');
+  });
+});
+
+describe("mentionFullHtml", () => {
+  it("renders the clickable name plus the clickable @username", () => {
+    expect(mentionFullHtml(42, "Harry")).toBe('<a href="tg://user?id=42">Harry</a>');
+    expect(mentionFullHtml(42, "Harry", "hrush")).toBe(
+      '<a href="tg://user?id=42">Harry</a> (<a href="tg://user?id=42">@hrush</a>)'
+    );
+  });
+
+  it("falls back to a tap-to-copy ID only when idFallback is set", () => {
+    expect(mentionFullHtml(42, "Harry", undefined, { idFallback: true })).toBe(
+      '<a href="tg://user?id=42">Harry</a> (<code>42</code>)'
+    );
+  });
+
+  it("escapes HTML in the name and the username", () => {
+    expect(mentionFullHtml(42, "<b>H</b>", "<i>u</i>")).toBe(
+      '<a href="tg://user?id=42">&lt;b&gt;H&lt;/b&gt;</a> (<a href="tg://user?id=42">@&lt;i&gt;u&lt;/i&gt;</a>)'
+    );
   });
 });

@@ -4,16 +4,15 @@ import { BotContext } from "../../types";
 import { userRepository } from "../../db/repositories/userRepository";
 import { csamRecentMessageRepository } from "../../db/repositories/csamRecentMessageRepository";
 import { deleteMessagesConfirmed } from "../csamDetection/actions";
-import { silenceUser } from "../../bot/helpers/silenceUser";
 import { applyWarn } from "../../bot/helpers/applyWarn";
-import { sendLog, buildNavLine } from "../../bot/helpers/sendLog";
+import { buildNavLine } from "../../bot/helpers/sendLog";
 import { forwardToLog } from "../../bot/helpers/forwardToLog";
-import { mentionHtml, esc } from "../../bot/helpers/html";
+import { mentionHtml, mentionFullHtml, esc } from "../../bot/helpers/html";
 import { getChatTitle } from "../../bot/helpers/contextHelpers";
 import { recordActivity } from "../../utils/activityLog";
 import { logger } from "../../utils/logger";
 import { t } from "../../locales/i18n";
-import { LANGUAGE_BULK_DELETE_WINDOW_MS, MAX_WARNINGS, SILENCE_DURATION_MS } from "../../config/constants";
+import { LANGUAGE_BULK_DELETE_WINDOW_MS, MAX_WARNINGS } from "../../config/constants";
 
 export interface LanguageTarget {
   userId: number;
@@ -40,11 +39,10 @@ export function buildAdminNotifyText(
   target: LanguageTarget,
   warningsAfter: number,
   banned: boolean,
-  chatName: string,
-  chatId: number
+  chatName: string
 ): string {
-  const who = mentionHtml(target.userId, target.name, target.username);
-  const chat = `${esc(chatName)} [<code>${chatId}</code>]`;
+  const who = mentionFullHtml(target.userId, target.name, target.username, { idFallback: true });
+  const chat = esc(chatName);
   return banned
     ? t("language.adminNotifyBanned", { user: who, max: MAX_WARNINGS, chat })
     : t("language.adminNotifyWarn", { user: who, current: warningsAfter, max: MAX_WARNINGS, chat });
@@ -102,6 +100,21 @@ async function sendLanguageGraceLog(
   }
 }
 
+/** Marks the language grace as consumed. Shared by the grace path and the direct-warn path. */
+async function markGraceSpent(target: LanguageTarget, chatId: number): Promise<void> {
+  try {
+    await userRepository.upsert({
+      userId: target.userId,
+      chatId,
+      username: target.username,
+      name: target.name,
+      languageGraceGivenAt: new Date(),
+    });
+  } catch (err) {
+    logger.error({ action: "language_grace_persist", chatId, userId: target.userId, error: String(err) });
+  }
+}
+
 /** First offense: delete + friendly notice (stays in chat) + remember + log with an undo button. */
 export async function executeLanguageGrace(
   ctx: BotContext,
@@ -116,7 +129,7 @@ export async function executeLanguageGrace(
     logger.error({ action: "language_grace_delete", chatId, userId: target.userId, error: String(err) });
   }
 
-  const who = mentionHtml(target.userId, target.name, target.username);
+  const who = mentionFullHtml(target.userId, target.name, target.username);
   try {
     await ctx.api.sendMessage(chatId, t("language.graceNotice", { user: who }), {
       parse_mode: "HTML",
@@ -126,22 +139,12 @@ export async function executeLanguageGrace(
     logger.error({ action: "language_grace_notice", chatId, userId: target.userId, error: String(err) });
   }
 
-  try {
-    await userRepository.upsert({
-      userId: target.userId,
-      chatId,
-      username: target.username,
-      name: target.name,
-      languageGraceGivenAt: new Date(),
-    });
-  } catch (err) {
-    logger.error({ action: "language_grace_persist", chatId, userId: target.userId, error: String(err) });
-  }
+  await markGraceSpent(target, chatId);
 
   await sendLanguageGraceLog(ctx, target, message);
 }
 
-/** Second+ offense: elsilav-equivalent (delete + silence + warn) + bulk-delete + admin ping. */
+/** Second+ offense (or first with prior warnings): elav-equivalent (delete + warn) + bulk-delete + admin ping. */
 export async function executeLanguageEnforcement(
   ctx: BotContext,
   target: LanguageTarget,
@@ -154,49 +157,6 @@ export async function executeLanguageEnforcement(
     await ctx.api.deleteMessage(chatId, message.message_id);
   } catch (err) {
     logger.error({ action: "language_enforce_delete", chatId, userId: target.userId, error: String(err) });
-  }
-
-  const silenced = await silenceUser(ctx, target.userId, chatId);
-  if (silenced) {
-    const muteUntil = new Date(Date.now() + SILENCE_DURATION_MS);
-    try {
-      await userRepository.upsert({
-        userId: target.userId,
-        chatId,
-        username: target.username,
-        name: target.name,
-        isMuted: true,
-        muteUntil,
-      });
-    } catch (err) {
-      logger.error({
-        action: "language_enforce_silence_persist",
-        chatId,
-        userId: target.userId,
-        error: String(err),
-      });
-    }
-
-    sendLog(ctx.api, ctx.chatConfig, {
-      action: "SILENCIO",
-      actor,
-      target: { id: target.userId, name: target.name, username: target.username },
-      chatId,
-      chatName: getChatTitle(ctx),
-      chatType: ctx.chatConfig?.type ?? "normal",
-      muteUntil,
-      topicId: message.message_thread_id,
-      // AVISO (applyWarn, below) carries the forwarded original message — avoid duplicating it.
-    }).catch(() => {});
-
-    recordActivity({
-      chatId,
-      type: "silence",
-      source: "bot",
-      actor,
-      target: { id: target.userId, name: target.name, username: target.username },
-      messageText: message.text ?? message.caption,
-    });
   }
 
   const { banned, warningsAfter } = await applyWarn(
@@ -239,7 +199,7 @@ export async function executeLanguageEnforcement(
     const chatName = getChatTitle(ctx);
     await sendLanguageAdminNotify(
       ctx,
-      buildAdminNotifyText(target, warningsAfter, banned ?? false, chatName, chatId)
+      buildAdminNotifyText(target, warningsAfter, banned ?? false, chatName)
     );
   }
 }
@@ -251,9 +211,13 @@ export async function handleLanguageOffense(
 ): Promise<void> {
   try {
     const user = await userRepository.findByUserAndChat(target.userId, message.chat.id);
-    if (!user?.languageGraceGivenAt) {
+    const graceSpent = Boolean(user?.languageGraceGivenAt);
+    const hasWarnings = (user?.warnings ?? 0) > 0;
+
+    if (!graceSpent && !hasWarnings) {
       await executeLanguageGrace(ctx, target, message);
     } else {
+      if (!graceSpent) await markGraceSpent(target, message.chat.id);
       await executeLanguageEnforcement(ctx, target, message);
     }
   } catch (err) {
