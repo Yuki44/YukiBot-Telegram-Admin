@@ -40,7 +40,7 @@ export async function discoverProfilePhoto(api: Api, userId: number, chatId: num
 
     // The avatar is identity-level, not chat-level — fan out to every chat where
     // we already know this user. Fire-and-forget; the repository swallows errors.
-    void userRepository.syncIdentityAcrossChats(userId, {
+    void userRepository.syncPhotoAcrossChats(userId, {
       photoFileId: fileId,
       photoCheckedAt: now,
     });

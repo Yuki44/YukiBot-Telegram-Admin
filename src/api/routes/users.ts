@@ -19,6 +19,7 @@ import {
   warnUserViaApi,
 } from "../services/userActions";
 import { discoverProfilePhoto, shouldRecheckPhoto } from "../../bot/helpers/profilePhoto";
+import { fullName } from "../../bot/helpers/fullName";
 
 const VALID_FILTERS: UserListFilter[] = ["all", "warned", "silenced", "banned"];
 
@@ -277,10 +278,7 @@ export function createUsersRouter(bot: Bot<BotContext>): Router {
       userId: member.user.id,
       chatId,
       username: member.user.username,
-      name:
-        [member.user.first_name, member.user.last_name].filter(Boolean).join(" ") ||
-        member.user.username ||
-        undefined,
+      name: fullName(member.user) || undefined,
       isMuted: isMutedFromTg,
       muteUntil: muteUntilFromTg,
       isBanned: isBannedFromTg,
@@ -322,15 +320,6 @@ export function createUsersRouter(bot: Bot<BotContext>): Router {
       if (shouldRecheckPhoto(updated)) {
         await discoverProfilePhoto(bot.api, userId, chatId);
       }
-      // Propagate identity (not per-chat mute/ban state) so the same user looks
-      // identical across every chat where the dashboard shows them.
-      void userRepository.syncIdentityAcrossChats(userId, {
-        name:
-          [member.user.first_name, member.user.last_name].filter(Boolean).join(" ") ||
-          member.user.username ||
-          null,
-        username: member.user.username ?? null,
-      });
       const final = (await userRepository.findByUserAndChat(userId, chatId)) ?? updated;
       const isAdmin = await adminRepository.isChatAdmin(userId, chatId);
       logger.info({

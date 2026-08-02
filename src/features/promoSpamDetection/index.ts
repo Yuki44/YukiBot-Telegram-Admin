@@ -15,6 +15,7 @@ import { t } from "../../locales/i18n";
 import { IChat } from "../../types";
 import { analyzeLinks } from "./linkAnalyzer";
 import { matchesSpamPattern } from "./patternMatcher";
+import { fullName } from "../../bot/helpers/fullName";
 
 // ── Callback data helpers ────────────────────────────────────────────
 
@@ -203,7 +204,7 @@ export async function promoSpamDetection(ctx: BotContext, next: NextFunction): P
     const chatId = msg.chat.id;
     const topicId = msg.message_thread_id;
     const chatName = getChatTitle(ctx);
-    const senderName = [sender.first_name, sender.last_name].filter(Boolean).join(" ");
+    const senderName = fullName(sender);
     const senderUsername = sender.username;
     const logsTo = chatConfig.logsTo;
 

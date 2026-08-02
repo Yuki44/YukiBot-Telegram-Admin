@@ -62,10 +62,6 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
         .findOrCreate(userId, chatId, username, target.name)
         .catch(logErr("chatMember_userUpsert", userId, chatId));
 
-      void userRepository.syncIdentityAcrossChats(userId, {
-        name: target.name || undefined,
-        username: username ?? null,
-      });
       return;
     }
 

@@ -7,7 +7,7 @@ vi.mock("../../src/utils/logger", () => ({
 vi.mock("../../src/db/repositories/userRepository", () => ({
   userRepository: {
     findOrCreate: vi.fn(async () => ({})),
-    syncIdentityAcrossChats: vi.fn(async () => {}),
+    syncPhotoAcrossChats: vi.fn(async () => {}),
     clearLeftDate: vi.fn(async () => {}),
   },
 }));
@@ -34,7 +34,7 @@ describe("trackUser (finding #3: phantom rows)", () => {
   it("never creates a row for a private chat — the userId is not a chatId", async () => {
     await trackUser(ctx(555001, "private", 555001), next);
     expect(userRepository.findOrCreate).not.toHaveBeenCalled();
-    expect(userRepository.syncIdentityAcrossChats).not.toHaveBeenCalled();
+    expect(userRepository.syncPhotoAcrossChats).not.toHaveBeenCalled();
     expect(next).toHaveBeenCalled();
   });
 

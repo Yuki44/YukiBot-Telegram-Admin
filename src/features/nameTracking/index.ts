@@ -1,14 +1,14 @@
 import { Api } from "grammy";
 import { IChat } from "../../types";
 import { userRepository } from "../../db/repositories/userRepository";
-import { chatRepository } from "../../db/repositories/chatRepository";
 import { logger } from "../../utils/logger";
 import { esc, profileLink, mentionHtml } from "../../bot/helpers/html";
 import { t } from "../../locales/i18n";
 
 /**
  * SangMata-style identity tracker: notices when a user changes their name or @username and
- * keeps the DB fresh. Feature-flagged (trackNameChanges), default off.
+ * keeps the DB fresh. Feature-flagged (trackNameChanges), default off. Notices go to the
+ * chat's `logsTo`; they reach the group itself only when `nameChangesVisible` is also on.
  *
  * Notice: "Usuario <id> ha actualizado su perfil: <before> → <after>". The id is tap-to-copy
  * (<code>); a value is a clickable profile link only when it is the user's *current* value,
@@ -90,10 +90,13 @@ export function buildIdentityChangeMessage(userId: number, before: Identity, aft
 }
 
 async function announce(api: Api, chatConfig: IChat, chatId: number, text: string): Promise<void> {
-  try {
-    await api.sendMessage(chatId, text, { parse_mode: "HTML", disable_notification: true });
-  } catch (err) {
-    logger.error({ action: "name_change_announce_group", chatId, error: String(err) });
+  // The log channel always gets the notice; the group only when the visibility flag is on.
+  if (chatConfig.features?.nameChangesVisible) {
+    try {
+      await api.sendMessage(chatId, text, { parse_mode: "HTML", disable_notification: true });
+    } catch (err) {
+      logger.error({ action: "name_change_announce_group", chatId, error: String(err) });
+    }
   }
   if (chatConfig.logsTo && chatConfig.logsTo !== chatId) {
     try {
@@ -104,7 +107,10 @@ async function announce(api: Api, chatConfig: IChat, chatId: number, text: strin
   }
 }
 
-/** Compare against the stored record, announce any change, then persist the current identity. */
+/**
+ * Compare against this chat's own stored row, announce any change, then persist.
+ * Strictly per-chat: cross-chat propagation is what turned one profile edit into a burst.
+ */
 export async function trackIdentity(
   api: Api,
   chatConfig: IChat,
@@ -119,30 +125,17 @@ export async function trackIdentity(
     return;
   }
 
-  const rows = await userRepository.findAllForUser(userId);
-  const origin = rows.find((r) => r.chatId === chatId);
+  const row = await userRepository.findByUserAndChat(userId, chatId);
+  const before: Identity = { name: row?.name, username: row?.username };
 
-  // A change is announced in every chat whose own stored row is still stale, not just the
-  // one that observed it: the scanner sees a user once per rotation, and stamping only the
-  // origin row left the other chats silent (and re-announcing later from their own turn).
-  const stale = rows.filter(
-    (r) => norm(r.name) && diffIdentity({ name: r.name, username: r.username }, current)
-  );
+  // An unconfirmed row holds an unverified leftover (first name alone, or a lurker never read),
+  // so adopting the first reading silently is what keeps that backlog out of the channel.
+  const change = row?.identityConfirmedAt ? diffIdentity(before, current) : null;
 
-  for (const row of stale) {
-    const config =
-      row.chatId === chatId ? chatConfig : await chatRepository.findByChatId(row.chatId).catch(() => null);
-    if (!config || config.isActive === false || !config.features?.trackNameChanges) continue;
-    if (row.chatId !== chatId && (row.notMemberAt || row.isBanned)) continue;
-
-    const before: Identity = { name: row.name, username: row.username };
-    logger.info({ action: "name_change", chatId: row.chatId, userId, change: diffIdentity(before, current) });
-    await announce(api, config, row.chatId, buildIdentityChangeMessage(userId, before, current));
+  if (change) {
+    logger.info({ action: "name_change", chatId, userId, change });
+    await announce(api, chatConfig, chatId, buildIdentityChangeMessage(userId, before, current));
   }
 
-  if (!origin) await userRepository.updateIdentity(userId, chatId, current.name, current.username);
-  await userRepository.syncIdentityAcrossChats(userId, {
-    name: current.name,
-    username: current.username ?? null,
-  });
+  await userRepository.confirmIdentity(userId, chatId, current.name, current.username);
 }

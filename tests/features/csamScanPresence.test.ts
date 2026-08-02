@@ -27,7 +27,7 @@ vi.mock("../../src/db/repositories/userRepository", () => ({
     recordBioMiss: vi.fn(async () => 1),
     clearBioMiss: vi.fn(async () => {}),
     markNotMember: vi.fn(async () => true),
-    syncIdentityAcrossChats: vi.fn(async () => {}),
+    syncPhotoAcrossChats: vi.fn(async () => {}),
   },
 }));
 
@@ -225,7 +225,7 @@ describe("profile photo cached from the scan (finding #5)", () => {
       })),
     });
     await runBioScanBatch(bot, actor);
-    expect(userRepository.syncIdentityAcrossChats).toHaveBeenCalledWith(
+    expect(userRepository.syncPhotoAcrossChats).toHaveBeenCalledWith(
       USER,
       expect.objectContaining({ photoFileId: "AgACsmall" })
     );
@@ -236,7 +236,7 @@ describe("profile photo cached from the scan (finding #5)", () => {
     const bot = makeBot();
     await runBioScanBatch(bot, actor);
     const photoWrites = vi
-      .mocked(userRepository.syncIdentityAcrossChats)
+      .mocked(userRepository.syncPhotoAcrossChats)
       .mock.calls.filter(([, fields]) => "photoFileId" in fields);
     expect(photoWrites).toHaveLength(0);
   });

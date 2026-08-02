@@ -11,6 +11,7 @@ import { logger } from "../../utils/logger";
 import { SILENCE_DURATION_S } from "../../config/constants";
 import { getActiveRules } from "./cache";
 import { findMatchingRule } from "./matcher";
+import { fullName } from "../../bot/helpers/fullName";
 
 /**
  * Scan each incoming message against the chat's BannedWord rules and dispatch the
@@ -61,7 +62,7 @@ export async function bannedWordsEnforcement(ctx: BotContext, next: NextFunction
     const rule = findMatchingRule(rules, text, threadId);
     if (!rule) return await next();
 
-    const senderName = [sender.first_name, sender.last_name].filter(Boolean).join(" ") || "Usuario";
+    const senderName = fullName(sender) || "Usuario";
     const senderUsername = sender.username;
     const chatName = getChatTitle(ctx);
     const botActor = { id: ctx.me.id, name: ctx.me.first_name, username: ctx.me.username };

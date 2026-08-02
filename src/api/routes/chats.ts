@@ -23,6 +23,7 @@ const FEATURE_KEYS: ReadonlyArray<keyof IChat["features"]> = [
   "welcomeMessage",
   "csamDetection",
   "trackNameChanges",
+  "nameChangesVisible",
   "topicReminders",
 ];
 

@@ -7,6 +7,7 @@ import { adminRepository } from "../../db/repositories/adminRepository";
 import { credentialRepository } from "../../db/repositories/credentialRepository";
 import { logger } from "../../utils/logger";
 import { AuthUser, authenticate } from "../middleware/authenticate";
+import { fullName } from "../../bot/helpers/fullName";
 
 const TOKEN_TTL = "7d";
 const MAX_AUTH_AGE_S = 86400; // 24h, per Telegram spec
@@ -125,7 +126,7 @@ export function createAuthRouter(): Router {
       /* non-fatal — default to false */
     }
 
-    const name = [data.first_name, data.last_name].filter(Boolean).join(" ") || undefined;
+    const name = fullName(data) || undefined;
     const payload: AuthUser = {
       userId: data.id,
       username: data.username,

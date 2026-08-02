@@ -201,18 +201,18 @@ export const userRepository = {
     );
   },
 
-  /** Persist a user's current name/username. Unsets username when removed so it isn't stale. */
-  async updateIdentity(userId: number, chatId: number, name?: string, username?: string): Promise<void> {
-    const set: Record<string, unknown> = {};
+  /** Persist an identity read from Telegram and mark it trustworthy. Unsets a removed username. */
+  async confirmIdentity(userId: number, chatId: number, name?: string, username?: string): Promise<void> {
+    const set: Record<string, unknown> = { identityConfirmedAt: new Date() };
     const update: Record<string, unknown> = { $setOnInsert: { userId, chatId } };
     if (name && name.trim()) set.name = name.trim();
     if (username && username.trim()) set.username = username.trim();
     else update.$unset = { username: 1 };
-    if (Object.keys(set).length > 0) update.$set = set;
+    update.$set = set;
     await User.updateOne({ userId, chatId }, update, { upsert: true, setDefaultsOnInsert: true });
   },
 
-  /** Every row of this user, across all chats. Used to fan out identity announcements. */
+  /** Every row of this user, across all chats. */
   async findAllForUser(userId: number): Promise<IUser[]> {
     return await User.find({ userId });
   },
@@ -293,52 +293,32 @@ export const userRepository = {
   },
 
   /**
-   * Propagate identity-only fields (name/username/photoFileId/photoCheckedAt) across
-   * every chat that already has this userId. Per-chat enforcement state — wasBanned,
-   * isBanned, warnings, isMuted — is deliberately NOT synced (G3): those are chat-scoped.
-   *
-   * Empty/whitespace name is dropped so we never overwrite real identity with a blank value
-   * from a stripped-down Telegram update. An explicit `username: null` means the user removed
-   * their @username and unsets it — otherwise a dropped handle would be re-announced forever.
+   * Propagate the avatar only. Name/@username are per-chat: writing another chat's row would
+   * either silence its notice or fabricate one, and enforcement state is chat-scoped too (G3).
    */
-  async syncIdentityAcrossChats(
+  async syncPhotoAcrossChats(
     userId: number,
     fields: {
-      name?: string | null;
-      username?: string | null;
       photoFileId?: string | null;
       photoCheckedAt?: Date;
     }
   ): Promise<void> {
     const setFields: Record<string, unknown> = {};
-    const unsetFields: Record<string, unknown> = {};
-    if (typeof fields.name === "string" && fields.name.trim().length > 0) {
-      setFields.name = fields.name.trim();
-    }
-    if (typeof fields.username === "string" && fields.username.trim().length > 0) {
-      setFields.username = fields.username.trim();
-    } else if (fields.username === null) {
-      unsetFields.username = 1;
-    }
     if (fields.photoFileId !== undefined) {
       setFields.photoFileId = fields.photoFileId;
     }
     if (fields.photoCheckedAt !== undefined) {
       setFields.photoCheckedAt = fields.photoCheckedAt;
     }
-    if (Object.keys(setFields).length === 0 && Object.keys(unsetFields).length === 0) return;
-
-    const update: Record<string, unknown> = {};
-    if (Object.keys(setFields).length > 0) update.$set = setFields;
-    if (Object.keys(unsetFields).length > 0) update.$unset = unsetFields;
+    if (Object.keys(setFields).length === 0) return;
 
     try {
-      await User.updateMany({ userId }, update);
+      await User.updateMany({ userId }, { $set: setFields });
     } catch (err) {
       // Swallow — caller flows shouldn't fail because a cosmetic sync hit a transient DB error.
       // Logged here instead of at every call site.
       const { logger } = await import("../../utils/logger");
-      logger.warn({ action: "userRepository.syncIdentityAcrossChats", userId, error: String(err) });
+      logger.warn({ action: "userRepository.syncPhotoAcrossChats", userId, error: String(err) });
     }
   },
 

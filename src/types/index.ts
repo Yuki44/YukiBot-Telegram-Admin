@@ -55,8 +55,10 @@ export interface IChat extends Document {
     csamDetection?: boolean;
     /** When true, each user is greeted once (per chat) with the configured `welcome` message on join. */
     welcomeMessage?: boolean;
-    /** When true, name/@username changes are announced (group + logsTo) and the DB is kept fresh. */
+    /** When true, name/@username changes are announced (logsTo, plus the group only when `nameChangesVisible`) and the DB is kept fresh. */
     trackNameChanges?: boolean;
+    /** Sends `trackNameChanges` notices to the group too; off (default) keeps them in `logsTo`. */
+    nameChangesVisible?: boolean;
     /** When true, each topic with a configured reminder reposts it (at most every TOPIC_REMINDER_INTERVAL_MS) on activity. */
     topicReminders?: boolean;
   };
@@ -215,6 +217,8 @@ export interface IUser extends Document {
   lastBioCheckAt?: Date;
   /** Consecutive getChat failures for this user; drives the scanner's presence probe. */
   bioMissCount?: number;
+  /** Undefined = the stored name was never verified against Telegram, so it is not a baseline. */
+  identityConfirmedAt?: Date;
   /**
    * Set when getChatMember confirmed the user is no longer in this chat but the row is
    * kept (warnings pending, or ever banned — G3). Excluded from the bio scan queue.

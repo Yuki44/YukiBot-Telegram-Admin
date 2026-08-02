@@ -4,6 +4,7 @@
 
 import { BotContext } from "../../types";
 import { LogUser } from "./sendLog";
+import { fullName } from "./fullName";
 
 /** Parse command arguments from ctx.match into a trimmed string array. */
 export function parseArgs(ctx: BotContext): string[] {
@@ -13,8 +14,7 @@ export function parseArgs(ctx: BotContext): string[] {
 /** Build a LogUser actor object from ctx.from, or undefined if absent. */
 export function buildActor(ctx: BotContext): LogUser | undefined {
   if (!ctx.from) return undefined;
-  const fullName = ctx.from.first_name + (ctx.from.last_name ? ` ${ctx.from.last_name}` : "");
-  return { id: ctx.from.id, name: fullName, username: ctx.from.username };
+  return { id: ctx.from.id, name: fullName(ctx.from), username: ctx.from.username };
 }
 
 /** Extract the chat title safely (avoids `as any` casts). */

@@ -17,6 +17,7 @@ import { csamImageHashRepository } from "../../db/repositories/csamImageHashRepo
 import { executeCsamAutoBan, executeCsamSilence, CsamTarget } from "../../features/csamDetection/actions";
 import { logger } from "../../utils/logger";
 import { CSAM_OCR_MAX_BYTES, CSAM_PHASH_REVIEW_MAX_DIST } from "../../config/constants";
+import { fullName } from "../helpers/fullName";
 
 /**
  * Extract a SINGLE STILL image to OCR from a message. Never a video stream —
@@ -206,7 +207,7 @@ export async function csamImageScan(ctx: BotContext, next: NextFunction): Promis
 
     const target: CsamTarget = {
       userId: sender.id,
-      name: [sender.first_name, sender.last_name].filter(Boolean).join(" "),
+      name: fullName(sender),
       username: sender.username,
     };
     const summary = summarizeImageMatch(result);
