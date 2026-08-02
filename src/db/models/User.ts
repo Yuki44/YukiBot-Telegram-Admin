@@ -61,6 +61,9 @@ const userSchema = new Schema<IUser>({
   notMemberAt: {
     type: Date,
   },
+  identityConfirmedAt: {
+    type: Date,
+  },
   languageGraceGivenAt: {
     type: Date,
   },

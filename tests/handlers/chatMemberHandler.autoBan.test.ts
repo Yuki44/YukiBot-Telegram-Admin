@@ -8,7 +8,7 @@ vi.mock("../../src/db/repositories/userRepository", () => ({
     upsert: vi.fn().mockResolvedValue(undefined),
     clearLeftDate: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
-    syncIdentityAcrossChats: vi.fn().mockResolvedValue(undefined),
+    syncPhotoAcrossChats: vi.fn().mockResolvedValue(undefined),
   },
 }));
 vi.mock("../../src/db/repositories/adminRepository", () => ({

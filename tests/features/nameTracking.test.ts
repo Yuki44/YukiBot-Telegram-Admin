@@ -4,13 +4,8 @@ vi.mock("../../src/utils/logger", () => ({ logger: { error: vi.fn(), warn: vi.fn
 vi.mock("../../src/db/repositories/userRepository", () => ({
   userRepository: {
     findByUserAndChat: vi.fn(),
-    findAllForUser: vi.fn(async () => []),
-    updateIdentity: vi.fn(async () => {}),
-    syncIdentityAcrossChats: vi.fn(async () => {}),
+    confirmIdentity: vi.fn(async () => {}),
   },
-}));
-vi.mock("../../src/db/repositories/chatRepository", () => ({
-  chatRepository: { findByChatId: vi.fn(async () => null) },
 }));
 
 import {
@@ -19,7 +14,6 @@ import {
   trackIdentity,
 } from "../../src/features/nameTracking";
 import { userRepository } from "../../src/db/repositories/userRepository";
-import { chatRepository } from "../../src/db/repositories/chatRepository";
 import { fullName } from "../../src/bot/helpers/fullName";
 import { IChat } from "../../src/types";
 
@@ -101,125 +95,93 @@ describe("buildIdentityChangeMessage", () => {
 });
 
 describe("trackIdentity", () => {
-  const chatConfig = {
-    chatId: -100111,
-    logsTo: -100999,
-    features: { trackNameChanges: true },
-  } as unknown as IChat;
+  const config = (nameChangesVisible: boolean): IChat =>
+    ({
+      chatId: -100111,
+      logsTo: -100999,
+      features: { trackNameChanges: true, nameChangesVisible },
+    }) as unknown as IChat;
   const api = { sendMessage: vi.fn(async () => ({ message_id: 1 })) } as never;
 
-  const rows = (...r: Record<string, unknown>[]): void => {
-    vi.mocked(userRepository.findAllForUser).mockResolvedValue(r as never);
-  };
-  const otherChat = (trackNameChanges: boolean): void => {
-    vi.mocked(chatRepository.findByChatId).mockResolvedValue({
-      chatId: -100222,
-      features: { trackNameChanges },
-    } as never);
+  const confirmed = new Date("2026-08-01T00:00:00Z");
+  const row = (r: Record<string, unknown> | null): void => {
+    vi.mocked(userRepository.findByUserAndChat).mockResolvedValue(r as never);
   };
   const dests = (): unknown[] =>
     (api as { sendMessage: ReturnType<typeof vi.fn> }).sendMessage.mock.calls.map((c) => c[0]);
 
   beforeEach(() => {
-    vi.mocked(userRepository.findAllForUser).mockReset();
-    vi.mocked(userRepository.findAllForUser).mockResolvedValue([]);
-    vi.mocked(userRepository.updateIdentity).mockClear();
-    vi.mocked(userRepository.syncIdentityAcrossChats).mockClear();
-    vi.mocked(chatRepository.findByChatId).mockReset();
-    vi.mocked(chatRepository.findByChatId).mockResolvedValue(null);
+    vi.mocked(userRepository.findByUserAndChat).mockReset();
+    vi.mocked(userRepository.findByUserAndChat).mockResolvedValue(null as never);
+    vi.mocked(userRepository.confirmIdentity).mockClear();
     (api as { sendMessage: ReturnType<typeof vi.fn> }).sendMessage.mockClear();
   });
 
-  it("announces to the group AND the log channel on a change, then persists", async () => {
-    rows({ userId: 42, chatId: -100111, name: "Simo", username: "simo" });
+  it("sends only to the log channel while nameChangesVisible is off", async () => {
+    row({ userId: 42, chatId: -100111, name: "Simo", username: "simo", identityConfirmedAt: confirmed });
 
-    await trackIdentity(api, chatConfig, 42, -100111, { name: "Simon", username: "simo" });
+    await trackIdentity(api, config(false), 42, -100111, { name: "Simon", username: "simo" });
 
-    expect(dests()).toContain(-100111); // group
-    expect(dests()).toContain(-100999); // logsTo
-    expect(userRepository.syncIdentityAcrossChats).toHaveBeenCalledWith(42, {
-      name: "Simon",
-      username: "simo",
-    });
+    expect(dests()).toEqual([-100999]);
+    expect(userRepository.confirmIdentity).toHaveBeenCalledWith(42, -100111, "Simon", "simo");
+  });
+
+  it("adds the group once nameChangesVisible is on", async () => {
+    row({ userId: 42, chatId: -100111, name: "Simo", username: "simo", identityConfirmedAt: confirmed });
+
+    await trackIdentity(api, config(true), 42, -100111, { name: "Simon", username: "simo" });
+
+    expect(dests()).toContain(-100111);
+    expect(dests()).toContain(-100999);
+  });
+
+  // The incident: rows never verified against Telegram held a first-name-only leftover, so the
+  // first honest reading looked like thousands of simultaneous renames.
+  it("adopts the first confirmed reading silently, then announces the next change", async () => {
+    row({ userId: 42, chatId: -100111, name: "Henry", username: "henry" });
+
+    await trackIdentity(api, config(true), 42, -100111, { name: "Henry B", username: "henry" });
+
+    expect((api as { sendMessage: ReturnType<typeof vi.fn> }).sendMessage).not.toHaveBeenCalled();
+    expect(userRepository.confirmIdentity).toHaveBeenCalledWith(42, -100111, "Henry B", "henry");
+
+    row({ userId: 42, chatId: -100111, name: "Henry B", username: "henry", identityConfirmedAt: confirmed });
+    await trackIdentity(api, config(true), 42, -100111, { name: "Henry C", username: "henry" });
+
+    expect(dests()).toContain(-100111);
   });
 
   // Deleted accounts resolve to an empty name: announcing printed "Va (@vavabaa) → " and
   // persisting would have blanked the last good name we had for them.
   it("ignores a blank-name observation: no announcement, no write", async () => {
-    rows({ userId: 42, chatId: -100111, name: "Va", username: "vavabaa" });
+    row({ userId: 42, chatId: -100111, name: "Va", username: "vavabaa", identityConfirmedAt: confirmed });
 
-    await trackIdentity(api, chatConfig, 42, -100111, { name: "  ", username: undefined });
-
-    expect((api as { sendMessage: ReturnType<typeof vi.fn> }).sendMessage).not.toHaveBeenCalled();
-    expect(userRepository.syncIdentityAcrossChats).not.toHaveBeenCalled();
-    expect(userRepository.updateIdentity).not.toHaveBeenCalled();
-  });
-
-  it("first sighting (no stored record) never announces, only persists — no notify loop", async () => {
-    rows();
-
-    await trackIdentity(api, chatConfig, 42, -100111, { name: "Simon", username: "simon" });
+    await trackIdentity(api, config(true), 42, -100111, { name: "  ", username: undefined });
 
     expect((api as { sendMessage: ReturnType<typeof vi.fn> }).sendMessage).not.toHaveBeenCalled();
-    expect(userRepository.updateIdentity).toHaveBeenCalledWith(42, -100111, "Simon", "simon");
+    expect(userRepository.confirmIdentity).not.toHaveBeenCalled();
   });
 
-  // Finding #2: updating only the observing chat's row left the other chat stale, so the
-  // same change was announced again days later from that chat's own rotation turn.
-  it("persists to every row of the user, not just the observing chat's", async () => {
-    rows(
-      { userId: 42, chatId: -100111, name: "Simo", username: "simo" },
-      { userId: 42, chatId: -100222, name: "Simo", username: "simo" }
-    );
-    otherChat(false);
+  it("first sighting (no stored row) never announces, only persists — no notify loop", async () => {
+    row(null);
 
-    await trackIdentity(api, chatConfig, 42, -100111, { name: "Simon", username: "simo" });
+    await trackIdentity(api, config(true), 42, -100111, { name: "Simon", username: "simon" });
 
-    expect(userRepository.syncIdentityAcrossChats).toHaveBeenCalledWith(42, {
-      name: "Simon",
-      username: "simo",
-    });
+    expect((api as { sendMessage: ReturnType<typeof vi.fn> }).sendMessage).not.toHaveBeenCalled();
+    expect(userRepository.confirmIdentity).toHaveBeenCalledWith(42, -100111, "Simon", "simon");
   });
 
-  // Finding #4: the second chat's rows were stamped by the first chat's scan, so they never
-  // came due and that chat never announced anything.
-  it("announces in every tracking chat whose stored row is stale", async () => {
-    rows(
-      { userId: 42, chatId: -100111, name: "Simo", username: "simo" },
-      { userId: 42, chatId: -100222, name: "Simo", username: "simo" }
-    );
-    otherChat(true);
+  // One profile edit used to fan out into every chat at once. Each chat now reports it once,
+  // from its own observation, and touches nothing but its own row.
+  it("reads and writes only the observing chat's row", async () => {
+    row({ userId: 42, chatId: -100111, name: "Simo", username: "simo", identityConfirmedAt: confirmed });
 
-    await trackIdentity(api, chatConfig, 42, -100111, { name: "Simon", username: "simo" });
+    await trackIdentity(api, config(true), 42, -100111, { name: "Simon", username: "simo" });
 
-    expect(dests()).toContain(-100111);
-    expect(dests()).toContain(-100222);
-  });
-
-  it("never announces in a chat the user has left", async () => {
-    rows(
-      { userId: 42, chatId: -100111, name: "Simo", username: "simo" },
-      { userId: 42, chatId: -100222, name: "Simo", username: "simo", notMemberAt: new Date() }
-    );
-    otherChat(true);
-
-    await trackIdentity(api, chatConfig, 42, -100111, { name: "Simon", username: "simo" });
-
+    expect(userRepository.findByUserAndChat).toHaveBeenCalledWith(42, -100111);
+    expect(userRepository.confirmIdentity).toHaveBeenCalledTimes(1);
+    expect(userRepository.confirmIdentity).toHaveBeenCalledWith(42, -100111, "Simon", "simo");
     expect(dests()).not.toContain(-100222);
-  });
-
-  // G16: each chat's own flag governs its notice — the observing chat's flag doesn't leak.
-  it("stays silent in a chat that has trackNameChanges off", async () => {
-    rows(
-      { userId: 42, chatId: -100111, name: "Simo", username: "simo" },
-      { userId: 42, chatId: -100222, name: "Simo", username: "simo" }
-    );
-    otherChat(false);
-
-    await trackIdentity(api, chatConfig, 42, -100111, { name: "Simon", username: "simo" });
-
-    expect(dests()).not.toContain(-100222);
-    expect(dests()).toContain(-100111);
   });
 });
 

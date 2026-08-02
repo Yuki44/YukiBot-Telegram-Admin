@@ -29,12 +29,6 @@ export const trackUser: Middleware<BotContext> = async (ctx, next) => {
       // A message is proof of presence: clear any exit marker the scanner set, so a rejoin we
       // never saw can't keep the user out of the bio scan queue.
       void userRepository.clearLeftDate(from.id, chatId);
-      // Propagate name/username to every other chat that knows this user so the
-      // dashboard stays consistent without an explicit /refresh. Fire-and-forget.
-      void userRepository.syncIdentityAcrossChats(from.id, {
-        name: fullName(from),
-        username: from.username ?? null,
-      });
     }
   }
 

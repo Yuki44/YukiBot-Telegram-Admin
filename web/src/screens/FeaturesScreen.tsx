@@ -62,7 +62,12 @@ const FEATURE_META: FeatureMeta[] = [
   {
     id: "trackNameChanges",
     name: "Seguimiento de nombres",
-    desc: "Avisa (en el grupo y en el canal de registro) cuando alguien cambia su nombre o @usuario, y mantiene sus datos al día.",
+    desc: "Detecta cuándo alguien cambia su nombre o @usuario y mantiene sus datos al día. El aviso va siempre al canal de registro.",
+  },
+  {
+    id: "nameChangesVisible",
+    name: "Mostrar cambios de nombre en el grupo",
+    desc: "Publica también en el grupo los avisos de «Seguimiento de nombres». Si está apagado, solo se ven en el canal de registro.",
   },
   {
     id: "topicReminders",

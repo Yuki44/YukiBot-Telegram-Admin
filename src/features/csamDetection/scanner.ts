@@ -240,7 +240,7 @@ async function checkUserBio(
   // real photo is written: a response without one may just mean it isn't visible to us, and
   // blanking a known avatar would also suppress the dashboard's own refresh path.
   if (profile.photoFileId) {
-    void userRepository.syncIdentityAcrossChats(target.userId, {
+    void userRepository.syncPhotoAcrossChats(target.userId, {
       photoFileId: profile.photoFileId,
       photoCheckedAt: new Date(),
     });

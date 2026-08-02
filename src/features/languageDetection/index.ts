@@ -5,6 +5,7 @@ import { isCandidate } from "./preScreen";
 import { classifyLanguage } from "./classifier";
 import { handleLanguageOffense } from "./actions";
 import { logger } from "../../utils/logger";
+import { fullName } from "../../bot/helpers/fullName";
 
 export async function languageDetection(ctx: BotContext, next: NextFunction): Promise<void> {
   try {
@@ -35,7 +36,7 @@ export async function languageDetection(ctx: BotContext, next: NextFunction): Pr
 
     logger.info({ action: "languageDetection_match", chatId: msg.chat.id, userId: sender.id, reason });
 
-    const senderName = [sender.first_name, sender.last_name].filter(Boolean).join(" ") || "Usuario";
+    const senderName = fullName(sender) || "Usuario";
     await handleLanguageOffense(ctx, { userId: sender.id, name: senderName, username: sender.username }, msg);
   } catch (err) {
     logger.error({ action: "languageDetection", error: String(err) });

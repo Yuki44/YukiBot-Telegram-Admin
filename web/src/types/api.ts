@@ -46,6 +46,7 @@ export interface ChatFeatures {
   welcomeMessage: boolean;
   csamDetection: boolean;
   trackNameChanges: boolean;
+  nameChangesVisible: boolean;
   topicReminders: boolean;
 }
 

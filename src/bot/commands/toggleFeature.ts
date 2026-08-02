@@ -13,6 +13,7 @@ const VALID_FEATURES = [
   "bannedWordsEnforcement",
   "csamDetection",
   "trackNameChanges",
+  "nameChangesVisible",
   "topicReminders",
 ] as const;
 
@@ -33,7 +34,7 @@ export async function toggleFeatureHandler(ctx: CommandContext<BotContext>) {
 
     if (!featureName || !VALID_FEATURES.includes(featureName as FeatureName)) {
       await ctx.reply(
-        "Valid features: languageDetection, topicFiltering, autoBan, autoWarnSpam, promoSpamDetection, bannedWordsEnforcement, csamDetection, trackNameChanges, topicReminders"
+        "Valid features: languageDetection, topicFiltering, autoBan, autoWarnSpam, promoSpamDetection, bannedWordsEnforcement, csamDetection, trackNameChanges, nameChangesVisible, topicReminders"
       );
       return;
     }

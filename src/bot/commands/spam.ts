@@ -11,6 +11,7 @@ import { sendSpamLog } from "../../features/promoSpamDetection";
 import { SILENCE_DURATION_MS } from "../../config/constants";
 import { recordActivity } from "../../utils/activityLog";
 import { logger } from "../../utils/logger";
+import { fullName } from "../helpers/fullName";
 
 /** Describe media type for non-text messages stored as learned patterns */
 function describeMedia(msg: NonNullable<CommandContext<BotContext>["message"]>): string {
@@ -49,7 +50,7 @@ export async function spamHandler(ctx: CommandContext<BotContext>): Promise<void
     const logsTo = chatConfig.logsTo;
     const topicId = ctx.message?.message_thread_id;
     const chatName = getChatTitle(ctx);
-    const targetName = [target.first_name, target.last_name].filter(Boolean).join(" ");
+    const targetName = fullName(target);
     const targetUsername = target.username;
     const adminId = ctx.from!.id;
 

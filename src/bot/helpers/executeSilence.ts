@@ -18,6 +18,7 @@ import { t } from "../../locales/i18n";
 import { userRepository } from "../../db/repositories/userRepository";
 import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
+import { fullName } from "./fullName";
 
 export interface SilenceOptions {
   /** Delete the target's message (replied-to or last tracked). */
@@ -56,7 +57,7 @@ export async function executeSilence(ctx: BotContext, options: SilenceOptions): 
       target = {
         userId: replyFrom.id,
         username: replyFrom.username,
-        name: replyFrom.first_name + (replyFrom.last_name ? ` ${replyFrom.last_name}` : ""),
+        name: fullName(replyFrom),
         resolvedFromArgs: false,
       };
       replyMessageId = ctx.message!.reply_to_message!.message_id;
