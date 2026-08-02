@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../../src/utils/logger", () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
-vi.mock("../../src/features/nameTracking", () => ({ trackIdentity: vi.fn(async () => {}) }));
+vi.mock("../../src/features/nameTracking", () => ({
+  trackIdentity: vi.fn(async () => false),
+  trackIdentityEverywhere: vi.fn(async () => {}),
+}));
 
 import { nameChangeTracker } from "../../src/bot/handlers/nameChangeTracker";
-import { trackIdentity } from "../../src/features/nameTracking";
+import { trackIdentity, trackIdentityEverywhere } from "../../src/features/nameTracking";
 import { BotContext } from "../../src/types";
 
 const next = vi.fn(async () => {});
@@ -41,5 +44,28 @@ describe("nameChangeTracker gate (G16/G18)", () => {
 
     expect(trackIdentity).toHaveBeenCalled();
     expect(next).toHaveBeenCalled();
+  });
+});
+
+describe("cross-chat propagation", () => {
+  it("propagates a detected change to the user's other chats, skipping this one", async () => {
+    vi.mocked(trackIdentity).mockResolvedValueOnce(true);
+
+    await nameChangeTracker(ctx({ trackNameChanges: true }), next);
+
+    expect(trackIdentityEverywhere).toHaveBeenCalledWith(
+      expect.anything(),
+      42,
+      { name: "Simon B", username: "simon" },
+      -100111
+    );
+  });
+
+  it("spends nothing on other chats when the identity is unchanged", async () => {
+    vi.mocked(trackIdentity).mockResolvedValueOnce(false);
+
+    await nameChangeTracker(ctx({ trackNameChanges: true }), next);
+
+    expect(trackIdentityEverywhere).not.toHaveBeenCalled();
   });
 });

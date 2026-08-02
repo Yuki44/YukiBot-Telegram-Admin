@@ -59,7 +59,7 @@
     "reverted": "↩️ Revertido — silencio quitado, aviso eliminado, mensaje borrado.",
     "revertedWithIssues": "↩️ Revertido (con problemas en: {issues}).",
     "applied": "🛡️ Sanción aplicada.",
-    "adminNotify": "He avisado a {user} por spam @edjoker"
+    "adminNotify": "He avisado a {user} por spam en {chat} @edjoker"
   },
   "language": {
     "graceNotice": "{user} En este chat hablamos solo Español y/o Catalán.",
