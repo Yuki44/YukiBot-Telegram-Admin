@@ -31,12 +31,12 @@ vi.mock("../../src/db/repositories/userRepository", () => ({
   },
 }));
 
-vi.mock("../../src/features/nameTracking", () => ({ trackIdentity: vi.fn(async () => {}) }));
+vi.mock("../../src/features/nameTracking", () => ({ trackIdentityEverywhere: vi.fn(async () => {}) }));
 
 import { runBioScanBatch, isDefinitiveAbsence } from "../../src/features/csamDetection/scanner";
 import { userRepository } from "../../src/db/repositories/userRepository";
 import { chatRepository } from "../../src/db/repositories/chatRepository";
-import { trackIdentity } from "../../src/features/nameTracking";
+import { trackIdentityEverywhere } from "../../src/features/nameTracking";
 import { CSAM_SCAN_MISS_LIMIT } from "../../src/config/constants";
 
 const CHAT = -100111;
@@ -103,7 +103,7 @@ describe("presence probe (finding #1)", () => {
     });
     await runBioScanBatch(bot, actor);
     expect(userRepository.markNotMember).toHaveBeenCalledWith(USER, CHAT);
-    expect(trackIdentity).not.toHaveBeenCalled();
+    expect(trackIdentityEverywhere).not.toHaveBeenCalled();
   });
 
   it("treats an unresolvable member as absent rather than retrying forever", async () => {
@@ -136,7 +136,7 @@ describe("presence probe (finding #1)", () => {
     });
     await runBioScanBatch(bot, actor);
     expect(userRepository.markNotMember).not.toHaveBeenCalled();
-    expect(trackIdentity).toHaveBeenCalledWith(bot.api, expect.anything(), USER, CHAT, {
+    expect(trackIdentityEverywhere).toHaveBeenCalledWith(bot.api, USER, {
       name: "Simon B",
       username: "simon",
     });
@@ -186,8 +186,8 @@ describe("presence probe (finding #1)", () => {
     expect(userRepository.markNotMember).toHaveBeenCalledWith(USER, CHAT);
   });
 
-  // G16: the probe belongs to csamDetection; the identity it yields is a rider on it.
-  it("probes and prunes without announcing when trackNameChanges is off", async () => {
+  // A user who already left yields no identity to record, whatever the flags say.
+  it("probes and prunes without recording an identity for a departed user", async () => {
     vi.mocked(userRepository.recordBioMiss).mockResolvedValue(CSAM_SCAN_MISS_LIMIT);
     const bot = makeBot({
       getChat: vi.fn(async () => {
@@ -197,7 +197,7 @@ describe("presence probe (finding #1)", () => {
     });
     await runBioScanBatch(bot, actor);
     expect(userRepository.markNotMember).toHaveBeenCalledWith(USER, CHAT);
-    expect(trackIdentity).not.toHaveBeenCalled();
+    expect(trackIdentityEverywhere).not.toHaveBeenCalled();
   });
 });
 

@@ -67,6 +67,13 @@ const userSchema = new Schema<IUser>({
   languageGraceGivenAt: {
     type: Date,
   },
+  csamAlertedAt: {
+    type: Date,
+  },
+  csamAlertVerdict: {
+    type: String,
+    enum: ["AUTO_BAN", "SILENCE"],
+  },
 });
 
 // Compound unique index on userId + chatId

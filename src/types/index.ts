@@ -229,7 +229,13 @@ export interface IUser extends Document {
    * reset). Undefined = never given, i.e. their next blatant-language hit is still a grace.
    */
   languageGraceGivenAt?: Date;
+  /** Last CP_ALERTA raised for this user in this chat, and with which verdict. */
+  csamAlertedAt?: Date;
+  csamAlertVerdict?: CsamVerdict;
 }
+
+/** CSAM verdict: a strict bio match bans unattended, anything softer silences for review. */
+export type CsamVerdict = "AUTO_BAN" | "SILENCE";
 
 /**
  * Per-user domain allowance ("Mixtos" in the dashboard).
@@ -269,7 +275,8 @@ export type ActivityLogType =
   | "spam_confirmed"
   | "csam_autoban"
   | "csam_silence"
-  | "message_delete";
+  | "message_delete"
+  | "name_change";
 
 /** Where the action originated. */
 export type ActivityLogSource = "bot" | "panel" | "auto";

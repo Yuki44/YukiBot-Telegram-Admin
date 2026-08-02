@@ -38,7 +38,9 @@ describe("trackUser (finding #3: phantom rows)", () => {
     expect(next).toHaveBeenCalled();
   });
 
-  it("still tracks a real group member", async () => {
+  // Identity here only seeds a new row; findOrCreate never overwrites it, so the
+  // comparison in nameChangeTracker still sees the previous name.
+  it("creates the membership row seeding the identity", async () => {
     await trackUser(ctx(-100222, "supergroup", 555002), next);
     expect(userRepository.findOrCreate).toHaveBeenCalledWith(555002, -100222, "simon", "Simon");
     expect(next).toHaveBeenCalled();

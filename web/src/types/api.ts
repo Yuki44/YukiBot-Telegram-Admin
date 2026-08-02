@@ -226,7 +226,8 @@ export type ActivityLogType =
   | "spam_confirmed"
   | "csam_autoban"
   | "csam_silence"
-  | "message_delete";
+  | "message_delete"
+  | "name_change";
 
 export type ActivityLogSource = "bot" | "panel" | "auto";
 

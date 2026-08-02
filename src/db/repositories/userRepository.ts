@@ -1,6 +1,7 @@
 import { PipelineStage, Types } from "mongoose";
 import { User } from "../models/User";
-import { IUser } from "../../types";
+import { IUser, CsamVerdict } from "../../types";
+import { logger } from "../../utils/logger";
 import { MAX_WARNINGS, NOT_MEMBER_RECHECK_MS } from "../../config/constants";
 
 export type UserListFilter = "all" | "warned" | "silenced" | "banned";
@@ -218,30 +219,28 @@ export const userRepository = {
   },
 
   async findOrCreate(userId: number, chatId: number, username?: string, name?: string): Promise<IUser> {
-    const update: Record<string, unknown> = {
-      $setOnInsert: {
-        userId,
-        chatId,
-        warnings: 0,
-        warningReasons: [],
-        isBanned: false,
-        wasBanned: false,
-      },
+    // Identity is seeded here but never overwritten: nameChangeTracker owns updates, and a
+    // stale $set (a cached admin name, a months-old join) hid the very next real change.
+    const insert: Record<string, unknown> = {
+      userId,
+      chatId,
+      warnings: 0,
+      warningReasons: [],
+      isBanned: false,
+      wasBanned: false,
     };
+    if (username) insert.username = username;
+    if (name) insert.name = name;
 
-    const setFields: Record<string, unknown> = {};
-    if (username) setFields.username = username;
-    if (name) setFields.name = name;
-
-    if (Object.keys(setFields).length > 0) {
-      update.$set = setFields;
-    }
-
-    return await User.findOneAndUpdate({ userId, chatId }, update, {
-      upsert: true,
-      returnDocument: "after",
-      setDefaultsOnInsert: true,
-    });
+    return await User.findOneAndUpdate(
+      { userId, chatId },
+      { $setOnInsert: insert },
+      {
+        upsert: true,
+        returnDocument: "after",
+        setDefaultsOnInsert: true,
+      }
+    );
   },
 
   async incrementWarning(
@@ -400,6 +399,49 @@ export const userRepository = {
   /** Stamp lastBioCheckAt on every chat doc for this user (bio is a global property). */
   async markBioChecked(userId: number, when: Date = new Date()): Promise<void> {
     await User.updateMany({ userId }, { $set: { lastBioCheckAt: when } });
+  },
+
+  /**
+   * Atomically claim the right to raise a CP_ALERTA (false = already raised inside the window).
+   * When the row fails the condition the upsert collides on userId+chatId, and that E11000 is
+   * the "already alerted" answer — what makes two concurrent paths yield exactly one alert.
+   */
+  async claimCsamAlert(
+    userId: number,
+    chatId: number,
+    verdict: CsamVerdict,
+    windowMs: number,
+    now: Date = new Date()
+  ): Promise<boolean> {
+    const cutoff = new Date(now.getTime() - windowMs);
+    const free: Record<string, unknown>[] = [
+      { csamAlertedAt: { $exists: false } },
+      { csamAlertedAt: { $lt: cutoff } },
+    ];
+    // The action changed, so an escalation must reach the admins even inside the window.
+    if (verdict === "AUTO_BAN") free.push({ csamAlertVerdict: "SILENCE" });
+
+    try {
+      await User.updateOne(
+        { userId, chatId, $or: free },
+        { $set: { csamAlertedAt: now, csamAlertVerdict: verdict }, $setOnInsert: { userId, chatId } },
+        { upsert: true, setDefaultsOnInsert: true }
+      );
+      return true;
+    } catch (err) {
+      if ((err as { code?: number }).code === 11000) return false;
+      logger.error({ action: "claimCsamAlert", userId, chatId, error: String(err) });
+      return true; // never swallow an alert because of a DB hiccup
+    }
+  },
+
+  /** Undo a claim whose alert never reached anyone, so the next path can still raise it. */
+  async releaseCsamAlert(userId: number, chatId: number): Promise<void> {
+    try {
+      await User.updateOne({ userId, chatId }, { $unset: { csamAlertedAt: 1, csamAlertVerdict: 1 } });
+    } catch (err) {
+      logger.error({ action: "releaseCsamAlert", userId, chatId, error: String(err) });
+    }
   },
 
   /**

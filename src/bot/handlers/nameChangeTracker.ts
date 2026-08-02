@@ -4,15 +4,20 @@ import { trackIdentity } from "../../features/nameTracking";
 import { fullName } from "../helpers/fullName";
 import { logger } from "../../utils/logger";
 
-/** On every message in a trackNameChanges chat: detect name/@username changes, announce, refresh the DB. */
+/**
+ * On every message: refresh the stored identity and, in a trackNameChanges chat, announce the
+ * change. Persisting here (not in trackUser) is what makes the comparison reliable — the
+ * membership middleware used to overwrite the stored name before this handler could read it,
+ * silently eating one change per user after every restart.
+ */
 export async function nameChangeTracker(ctx: BotContext, next: NextFunction): Promise<void> {
   try {
     const chatConfig = ctx.chatConfig;
-    if (!chatConfig?.features?.trackNameChanges) return await next();
+    if (!chatConfig) return await next();
 
     const msg = ctx.message;
     const from = msg?.from;
-    if (!msg || !from || from.is_bot) return await next();
+    if (!msg || !from || from.is_bot || msg.chat.type === "private") return await next();
 
     const current = {
       name: fullName(from),

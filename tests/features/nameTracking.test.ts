@@ -4,16 +4,23 @@ vi.mock("../../src/utils/logger", () => ({ logger: { error: vi.fn(), warn: vi.fn
 vi.mock("../../src/db/repositories/userRepository", () => ({
   userRepository: {
     findByUserAndChat: vi.fn(),
+    findAllForUser: vi.fn(async () => []),
     confirmIdentity: vi.fn(async () => {}),
   },
 }));
+vi.mock("../../src/db/repositories/chatRepository", () => ({
+  chatRepository: { listByChatIds: vi.fn(async () => []) },
+}));
+vi.mock("../../src/utils/activityLog", () => ({ recordActivity: vi.fn() }));
 
 import {
   diffIdentity,
   buildIdentityChangeMessage,
   trackIdentity,
+  trackIdentityEverywhere,
 } from "../../src/features/nameTracking";
 import { userRepository } from "../../src/db/repositories/userRepository";
+import { chatRepository } from "../../src/db/repositories/chatRepository";
 import { fullName } from "../../src/bot/helpers/fullName";
 import { IChat } from "../../src/types";
 
@@ -53,6 +60,22 @@ describe("diffIdentity", () => {
     expect(diffIdentity({ name: "Ana B" }, { name: "Ana  B" })).toBeNull(); // doubled space
     expect(diffIdentity({ name: "José" }, { name: "Jose\u0301" })).toBeNull(); // NFC vs NFD
     expect(diffIdentity({ name: "Ana" }, { name: "\u200EAna" })).toBeNull(); // direction mark
+  });
+
+  // Seen in production: a name of soft hyphens printed "­­­ (@x) → ­­­", a notice with two
+  // empty halves. It renders as nothing, so it must compare as nothing and show a placeholder.
+  it("treats a name built from invisible characters as unreadable, not as content", () => {
+    const invisible = "\u00AD\u00AD\u00AD";
+    const filler = "\u3164\u115F";
+    expect(diffIdentity({ name: invisible }, { name: filler })).toBeNull();
+    expect(diffIdentity({ name: invisible }, { name: "Ana" })?.nameChange).toEqual({
+      from: "(nombre invisible)",
+      to: "Ana",
+    });
+    // The username still changes on its own, and that is what gets announced.
+    expect(diffIdentity({ name: invisible, username: "licuadodefresas" }, { name: invisible })?.usernameChange).toEqual(
+      { from: "licuadodefresas", to: undefined }
+    );
   });
 });
 
@@ -183,8 +206,58 @@ describe("trackIdentity", () => {
     expect(userRepository.confirmIdentity).toHaveBeenCalledWith(42, -100111, "Simon", "simo");
     expect(dests()).not.toContain(-100222);
   });
-});
 
+  // Refreshing the row is bookkeeping; only the notice belongs to the feature.
+  it("persists without announcing when trackNameChanges is off", async () => {
+    row({ userId: 42, chatId: -100111, name: "Simo", username: "simo", identityConfirmedAt: confirmed });
+    const off = {
+      chatId: -100111,
+      logsTo: -100999,
+      features: { trackNameChanges: false },
+    } as unknown as IChat;
+
+    await trackIdentity(api, off, 42, -100111, { name: "Simon", username: "simo" });
+
+    expect((api as { sendMessage: ReturnType<typeof vi.fn> }).sendMessage).not.toHaveBeenCalled();
+    expect(userRepository.confirmIdentity).toHaveBeenCalledWith(42, -100111, "Simon", "simo");
+  });
+
+  // The rotation stamps lastBioCheckAt on every row of a user, so one read has to serve every
+  // chat: confirming only the chat that came due left the others months behind.
+  it("applies one observation to every chat the user belongs to, each against its own row", async () => {
+    vi.mocked(userRepository.findAllForUser).mockResolvedValue([
+      { userId: 42, chatId: -100111 },
+      { userId: 42, chatId: -100222 },
+    ] as never);
+    vi.mocked(chatRepository.listByChatIds).mockResolvedValue([
+      { chatId: -100111, logsTo: -100999, features: { trackNameChanges: true } },
+      { chatId: -100222, logsTo: -100888, features: { trackNameChanges: false } },
+    ] as never);
+    vi.mocked(userRepository.findByUserAndChat).mockImplementation(
+      async (userId: number, chatId: number) =>
+        ({ userId, chatId, name: "Simo", username: "simo", identityConfirmedAt: confirmed }) as never
+    );
+
+    await trackIdentityEverywhere(api, 42, { name: "Simon", username: "simo" });
+
+    expect(userRepository.confirmIdentity).toHaveBeenCalledWith(42, -100111, "Simon", "simo");
+    expect(userRepository.confirmIdentity).toHaveBeenCalledWith(42, -100222, "Simon", "simo");
+    // Each chat still decides on its own flag (G16): only the tracking one announces.
+    expect(dests()).toEqual([-100999]);
+  });
+  // The invisible-name case the admins saw: the notice must still say what actually changed.
+  it("spells out a dropped @handle instead of silently losing the token", () => {
+    const invisible = "\u00AD\u00AD\u00AD";
+    const msg = buildIdentityChangeMessage(
+      7946622105,
+      { name: invisible, username: "licuadodefresas" },
+      { name: invisible }
+    );
+    expect(msg).toContain("(nombre invisible)");
+    expect(msg).toContain("<code>@licuadodefresas</code>");
+    expect(msg).toContain("sin @usuario");
+  });
+});
 describe("identity captured from the CSAM rotation", () => {
   // G17: the scanner derives the name from a getChat response, the message path from
   // ctx.from. Both must use fullName or the rotation invents phantom profile changes.

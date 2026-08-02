@@ -8,6 +8,7 @@ import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
 import { t } from "../../locales/i18n";
 import { enqueueUrgentBioCheck } from "../../features/csamDetection/scanner";
+import { trackIdentity } from "../../features/nameTracking";
 
 export interface JoinUser {
   id: number;
@@ -59,13 +60,17 @@ export async function handleUserJoin(
 
   let record;
   try {
-    // Persist the full name (first+last) so it agrees with what nameTracking compares against (G17);
-    // `name` (first-only) is the welcome-address fallback below, not what we store.
     record = await userRepository.findOrCreate(userId, chatId, username, user.fullName);
   } catch (err) {
     logger.error({ action: "handleUserJoin_findOrCreate", userId, chatId, error: String(err) });
     return { ok: false, autobanned: false };
   }
+
+  // A join is a fresh reading: someone who renamed while away is caught here, not on their
+  // first message — and the row is confirmed either way, so the change can't be swallowed.
+  void trackIdentity(api, chatConfig, userId, chatId, { name: user.fullName, username }).catch((err) =>
+    logger.error({ action: "handleUserJoin_identity", userId, chatId, error: String(err) })
+  );
 
   // Catch a CSAM/impostor bio before the first message, not after it.
   if (chatConfig.features.csamDetection) enqueueUrgentBioCheck(userId, chatId);
