@@ -96,6 +96,12 @@ export const CSAM_SCAN_HEARTBEAT_MS = 30 * 60 * 1000;
  */
 export const CSAM_URGENT_COOLDOWN_MS = 10 * 60 * 1000;
 
+/**
+ * Window suppressing a second CP_ALERTA for the same user and chat: the image tier and the
+ * bio rotation flag one post seconds apart. It spans the urgent bio check that follows.
+ */
+export const CSAM_ALERT_DEDUP_MS = CSAM_URGENT_COOLDOWN_MS;
+
 /** How long a sent message's id is kept around for the on-ban bulk-delete (seconds). */
 export const CSAM_RECENT_MESSAGE_TTL_S = 48 * 60 * 60;
 

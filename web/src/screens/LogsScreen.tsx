@@ -206,6 +206,13 @@ function metaFor(type: ActivityLogType): TypeMeta {
         fg: "var(--danger-fg)",
         label: "Mensajes borrados",
       };
+    case "name_change":
+      return {
+        icon: () => I.user({ size: 14 }),
+        bg: "var(--info-bg)",
+        fg: "var(--info-fg)",
+        label: "Perfil actualizado",
+      };
   }
 }
 

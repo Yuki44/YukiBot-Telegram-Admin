@@ -34,11 +34,12 @@ describe("nameChangeTracker gate (G16/G18)", () => {
     expect(next).toHaveBeenCalled();
   });
 
-  // The modifier enables nothing on its own: it can't resurrect a feature its owner turned off.
-  it("tracks nothing when trackNameChanges is off, even with nameChangesVisible on", async () => {
+  // Refreshing the stored identity is membership bookkeeping every chat already did through
+  // trackUser; only the notice is the feature, and trackIdentity is what gates it on the flag.
+  it("still refreshes the identity when trackNameChanges is off", async () => {
     await nameChangeTracker(ctx({ trackNameChanges: false, nameChangesVisible: true }), next);
 
-    expect(trackIdentity).not.toHaveBeenCalled();
+    expect(trackIdentity).toHaveBeenCalled();
     expect(next).toHaveBeenCalled();
   });
 });

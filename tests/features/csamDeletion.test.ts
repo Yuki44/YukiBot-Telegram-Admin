@@ -9,7 +9,11 @@ vi.mock("../../src/db/repositories/chatRepository", () => ({
   chatRepository: { listAll: vi.fn() },
 }));
 vi.mock("../../src/db/repositories/userRepository", () => ({
-  userRepository: { upsert: vi.fn(async () => undefined) },
+  userRepository: {
+    upsert: vi.fn(async () => undefined),
+    claimCsamAlert: vi.fn(async () => true),
+    releaseCsamAlert: vi.fn(async () => undefined),
+  },
 }));
 
 import {

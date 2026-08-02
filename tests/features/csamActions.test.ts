@@ -9,8 +9,16 @@ import {
   sendCsamAlert,
   chunk,
 } from "../../src/features/csamDetection/actions";
+import { userRepository } from "../../src/db/repositories/userRepository";
+import { CSAM_ALERT_DEDUP_MS } from "../../src/config/constants";
 
 vi.mock("../../src/utils/logger", () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
+vi.mock("../../src/db/repositories/userRepository", () => ({
+  userRepository: {
+    claimCsamAlert: vi.fn(async () => true),
+    releaseCsamAlert: vi.fn(async () => undefined),
+  },
+}));
 
 describe("csam callback data", () => {
   it("round-trips ban/qsil/undo verdicts", () => {
@@ -102,7 +110,7 @@ describe("sendCsamAlert notify-chat keyboard", () => {
     const sendMessage = vi.fn().mockResolvedValue({ message_id: 999 });
     const api = { sendMessage } as unknown as Api;
 
-    await sendCsamAlert(api, makeChatConfig(), alert);
+    await sendCsamAlert(api, makeChatConfig(), alert, "SILENCE", 42);
 
     const notifyCall = sendMessage.mock.calls.find((c) => c[0] === -1003333333333)!;
     const kb = notifyCall[2].reply_markup.inline_keyboard[0][0] as { url?: string };
@@ -116,7 +124,7 @@ describe("sendCsamAlert notify-chat keyboard", () => {
       .mockResolvedValueOnce({ message_id: 1 });
     const api = { sendMessage } as unknown as Api;
 
-    await sendCsamAlert(api, makeChatConfig(), alert);
+    await sendCsamAlert(api, makeChatConfig(), alert, "SILENCE", 42);
 
     const notifyCall = sendMessage.mock.calls.find((c) => c[0] === -1003333333333)!;
     expect(notifyCall[2].reply_markup).toBeUndefined();
@@ -126,10 +134,47 @@ describe("sendCsamAlert notify-chat keyboard", () => {
     const sendMessage = vi.fn().mockResolvedValue({ message_id: 1 });
     const api = { sendMessage } as unknown as Api;
 
-    await sendCsamAlert(api, makeChatConfig({ logsTo: undefined }), alert);
+    await sendCsamAlert(api, makeChatConfig({ logsTo: undefined }), alert, "SILENCE", 42);
 
     const notifyCall = sendMessage.mock.calls.find((c) => c[0] === -1003333333333)!;
     expect(notifyCall[2].reply_markup).toBe(alert.keyboard);
+  });
+
+  // The image tier and the bio rotation flag the same post seconds apart; the admins were
+  // getting the identical CP_ALERTA twice for a single action.
+  it("stays silent when the claim says this user was already alerted", async () => {
+    vi.mocked(userRepository.claimCsamAlert).mockResolvedValueOnce(false);
+    const sendMessage = vi.fn().mockResolvedValue({ message_id: 1 });
+    const api = { sendMessage } as unknown as Api;
+
+    await sendCsamAlert(api, makeChatConfig(), alert, "SILENCE", 42);
+
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("claims per chat, per verdict — an escalation is a different claim", async () => {
+    vi.mocked(userRepository.claimCsamAlert).mockClear();
+    const sendMessage = vi.fn().mockResolvedValue({ message_id: 1 });
+    const api = { sendMessage } as unknown as Api;
+
+    await sendCsamAlert(api, makeChatConfig(), alert, "AUTO_BAN", 42);
+
+    expect(userRepository.claimCsamAlert).toHaveBeenCalledWith(
+      42,
+      -1001111111111,
+      "AUTO_BAN",
+      CSAM_ALERT_DEDUP_MS
+    );
+  });
+
+  // A claim that delivered nothing must not lock the other path out of alerting.
+  it("releases the claim when every destination fails", async () => {
+    const sendMessage = vi.fn().mockRejectedValue(new Error("down"));
+    const api = { sendMessage } as unknown as Api;
+
+    await sendCsamAlert(api, makeChatConfig({ notifyChatId: undefined }), alert, "SILENCE", 42);
+
+    expect(userRepository.releaseCsamAlert).toHaveBeenCalledWith(42, -1001111111111);
   });
 });
 

@@ -1,12 +1,12 @@
 import { Api, InlineKeyboard } from "grammy";
-import { IChat } from "../../types";
+import { IChat, CsamVerdict } from "../../types";
 import { userRepository } from "../../db/repositories/userRepository";
 import { chatRepository } from "../../db/repositories/chatRepository";
 import { csamRecentMessageRepository } from "../../db/repositories/csamRecentMessageRepository";
 import { recordActivity, ActivityActor } from "../../utils/activityLog";
 import { logger } from "../../utils/logger";
 import { esc, mentionHtml } from "../../bot/helpers/html";
-import { SILENCE_DURATION_S, SILENCE_DURATION_MS } from "../../config/constants";
+import { SILENCE_DURATION_S, SILENCE_DURATION_MS, CSAM_ALERT_DEDUP_MS } from "../../config/constants";
 
 /**
  * CSAM/impostor enforcement + alerting.
@@ -21,7 +21,7 @@ import { SILENCE_DURATION_S, SILENCE_DURATION_MS } from "../../config/constants"
  * carrying inline buttons so a human closes the loop from Telegram.
  */
 
-export type CsamVerdict = "AUTO_BAN" | "SILENCE";
+export type { CsamVerdict };
 export type CsamAction = "ban" | "qsil" | "undo";
 
 /** Appended as the final line of every alert so this handle is pinged in the admin chat. */
@@ -119,12 +119,29 @@ export function buildRegistroKeyboard(chatId: number, messageId: number): Inline
   return new InlineKeyboard().url("📋 Ver registro", `https://t.me/c/${internalId}/${messageId}`);
 }
 
-/** Notify chat only ever gets a redirect to logsTo's buttons — direct buttons only if no logsTo. */
+/**
+ * Notify chat only ever gets a redirect to logsTo's buttons — direct buttons only if no logsTo.
+ * Sends at most one alert per user per chat inside `CSAM_ALERT_DEDUP_MS`: the image tier and the
+ * bio rotation catch the same post seconds apart, and one action deserves one notice.
+ */
 export async function sendCsamAlert(
   api: Api,
   chatConfig: IChat,
-  alert: { logText: string; notifyText: string; keyboard: InlineKeyboard }
+  alert: { logText: string; notifyText: string; keyboard: InlineKeyboard },
+  verdict: CsamVerdict,
+  userId: number
 ): Promise<void> {
+  const claimed = await userRepository.claimCsamAlert(
+    userId,
+    chatConfig.chatId,
+    verdict,
+    CSAM_ALERT_DEDUP_MS
+  );
+  if (!claimed) {
+    logger.info({ action: "csam_alert_deduped", chatId: chatConfig.chatId, userId, verdict });
+    return;
+  }
+
   const notifyDest =
     chatConfig.notifyFlags?.notifyCsam && chatConfig.notifyChatId ? chatConfig.notifyChatId : null;
 
@@ -132,6 +149,7 @@ export async function sendCsamAlert(
   // send must NOT fall back to them, or the one case Registro exists to guard
   // against (real buttons in the busier notify chat) happens anyway.
   let notifyKeyboard: InlineKeyboard | undefined = alert.keyboard;
+  let delivered = false;
 
   if (chatConfig.logsTo) {
     notifyKeyboard = undefined;
@@ -141,6 +159,7 @@ export async function sendCsamAlert(
         reply_markup: alert.keyboard,
       });
       notifyKeyboard = buildRegistroKeyboard(chatConfig.logsTo, sent.message_id);
+      delivered = true;
     } catch (err) {
       logger.error({
         action: "csam_alert_send",
@@ -157,6 +176,7 @@ export async function sendCsamAlert(
         parse_mode: "HTML",
         reply_markup: notifyKeyboard,
       });
+      delivered = true;
     } catch (err) {
       logger.error({
         action: "csam_alert_send",
@@ -166,6 +186,10 @@ export async function sendCsamAlert(
       });
     }
   }
+
+  // A claim that delivered nothing would silence the other path too, leaving the admins with
+  // no alert at all for an action already taken.
+  if (!delivered) await userRepository.releaseCsamAlert(userId, chatConfig.chatId);
 }
 
 // ── Enforcement ──────────────────────────────────────────────────────
@@ -432,7 +456,7 @@ export async function silenceAcrossChats(
       targetUsername: target.username,
       matchSummary,
     });
-    await sendCsamAlert(api, c, alert);
+    await sendCsamAlert(api, c, alert, "SILENCE", target.userId);
     logger.info({ action: "csam_silence", chatId: c.chatId, userId: target.userId });
   }
   return chats.length;
@@ -488,7 +512,7 @@ export async function executeCsamAutoBan(
     matchSummary,
     propagatedTo,
   });
-  await sendCsamAlert(api, chatConfig, alert);
+  await sendCsamAlert(api, chatConfig, alert, "AUTO_BAN", target.userId);
 
   logger.info({ action: "csam_autoban", chatId: chatConfig.chatId, userId: target.userId, propagatedTo });
 }

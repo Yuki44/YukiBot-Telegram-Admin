@@ -30,6 +30,8 @@ const schema = new Schema<IActivityLog>({
       "spam_confirmed",
       "csam_autoban",
       "csam_silence",
+      "message_delete",
+      "name_change",
     ],
     required: true,
   },
