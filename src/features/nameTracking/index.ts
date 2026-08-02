@@ -1,6 +1,7 @@
 import { Api } from "grammy";
 import { IChat } from "../../types";
 import { userRepository } from "../../db/repositories/userRepository";
+import { chatRepository } from "../../db/repositories/chatRepository";
 import { logger } from "../../utils/logger";
 import { esc, profileLink, mentionHtml } from "../../bot/helpers/html";
 import { t } from "../../locales/i18n";
@@ -24,7 +25,15 @@ export interface IdentityChange {
   usernameChange?: { from?: string; to?: string };
 }
 
-const norm = (s?: string): string => (s ?? "").trim();
+/**
+ * Comparison form of a name. Telegram hands the same visible name back in different bytes
+ * (composed vs decomposed accents, stray direction marks, doubled spaces), and each variant
+ * would otherwise be announced as a change that reads "Ana → Ana". Emoji are left untouched:
+ * ZWJ and variation selectors are part of the glyph, so "👨‍👩‍👧" and "❤️" survive intact.
+ */
+const INVISIBLE = /[\u200B\u200E\u200F\u2060\uFEFF]/g;
+const norm = (s?: string | null): string =>
+  (s ?? "").normalize("NFC").replace(INVISIBLE, "").replace(/\s+/g, " ").trim();
 
 /** Pure diff. null = nothing to announce. A first sighting (no stored name) is never a change. */
 export function diffIdentity(stored: Identity, current: Identity): IdentityChange | null {
@@ -43,22 +52,40 @@ export function diffIdentity(stored: Identity, current: Identity): IdentityChang
   return change.nameChange || change.usernameChange ? change : null;
 }
 
+interface SideOptions {
+  linkName: boolean;
+  linkUser: boolean;
+  boldName?: boolean;
+  boldUser?: boolean;
+}
+
+const bold = (html: string, on?: boolean): string => (on ? `<b>${html}</b>` : html);
+
 /** Renders one side ("Name (@user)"), linking each token only when it is the current value. */
-function renderSide(userId: number, id: Identity, nameCurrent: boolean, userCurrent: boolean): string {
+function renderSide(userId: number, id: Identity, opts: SideOptions): string {
   const name = norm(id.name);
   const username = norm(id.username);
-  const namePart = nameCurrent ? profileLink(userId, name) : esc(name);
+  const namePart = bold(opts.linkName ? profileLink(userId, name) : esc(name), opts.boldName);
   if (!username) return namePart;
-  const userPart = userCurrent ? mentionHtml(userId, name, username) : `@${esc(username)}`;
+  // Replaced handles go in <code>: Telegram auto-links any bare @handle, so a freed handle
+  // renders as a live link to whoever registered it next — or to nothing at all.
+  const userPart = opts.linkUser
+    ? bold(mentionHtml(userId, name, username), opts.boldUser)
+    : `<code>@${esc(username)}</code>`;
   return `${namePart} (${userPart})`;
 }
 
-/** Builds the one-line HTML notice (pure, testable). */
+/** Builds the HTML notice (pure, testable). */
 export function buildIdentityChangeMessage(userId: number, before: Identity, after: Identity): string {
   const nameChanged = norm(before.name) !== norm(after.name);
   const userChanged = norm(before.username) !== norm(after.username);
-  const from = renderSide(userId, before, !nameChanged, !userChanged);
-  const to = renderSide(userId, after, true, true);
+  const from = renderSide(userId, before, { linkName: !nameChanged, linkUser: !userChanged });
+  const to = renderSide(userId, after, {
+    linkName: true,
+    linkUser: true,
+    boldName: nameChanged,
+    boldUser: userChanged,
+  });
   return t("nameTracker.profileUpdated", { id: userId, from, to });
 }
 
@@ -85,14 +112,37 @@ export async function trackIdentity(
   chatId: number,
   current: Identity
 ): Promise<void> {
-  const stored = await userRepository.findByUserAndChat(userId, chatId);
-  if (stored && norm(stored.name)) {
-    const before: Identity = { name: stored.name, username: stored.username };
-    const change = diffIdentity(before, current);
-    if (change) {
-      logger.info({ action: "name_change", chatId, userId, change });
-      await announce(api, chatConfig, chatId, buildIdentityChangeMessage(userId, before, current));
-    }
+  // A blank name means Telegram gave us nothing readable (deleted account, unresolved peer).
+  // Announcing it prints an empty half ("Va (@vavabaa) → ") and persisting it wipes good data.
+  if (!norm(current.name)) {
+    logger.warn({ action: "name_change_blank_observation", chatId, userId });
+    return;
   }
-  await userRepository.updateIdentity(userId, chatId, current.name, current.username);
+
+  const rows = await userRepository.findAllForUser(userId);
+  const origin = rows.find((r) => r.chatId === chatId);
+
+  // A change is announced in every chat whose own stored row is still stale, not just the
+  // one that observed it: the scanner sees a user once per rotation, and stamping only the
+  // origin row left the other chats silent (and re-announcing later from their own turn).
+  const stale = rows.filter(
+    (r) => norm(r.name) && diffIdentity({ name: r.name, username: r.username }, current)
+  );
+
+  for (const row of stale) {
+    const config =
+      row.chatId === chatId ? chatConfig : await chatRepository.findByChatId(row.chatId).catch(() => null);
+    if (!config || config.isActive === false || !config.features?.trackNameChanges) continue;
+    if (row.chatId !== chatId && (row.notMemberAt || row.isBanned)) continue;
+
+    const before: Identity = { name: row.name, username: row.username };
+    logger.info({ action: "name_change", chatId: row.chatId, userId, change: diffIdentity(before, current) });
+    await announce(api, config, row.chatId, buildIdentityChangeMessage(userId, before, current));
+  }
+
+  if (!origin) await userRepository.updateIdentity(userId, chatId, current.name, current.username);
+  await userRepository.syncIdentityAcrossChats(userId, {
+    name: current.name,
+    username: current.username ?? null,
+  });
 }

@@ -5,7 +5,7 @@ import { userRepository } from "../../db/repositories/userRepository";
 import { csamWatchlistRepository } from "../../db/repositories/csamWatchlistRepository";
 import { evaluateBio, BioResult, WatchConfig } from "./matcher";
 import { executeCsamAutoBan, executeCsamSilence, CsamTarget } from "./actions";
-import { trackIdentity } from "../nameTracking";
+import { trackIdentity, Identity } from "../nameTracking";
 import { fullName } from "../../bot/helpers/fullName";
 import { logger } from "../../utils/logger";
 import { ActivityActor } from "../../utils/activityLog";
@@ -16,6 +16,7 @@ import {
   CSAM_SCAN_MIN_INTERVAL_MS,
   CSAM_SCAN_HEARTBEAT_MS,
   CSAM_URGENT_COOLDOWN_MS,
+  CSAM_SCAN_MISS_LIMIT,
 } from "../../config/constants";
 
 /**
@@ -82,22 +83,102 @@ interface Profile {
   bio: string;
   name: string;
   username?: string;
+  photoFileId: string | null;
 }
 
 async function fetchProfile(bot: Bot<BotContext>, userId: number): Promise<Profile | null> {
   try {
     const chat = await bot.api.getChat(userId);
-    const p = chat as { bio?: string; first_name?: string; last_name?: string; username?: string };
-    return { bio: p.bio ?? "", name: fullName(p), username: p.username };
+    const p = chat as {
+      bio?: string;
+      first_name?: string;
+      last_name?: string;
+      username?: string;
+      photo?: { small_file_id?: string };
+    };
+    return {
+      bio: p.bio ?? "",
+      name: fullName(p),
+      username: p.username,
+      photoFileId: p.photo?.small_file_id ?? null,
+    };
   } catch (err) {
-    // User can't be resolved (never shared a resolvable chat / deleted account).
-    logger.error({ action: "csam_bio_fetch_failed", userId, error: String(err) });
+    // "chat not found" is the normal answer for a peer the bot can't resolve (~9 of every 10
+    // reads). One ERROR line each buried Railway under tens of thousands of entries a day; the
+    // aggregate already lives in the heartbeat's `failed` counter, so only surprises get a line.
+    if (!isUnresolvablePeer(err)) {
+      logger.warn({ action: "csam_bio_fetch_failed", userId, error: String(err) });
+    }
     return null;
   }
 }
 
+/** Telegram's error text, lowercased — the only part of a Bot API failure worth matching on. */
+function errorDescription(err: unknown): string {
+  return String((err as { description?: string })?.description ?? err).toLowerCase();
+}
+
+/** getChat's peer-cache miss — expected background noise, not a failure worth a log line. */
+function isUnresolvablePeer(err: unknown): boolean {
+  const d = errorDescription(err);
+  return d.includes("chat not found") || d.includes("user not found");
+}
+
+/**
+ * Distinguishes "Telegram says this account cannot exist here" from "we couldn't ask right now".
+ * Only the former may delete data: a demoted bot or a transient outage makes every probe in a
+ * chat fail at once, and reading that as absence would wipe good rows wholesale.
+ */
+export function isDefinitiveAbsence(err: unknown): boolean {
+  const d = errorDescription(err);
+  if (d.includes("chat not found") || d.includes("bot is not a member")) return false; // chat-level
+  return (
+    d.includes("user not found") ||
+    d.includes("user_id_invalid") ||
+    d.includes("peer_id_invalid") ||
+    d.includes("participant_id_invalid")
+  );
+}
+
+/**
+ * Presence probe for a user getChat keeps missing. getChatMember resolves regardless of the
+ * peer cache, so it is the only way to tell a pure lurker from someone who already left —
+ * and it carries the identity fields the missed getChat never delivered.
+ * Returns the member's identity, or null when they are absent or the answer was inconclusive.
+ */
+async function probePresence(bot: Bot<BotContext>, chatId: number, userId: number): Promise<Identity | null> {
+  let status: string;
+  let user: { first_name?: string; last_name?: string; username?: string } | undefined;
+  try {
+    const member = await bot.api.getChatMember(chatId, userId);
+    status = member.status;
+    user = member.user;
+  } catch (err) {
+    // Never delete on a maybe: an inconclusive answer keeps the row for a later rotation.
+    if (!isDefinitiveAbsence(err)) {
+      logger.warn({ action: "csam_scan_presence_inconclusive", chatId, userId, error: String(err) });
+      return null;
+    }
+    status = "left";
+  }
+
+  if (status === "left" || status === "kicked") {
+    try {
+      const deleted = await userRepository.markNotMember(userId, chatId);
+      stats.pruned += 1;
+      logger.info({ action: "csam_scan_pruned", chatId, userId, status, deleted });
+    } catch (err) {
+      logger.error({ action: "csam_scan_prune_failed", chatId, userId, error: String(err) });
+    }
+    return null;
+  }
+
+  await userRepository.clearBioMiss(userId, chatId).catch(() => {});
+  return user ? { name: fullName(user), username: user.username } : null;
+}
+
 /** Rotation counters for the heartbeat. */
-const stats = { checked: 0, urgent: 0, failed: 0, hits: 0, identity: 0 };
+const stats = { checked: 0, urgent: 0, failed: 0, hits: 0, identity: 0, pruned: 0 };
 
 /** Snapshot + reset of the heartbeat counters (exported for testing). */
 export function takeScanStats(): typeof stats {
@@ -107,7 +188,24 @@ export function takeScanStats(): typeof stats {
   stats.failed = 0;
   stats.hits = 0;
   stats.identity = 0;
+  stats.pruned = 0;
   return snapshot;
+}
+
+/** Announce/persist an identity observed by the rotation. Gated on its own flag (G16). */
+async function recordIdentity(
+  bot: Bot<BotContext>,
+  chatConfig: IChat,
+  userId: number,
+  identity: Identity
+): Promise<void> {
+  if (!chatConfig.features?.trackNameChanges) return;
+  try {
+    await trackIdentity(bot.api, chatConfig, userId, chatConfig.chatId, identity);
+    stats.identity += 1;
+  } catch (err) {
+    logger.error({ action: "csam_scan_identity", userId, error: String(err) });
+  }
 }
 
 /** Fetch + evaluate one user's bio and act on the verdict. Shared by both queues. */
@@ -123,24 +221,35 @@ async function checkUserBio(
   // can never be resolved must not starve the rotation by retrying forever.
   await userRepository.markBioChecked(target.userId);
   stats.checked += 1;
+
   if (profile === null) {
     stats.failed += 1;
+    const misses = await userRepository.recordBioMiss(target.userId, chatConfig.chatId).catch(() => 0);
+    // Only after repeated misses: the extra call is amortized over the users getChat
+    // will never resolve, so resolvable members keep their full bio cadence.
+    if (misses >= CSAM_SCAN_MISS_LIMIT) {
+      const identity = await probePresence(bot, chatConfig.chatId, target.userId);
+      if (identity) await recordIdentity(bot, chatConfig, target.userId, identity);
+    }
     return;
   }
 
-  // The same getChat response carries the display name and @username, so the rotation
-  // catches a lurker's profile change for free. Gated on its own flag (G16).
-  if (chatConfig.features?.trackNameChanges) {
-    try {
-      await trackIdentity(bot.api, chatConfig, target.userId, chatConfig.chatId, {
-        name: profile.name,
-        username: profile.username,
-      });
-      stats.identity += 1;
-    } catch (err) {
-      logger.error({ action: "csam_scan_identity", userId: target.userId, error: String(err) });
-    }
+  await userRepository.clearBioMiss(target.userId, chatConfig.chatId).catch(() => {});
+
+  // The avatar rides along in the getChat response, so caching it costs no API call. Only a
+  // real photo is written: a response without one may just mean it isn't visible to us, and
+  // blanking a known avatar would also suppress the dashboard's own refresh path.
+  if (profile.photoFileId) {
+    void userRepository.syncIdentityAcrossChats(target.userId, {
+      photoFileId: profile.photoFileId,
+      photoCheckedAt: new Date(),
+    });
   }
+
+  await recordIdentity(bot, chatConfig, target.userId, {
+    name: profile.name,
+    username: profile.username,
+  });
 
   const result = evaluateBio(profile.bio, config);
   if (result.verdict === "NONE") return;

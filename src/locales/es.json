@@ -1,6 +1,6 @@
 {
   "nameTracker": {
-    "profileUpdated": "Usuario <code>{id}</code> ha actualizado su perfil: {from} → {to}"
+    "profileUpdated": "Usuario <code>{id}</code> ha actualizado su perfil:\n{from} → {to}"
   },
   "errors": {
     "userNotFound": "⚠️ No se encontró al usuario.",
