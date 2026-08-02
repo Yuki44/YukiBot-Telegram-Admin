@@ -58,6 +58,16 @@ export const AUTO_DELETE_SHORT_MS = 1_000;
 
 // ── CSAM/impostor rolling bio scanner ────────────────────────────────
 
+/** How many consecutive getChat misses before we spend a tick on a getChatMember presence probe. */
+export const CSAM_SCAN_MISS_LIMIT = 3;
+
+/**
+ * How long a row confirmed absent stays out of the scan queue before we re-probe it. A missed
+ * rejoin (bot offline, or no permission to receive membership updates) must not bench a user
+ * for good — that would be a silent blind spot in the CSAM coverage.
+ */
+export const NOT_MEMBER_RECHECK_MS = 30 * 24 * 60 * 60 * 1000;
+
 /** Spacing (ms) between consecutive getChat calls in the bio scanner (rate-safe). */
 export const CSAM_SCAN_SPACING_MS = 1_500;
 

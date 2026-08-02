@@ -213,6 +213,13 @@ export interface IUser extends Document {
   photoCheckedAt?: Date;
   /** Last time the rolling CSAM bio scanner checked this user's bio (undefined = never). */
   lastBioCheckAt?: Date;
+  /** Consecutive getChat failures for this user; drives the scanner's presence probe. */
+  bioMissCount?: number;
+  /**
+   * Set when getChatMember confirmed the user is no longer in this chat but the row is
+   * kept (warnings pending, or ever banned — G3). Excluded from the bio scan queue.
+   */
+  notMemberAt?: Date;
   /**
    * When the one-time languageDetection grace notice was given (per userId+chatId, never
    * reset). Undefined = never given, i.e. their next blatant-language hit is still a grace.

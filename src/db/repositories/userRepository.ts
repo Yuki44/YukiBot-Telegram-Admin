@@ -1,7 +1,7 @@
 import { PipelineStage, Types } from "mongoose";
 import { User } from "../models/User";
 import { IUser } from "../../types";
-import { MAX_WARNINGS } from "../../config/constants";
+import { MAX_WARNINGS, NOT_MEMBER_RECHECK_MS } from "../../config/constants";
 
 export type UserListFilter = "all" | "warned" | "silenced" | "banned";
 
@@ -212,6 +212,11 @@ export const userRepository = {
     await User.updateOne({ userId, chatId }, update, { upsert: true, setDefaultsOnInsert: true });
   },
 
+  /** Every row of this user, across all chats. Used to fan out identity announcements. */
+  async findAllForUser(userId: number): Promise<IUser[]> {
+    return await User.find({ userId });
+  },
+
   async findOrCreate(userId: number, chatId: number, username?: string, name?: string): Promise<IUser> {
     const update: Record<string, unknown> = {
       $setOnInsert: {
@@ -292,8 +297,9 @@ export const userRepository = {
    * every chat that already has this userId. Per-chat enforcement state — wasBanned,
    * isBanned, warnings, isMuted — is deliberately NOT synced (G3): those are chat-scoped.
    *
-   * Empty/whitespace name and username are dropped so we never overwrite real identity
-   * with a blank value from a stripped-down Telegram update.
+   * Empty/whitespace name is dropped so we never overwrite real identity with a blank value
+   * from a stripped-down Telegram update. An explicit `username: null` means the user removed
+   * their @username and unsets it — otherwise a dropped handle would be re-announced forever.
    */
   async syncIdentityAcrossChats(
     userId: number,
@@ -305,11 +311,14 @@ export const userRepository = {
     }
   ): Promise<void> {
     const setFields: Record<string, unknown> = {};
+    const unsetFields: Record<string, unknown> = {};
     if (typeof fields.name === "string" && fields.name.trim().length > 0) {
       setFields.name = fields.name.trim();
     }
     if (typeof fields.username === "string" && fields.username.trim().length > 0) {
       setFields.username = fields.username.trim();
+    } else if (fields.username === null) {
+      unsetFields.username = 1;
     }
     if (fields.photoFileId !== undefined) {
       setFields.photoFileId = fields.photoFileId;
@@ -317,10 +326,14 @@ export const userRepository = {
     if (fields.photoCheckedAt !== undefined) {
       setFields.photoCheckedAt = fields.photoCheckedAt;
     }
-    if (Object.keys(setFields).length === 0) return;
+    if (Object.keys(setFields).length === 0 && Object.keys(unsetFields).length === 0) return;
+
+    const update: Record<string, unknown> = {};
+    if (Object.keys(setFields).length > 0) update.$set = setFields;
+    if (Object.keys(unsetFields).length > 0) update.$unset = unsetFields;
 
     try {
-      await User.updateMany({ userId }, { $set: setFields });
+      await User.updateMany({ userId }, update);
     } catch (err) {
       // Swallow — caller flows shouldn't fail because a cosmetic sync hit a transient DB error.
       // Logged here instead of at every call site.
@@ -329,8 +342,9 @@ export const userRepository = {
     }
   },
 
+  /** Clears the exit markers so a rejoining user re-enters the scan queue as a member. */
   async clearLeftDate(userId: number, chatId: number): Promise<void> {
-    await User.updateOne({ userId, chatId }, { $unset: { leftWithWarningsAt: "" } });
+    await User.updateOne({ userId, chatId }, { $unset: { leftWithWarningsAt: "", notMemberAt: "" } });
   },
 
   async markBanned(userId: number, chatId: number, username?: string, name?: string): Promise<IUser> {
@@ -367,14 +381,37 @@ export const userRepository = {
    * Candidates for the rolling CSAM bio scan: members of the given chats whose
    * bio has never been checked, or was checked before `staleBefore`. Ordered
    * never-checked first, then oldest-checked, so new joiners are seen quickly
-   * and everyone is eventually re-checked. Banned users are skipped.
+   * and everyone is eventually re-checked. Banned users and rows confirmed to
+   * have left the chat are skipped — we only scan who is actually inside.
+   *
+   * A row benched as absent returns to the queue after `notMemberRecheckBefore`: a rejoin we
+   * never saw must not exclude a user from CSAM coverage permanently. Both exit markers get
+   * that same window — `leftWithWarningsAt` is a retention rule, not a permanent scan ban.
    */
-  async findDueForBioScan(chatIds: number[], staleBefore: Date, limit: number): Promise<IUser[]> {
+  async findDueForBioScan(
+    chatIds: number[],
+    staleBefore: Date,
+    limit: number,
+    notMemberRecheckBefore: Date = new Date(Date.now() - NOT_MEMBER_RECHECK_MS)
+  ): Promise<IUser[]> {
     if (chatIds.length === 0) return [];
     return await User.find({
       chatId: { $in: chatIds },
       isBanned: { $ne: true },
-      $or: [{ lastBioCheckAt: { $exists: false } }, { lastBioCheckAt: { $lt: staleBefore } }],
+      $and: [
+        {
+          $or: [{ notMemberAt: { $exists: false } }, { notMemberAt: { $lt: notMemberRecheckBefore } }],
+        },
+        {
+          $or: [
+            { leftWithWarningsAt: { $exists: false } },
+            { leftWithWarningsAt: { $lt: notMemberRecheckBefore } },
+          ],
+        },
+        {
+          $or: [{ lastBioCheckAt: { $exists: false } }, { lastBioCheckAt: { $lt: staleBefore } }],
+        },
+      ],
     })
       .sort({ lastBioCheckAt: 1 })
       .limit(limit);
@@ -383,6 +420,46 @@ export const userRepository = {
   /** Stamp lastBioCheckAt on every chat doc for this user (bio is a global property). */
   async markBioChecked(userId: number, when: Date = new Date()): Promise<void> {
     await User.updateMany({ userId }, { $set: { lastBioCheckAt: when } });
+  },
+
+  /**
+   * Track consecutive getChat failures. The counter drives the scanner's presence probe:
+   * a user the peer cache can never resolve is either a lurker or gone, and only
+   * getChatMember can tell them apart.
+   */
+  async recordBioMiss(userId: number, chatId: number): Promise<number> {
+    const doc = await User.findOneAndUpdate(
+      { userId, chatId },
+      { $inc: { bioMissCount: 1 } },
+      { returnDocument: "after" }
+    );
+    return doc?.bioMissCount ?? 0;
+  },
+
+  async clearBioMiss(userId: number, chatId: number): Promise<void> {
+    await User.updateOne({ userId, chatId }, { $set: { bioMissCount: 0 } });
+  },
+
+  /**
+   * Apply the exit policy to a row whose absence getChatMember just confirmed, mirroring
+   * chatMemberHandler: drop a clean row, keep one that still carries state. Kept rows are
+   * stamped notMemberAt so the scan queue skips them until the user rejoins.
+   * Returns whether the row was deleted.
+   */
+  async markNotMember(userId: number, chatId: number): Promise<boolean> {
+    const user = await User.findOne({ userId, chatId });
+    if (!user) return false;
+
+    const keep = user.wasBanned || user.isBanned || user.warnings > 0;
+    if (!keep) {
+      await User.deleteOne({ userId, chatId });
+      return true;
+    }
+
+    const set: Record<string, unknown> = { notMemberAt: new Date() };
+    if (user.warnings > 0 && !user.leftWithWarningsAt) set.leftWithWarningsAt = new Date();
+    await User.updateOne({ userId, chatId }, { $set: set });
+    return false;
   },
 
   /** Resets the languageDetection grace flag so this user's next offense is a fresh grace notice. */

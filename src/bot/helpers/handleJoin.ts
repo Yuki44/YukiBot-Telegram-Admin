@@ -70,7 +70,8 @@ export async function handleUserJoin(
   // Catch a CSAM/impostor bio before the first message, not after it.
   if (chatConfig.features.csamDetection) enqueueUrgentBioCheck(userId, chatId);
 
-  if (record.leftWithWarningsAt && !record.wasBanned) {
+  // A rejoin invalidates both exit markers, so the user re-enters the bio scan queue.
+  if ((record.leftWithWarningsAt && !record.wasBanned) || record.notMemberAt) {
     userRepository
       .clearLeftDate(userId, chatId)
       .catch((err) =>

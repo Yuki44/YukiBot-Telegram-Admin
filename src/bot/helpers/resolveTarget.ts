@@ -109,7 +109,7 @@ export async function resolveTarget(ctx: BotContext, args: string[]): Promise<Re
       return {
         userId: member.user.id,
         username: member.user.username,
-        name: member.user.first_name,
+        name: fullName(member.user),
         resolvedFromArgs: true,
       };
     } catch {

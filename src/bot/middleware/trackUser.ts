@@ -12,7 +12,9 @@ export const trackUser: Middleware<BotContext> = async (ctx, next) => {
   const from = ctx.from;
   const chatId = ctx.chat?.id;
 
-  if (from && !from.is_bot && chatId) {
+  // Private chats aren't memberships: a row there would use the userId as chatId and
+  // pollute the dashboard and the scan queue with a phantom "chat".
+  if (from && !from.is_bot && chatId && ctx.chat?.type !== "private") {
     const messageId = ctx.message?.message_id;
     if (messageId) {
       trackLastMessage(from.id, chatId, messageId);
@@ -24,6 +26,9 @@ export const trackUser: Middleware<BotContext> = async (ctx, next) => {
       userRepository
         .findOrCreate(from.id, chatId, from.username, fullName(from))
         .catch((err) => logger.error({ action: "trackUser", userId: from.id, error: String(err) }));
+      // A message is proof of presence: clear any exit marker the scanner set, so a rejoin we
+      // never saw can't keep the user out of the bio scan queue.
+      void userRepository.clearLeftDate(from.id, chatId);
       // Propagate name/username to every other chat that knows this user so the
       // dashboard stays consistent without an explicit /refresh. Fire-and-forget.
       void userRepository.syncIdentityAcrossChats(from.id, {

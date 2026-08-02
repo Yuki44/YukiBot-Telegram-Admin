@@ -4,6 +4,7 @@ import { chatRepository } from "../../db/repositories/chatRepository";
 import { adminRepository } from "../../db/repositories/adminRepository";
 import { userRepository } from "../../db/repositories/userRepository";
 import { discoverProfilePhoto } from "../helpers/profilePhoto";
+import { fullName } from "../helpers/fullName";
 import { logger } from "../../utils/logger";
 import { t } from "../../locales/i18n";
 
@@ -39,19 +40,19 @@ export async function setupHandler(ctx: CommandContext<BotContext>) {
     const realAdmins = admins.filter((a) => !a.user.is_bot && a.user.id !== ANON_ADMIN_BOT_ID);
 
     for (const admin of realAdmins) {
-      const fullName = [admin.user.first_name, admin.user.last_name].filter(Boolean).join(" ");
+      const name = fullName(admin.user);
 
       await adminRepository.upsert({
         userId: admin.user.id,
         username: admin.user.username || "",
-        name: fullName || "Unknown",
+        name: name || "Unknown",
         chatId,
         chatName: chatTitle,
         role: admin.status === "creator" ? "owner" : "admin",
       });
 
       // Also populate User collection so @username lookups work
-      await userRepository.findOrCreate(admin.user.id, chatId, admin.user.username, admin.user.first_name);
+      await userRepository.findOrCreate(admin.user.id, chatId, admin.user.username, name);
 
       // Pre-fetch the profile photo so admins who've never messaged in the group
       // still render an avatar in the dashboard's Admins screen (issue #5).

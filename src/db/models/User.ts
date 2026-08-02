@@ -54,6 +54,13 @@ const userSchema = new Schema<IUser>({
   lastBioCheckAt: {
     type: Date,
   },
+  bioMissCount: {
+    type: Number,
+    default: 0,
+  },
+  notMemberAt: {
+    type: Date,
+  },
   languageGraceGivenAt: {
     type: Date,
   },
@@ -66,6 +73,6 @@ userSchema.index({ userId: 1, chatId: 1 }, { unique: true });
 userSchema.index({ leftWithWarningsAt: 1 }, { expireAfterSeconds: LEFT_WITH_WARNINGS_TTL_S, sparse: true });
 
 // Serves the CSAM scanner's due-for-scan query, which now runs every rotation tick.
-userSchema.index({ chatId: 1, isBanned: 1, lastBioCheckAt: 1 });
+userSchema.index({ chatId: 1, isBanned: 1, notMemberAt: 1, lastBioCheckAt: 1 });
 
 export const User = model<IUser>("User", userSchema);
