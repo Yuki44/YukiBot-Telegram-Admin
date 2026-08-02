@@ -85,7 +85,8 @@ export async function notifySpamAdmin(
   if (!chatConfig?.notifyFlags?.notifySpam || !chatConfig.notifyChatId) return;
   try {
     const who = mentionHtml(targetId, targetName, targetUsername);
-    await ctx.api.sendMessage(chatConfig.notifyChatId, t("spam.adminNotify", { user: who }), {
+    const chat = esc(chatConfig.name || getChatTitle(ctx));
+    await ctx.api.sendMessage(chatConfig.notifyChatId, t("spam.adminNotify", { user: who, chat }), {
       parse_mode: "HTML",
     });
   } catch (err) {

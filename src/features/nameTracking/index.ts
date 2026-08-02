@@ -140,7 +140,8 @@ export function describeIdentityChange(change: IdentityChange): string {
 
 /**
  * Compare against this chat's own stored row, announce any change, then persist.
- * Strictly per-chat: cross-chat propagation is what turned one profile edit into a burst.
+ * Returns whether the observation differed from what this chat had stored — the caller uses
+ * that to decide whether the read is worth spending on the other chats (see trackIdentityEverywhere).
  */
 export async function trackIdentity(
   api: Api,
@@ -148,21 +149,27 @@ export async function trackIdentity(
   userId: number,
   chatId: number,
   current: Identity
-): Promise<void> {
+): Promise<boolean> {
   // A blank name means Telegram gave us nothing readable (deleted account, unresolved peer).
   // Announcing it prints an empty half ("Va (@vavabaa) → ") and persisting it wipes good data.
   // An invisible-but-present name is not that case: it keeps its row and shows a placeholder.
   if (!(current.name ?? "").trim()) {
     logger.warn({ action: "name_change_blank_observation", chatId, userId });
-    return;
+    return false;
   }
 
   const row = await userRepository.findByUserAndChat(userId, chatId);
   const before: Identity = { name: row?.name, username: row?.username };
+  const diff = diffIdentity(before, current);
 
   // An unconfirmed row holds an unverified leftover (first name alone, or a lurker never read),
   // so adopting the first reading silently is what keeps that backlog out of the channel.
-  const change = row?.identityConfirmedAt ? diffIdentity(before, current) : null;
+  const change = row?.identityConfirmedAt ? diff : null;
+  // A silent adoption looks exactly like a missed change from outside — log it so "SangMata saw
+  // it, Yuki didn't" is answerable without guessing.
+  if (diff && !change) {
+    logger.info({ action: "name_change_baseline_adopted", chatId, userId, before, current });
+  }
 
   // Persisting is bookkeeping, not the feature: only the notice is flagged (G16).
   if (change && chatConfig.features?.trackNameChanges) {
@@ -179,6 +186,7 @@ export async function trackIdentity(
   }
 
   await userRepository.confirmIdentity(userId, chatId, current.name, current.username);
+  return diff !== null;
 }
 
 /**
@@ -186,9 +194,14 @@ export async function trackIdentity(
  * row and announces on its own flag. Name and @username are global, so a read taken for one
  * chat is valid for all; withholding it left the other chats stale.
  */
-export async function trackIdentityEverywhere(api: Api, userId: number, current: Identity): Promise<void> {
+export async function trackIdentityEverywhere(
+  api: Api,
+  userId: number,
+  current: Identity,
+  exceptChatId?: number
+): Promise<void> {
   const rows = await userRepository.findAllForUser(userId);
-  const chatIds = [...new Set(rows.map((r) => r.chatId))];
+  const chatIds = [...new Set(rows.map((r) => r.chatId))].filter((id) => id !== exceptChatId);
   if (chatIds.length === 0) return;
 
   const chats = await chatRepository.listByChatIds(chatIds);

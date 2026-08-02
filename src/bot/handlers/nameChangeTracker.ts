@@ -1,6 +1,6 @@
 import { NextFunction } from "grammy";
 import { BotContext } from "../../types";
-import { trackIdentity } from "../../features/nameTracking";
+import { trackIdentity, trackIdentityEverywhere } from "../../features/nameTracking";
 import { fullName } from "../helpers/fullName";
 import { logger } from "../../utils/logger";
 
@@ -9,6 +9,9 @@ import { logger } from "../../utils/logger";
  * change. Persisting here (not in trackUser) is what makes the comparison reliable — the
  * membership middleware used to overwrite the stored name before this handler could read it,
  * silently eating one change per user after every restart.
+ *
+ * A change seen here is fanned out to the user's other chats: names are global, and waiting for
+ * the user to post in each chat left the rest months stale.
  */
 export async function nameChangeTracker(ctx: BotContext, next: NextFunction): Promise<void> {
   try {
@@ -23,7 +26,9 @@ export async function nameChangeTracker(ctx: BotContext, next: NextFunction): Pr
       name: fullName(from),
       username: from.username,
     };
-    await trackIdentity(ctx.api, chatConfig, from.id, msg.chat.id, current);
+    const changed = await trackIdentity(ctx.api, chatConfig, from.id, msg.chat.id, current);
+    // Only a real change is worth the cross-chat lookups; the steady state stays two queries.
+    if (changed) await trackIdentityEverywhere(ctx.api, from.id, current, msg.chat.id);
   } catch (err) {
     logger.error({ action: "nameChangeTracker", error: String(err) });
   }
