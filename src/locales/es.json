@@ -2,7 +2,7 @@
   "nameTracker": {
     "profileUpdated": "Usuario <code>{id}</code> ha actualizado su perfil:\n{from} → {to}",
     "invisibleName": "(nombre invisible)",
-    "usernameRemoved": "sin @usuario"
+    "usernameRemoved": "sin alias"
   },
   "errors": {
     "userNotFound": "⚠️ No se encontró al usuario.",

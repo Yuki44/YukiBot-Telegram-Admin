@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+﻿import { describe, it, expect } from "vitest";
 import {
   buildAdminNotifyText,
   buildBotActor,
@@ -18,12 +18,12 @@ describe("buildAdminNotifyText", () => {
     expect(text).toContain("por idioma 1/3");
     expect(text).toContain("GayBCN");
     expect(text).toContain("@edjoker");
-    expect(text).toContain("tg://user?id=42");
+    expect(text).toContain("https://t.me/hrushbsbbd");
   });
 
   it("shows the clickable full name followed by the clickable @username in parentheses", () => {
     const text = buildAdminNotifyText(target, 1, false, "GayBCN");
-    expect(text).toContain('<a href="tg://user?id=42">Harry</a> (<a href="tg://user?id=42">@hrushbsbbd</a>)');
+    expect(text).toContain('<a href="https://t.me/hrushbsbbd">Harry</a> (<a href="https://t.me/hrushbsbbd">@hrushbsbbd</a>)');
   });
 
   it("falls back to a tap-to-copy user ID in parentheses when there is no @username", () => {
@@ -45,7 +45,7 @@ describe("buildAdminNotifyText", () => {
 
   it("has no buttons/call-to-action — plain text only, per spec", () => {
     const text = buildAdminNotifyText(target, 1, false, "GayBCN");
-    expect(text).not.toMatch(/<a href="(?!tg:\/\/user)/);
+    expect(text).not.toMatch(/<a href="(?!tg:\/\/user|https:\/\/t\.me\/)/);
   });
 
   it("escapes HTML in the chat name", () => {

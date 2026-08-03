@@ -1,5 +1,5 @@
 import { Bot } from "grammy";
-import { BotContext, IChat, IUser } from "../../types";
+import { BotContext, IChat, IUser, IdentitySource } from "../../types";
 import { chatRepository } from "../../db/repositories/chatRepository";
 import { userRepository } from "../../db/repositories/userRepository";
 import { csamWatchlistRepository } from "../../db/repositories/csamWatchlistRepository";
@@ -198,9 +198,14 @@ export function takeScanStats(): typeof stats {
  * row came due starved the others: 341 users were confirmed in one chat and 10 in the other.
  * Each chat still compares against its own row and announces on its own flag (G16).
  */
-async function recordIdentity(bot: Bot<BotContext>, userId: number, identity: Identity): Promise<void> {
+async function recordIdentity(
+  bot: Bot<BotContext>,
+  userId: number,
+  identity: Identity,
+  source: IdentitySource
+): Promise<void> {
   try {
-    await trackIdentityEverywhere(bot.api, userId, identity);
+    await trackIdentityEverywhere(bot.api, userId, identity, undefined, source);
     stats.identity += 1;
   } catch (err) {
     logger.error({ action: "csam_scan_identity", userId, error: String(err) });
@@ -228,7 +233,7 @@ async function checkUserBio(
     // will never resolve, so resolvable members keep their full bio cadence.
     if (misses >= CSAM_SCAN_MISS_LIMIT) {
       const identity = await probePresence(bot, chatConfig.chatId, target.userId);
-      if (identity) await recordIdentity(bot, target.userId, identity);
+      if (identity) await recordIdentity(bot, target.userId, identity, "presence_probe");
     }
     return;
   }
@@ -245,10 +250,15 @@ async function checkUserBio(
     });
   }
 
-  await recordIdentity(bot, target.userId, {
-    name: profile.name,
-    username: profile.username,
-  });
+  await recordIdentity(
+    bot,
+    target.userId,
+    {
+      name: profile.name,
+      username: profile.username,
+    },
+    "bio_rotation"
+  );
 
   const result = evaluateBio(profile.bio, config);
   if (result.verdict === "NONE") return;

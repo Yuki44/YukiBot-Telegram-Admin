@@ -1,6 +1,6 @@
 import { Api } from "grammy";
 import { IChat } from "../../types";
-import { esc, mentionHtml } from "./html";
+import { esc, mentionFullHtml } from "./html";
 import { logger } from "../../utils/logger";
 
 export type WelcomeConfig = NonNullable<IChat["welcome"]>;
@@ -23,11 +23,12 @@ const TOKEN_RE = /(@usuario\b|@nombreGrupo\b|<@username>|<chat name>)/g;
  * Render the admin-configured template. We split on the tokens *before*
  * escaping, then escape only the plain-text segments — so admin-entered
  * `<`/`>`/`&` can't break the HTML, while the generated mention/title stay
- * intact. The mention is always a clickable `tg://user?id=` link (see
- * mentionHtml) so it works even for users with no public @username.
+ * intact. The mention greets by name and adds the clickable `(@handle)` when
+ * there is one, so "Bienvenido Carlos (@carlosboss)" links on both tokens and
+ * degrades to the linked name alone for a user without a handle.
  */
 export function renderWelcome(template: string, user: WelcomeUser, chatTitle: string): string {
-  const usernameRepl = mentionHtml(user.id, user.name, user.username);
+  const usernameRepl = mentionFullHtml(user.id, user.name, user.username);
   const chatRepl = esc(chatTitle);
 
   return template
