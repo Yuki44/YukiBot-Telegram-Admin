@@ -68,8 +68,8 @@ export async function handleUserJoin(
 
   // A join is a fresh reading: someone who renamed while away is caught here, not on their
   // first message — and the row is confirmed either way, so the change can't be swallowed.
-  void trackIdentity(api, chatConfig, userId, chatId, { name: user.fullName, username }).catch((err) =>
-    logger.error({ action: "handleUserJoin_identity", userId, chatId, error: String(err) })
+  void trackIdentity(api, chatConfig, userId, chatId, { name: user.fullName, username }, "join").catch(
+    (err) => logger.error({ action: "handleUserJoin_identity", userId, chatId, error: String(err) })
   );
 
   // Catch a CSAM/impostor bio before the first message, not after it.

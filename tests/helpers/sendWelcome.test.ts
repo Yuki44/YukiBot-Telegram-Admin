@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+﻿import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../../src/utils/logger", () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
@@ -17,9 +17,9 @@ const WELCOME = (over: Partial<{ message: string; enabled: boolean; text: string
 });
 
 describe("renderWelcome", () => {
-  it("wraps @username in a tg://user?id= link so it's always clickable", () => {
+  it("greets by name and adds the clickable @handle, both linked", () => {
     const out = renderWelcome("Hola <@username>", { id: 1, username: "neo", name: "Neo" }, "Grupo");
-    expect(out).toBe('Hola <a href="tg://user?id=1">@neo</a>');
+    expect(out).toBe('Hola <a href="https://t.me/neo">Neo</a> (<a href="https://t.me/neo">@neo</a>)');
   });
 
   it("falls back to the escaped name, still wrapped in a clickable link, when there is no username", () => {
@@ -38,7 +38,7 @@ describe("renderWelcome", () => {
       { id: 1, username: "x", name: "X" },
       "G"
     );
-    const link = '<a href="tg://user?id=1">@x</a>';
+    const link = '<a href="https://t.me/x">X</a> (<a href="https://t.me/x">@x</a>)';
     expect(out).toBe(`G: hola ${link}, ${link} en G`);
   });
 
@@ -48,7 +48,7 @@ describe("renderWelcome", () => {
       { id: 1, username: "neo", name: "Neo" },
       "G"
     );
-    expect(out).toBe('&lt;b&gt;hola&lt;/b&gt; <a href="tg://user?id=1">@neo</a> &amp; bienvenido');
+    expect(out).toBe('&lt;b&gt;hola&lt;/b&gt; <a href="https://t.me/neo">Neo</a> (<a href="https://t.me/neo">@neo</a>) &amp; bienvenido');
   });
 
   it("supports the current @usuario / @nombreGrupo tokens", () => {
@@ -57,7 +57,7 @@ describe("renderWelcome", () => {
       { id: 1, username: "neo", name: "Neo" },
       "Café <3 & Té"
     );
-    expect(out).toBe('Bienvenido <a href="tg://user?id=1">@neo</a> a Café &lt;3 &amp; Té');
+    expect(out).toBe('Bienvenido <a href="https://t.me/neo">Neo</a> (<a href="https://t.me/neo">@neo</a>) a Café &lt;3 &amp; Té');
   });
 
   it("still supports the legacy <@username> / <chat name> tokens (back-compat)", () => {
@@ -66,7 +66,7 @@ describe("renderWelcome", () => {
       { id: 1, username: "neo", name: "Neo" },
       "Grupo"
     );
-    expect(out).toBe('Bienvenido <a href="tg://user?id=1">@neo</a> a Grupo');
+    expect(out).toBe('Bienvenido <a href="https://t.me/neo">Neo</a> (<a href="https://t.me/neo">@neo</a>) a Grupo');
   });
 
   it("mixes new and legacy tokens, and falls back to a clickable name-link with no username", () => {
@@ -106,7 +106,7 @@ describe("sendWelcome", () => {
     expect(api.sendMessage).toHaveBeenCalledTimes(1);
     const [chatId, text, other] = api.sendMessage.mock.calls[0];
     expect(chatId).toBe(-100);
-    expect(text).toBe('Hola <a href="tg://user?id=7">@neo</a>');
+    expect(text).toBe('Hola <a href="https://t.me/neo">Neo</a> (<a href="https://t.me/neo">@neo</a>)');
     expect(other.parse_mode).toBe("HTML");
     expect(other.reply_markup).toEqual({
       inline_keyboard: [[{ text: "Únete", url: "https://t.me/c" }]],

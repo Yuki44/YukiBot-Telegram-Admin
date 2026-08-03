@@ -59,6 +59,8 @@ export interface IChat extends Document {
     trackNameChanges?: boolean;
     /** Sends `trackNameChanges` notices to the group too; off (default) keeps them in `logsTo`. */
     nameChangesVisible?: boolean;
+    /** Diagnostics: records every identity reading (source + outcome) to explain missed changes. */
+    identityObservations?: boolean;
     /** When true, each topic with a configured reminder reposts it (at most every TOPIC_REMINDER_INTERVAL_MS) on activity. */
     topicReminders?: boolean;
   };
@@ -310,6 +312,36 @@ export interface IActivityLog extends Document {
   undoneAt?: Date | null;
   timestamp: Date;
 }
+
+export const IDENTITY_SOURCES = ["message", "join", "bio_rotation", "presence_probe", "fanout"] as const;
+export type IdentitySource = (typeof IDENTITY_SOURCES)[number];
+
+/** `notice_disabled` = a real change confirmed while `trackNameChanges` was off. */
+export const IDENTITY_OUTCOMES = [
+  "announced",
+  "notice_disabled",
+  "baseline_adopted",
+  "no_diff",
+  "blank_skipped",
+] as const;
+export type IdentityOutcome = (typeof IDENTITY_OUTCOMES)[number];
+
+export interface IdentityObservationInput {
+  userId: number;
+  chatId: number;
+  source: IdentitySource;
+  outcome: IdentityOutcome;
+  storedName?: string;
+  storedUsername?: string;
+  observedName?: string;
+  observedUsername?: string;
+  count?: number;
+  day?: string;
+  createdAt?: Date;
+  lastSeenAt?: Date;
+}
+
+export interface IIdentityObservation extends Document, IdentityObservationInput {}
 
 /**
  * What YukiBot does when a banned word is detected.

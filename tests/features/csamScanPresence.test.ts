@@ -136,10 +136,13 @@ describe("presence probe (finding #1)", () => {
     });
     await runBioScanBatch(bot, actor);
     expect(userRepository.markNotMember).not.toHaveBeenCalled();
-    expect(trackIdentityEverywhere).toHaveBeenCalledWith(bot.api, USER, {
-      name: "Simon B",
-      username: "simon",
-    });
+    expect(trackIdentityEverywhere).toHaveBeenCalledWith(
+      bot.api,
+      USER,
+      { name: "Simon B", username: "simon" },
+      undefined,
+      "presence_probe"
+    );
   });
 
   // R1: an outage or a demoted bot makes every probe in a chat fail at once. Reading that as

@@ -12,6 +12,9 @@ vi.mock("../../src/db/repositories/chatRepository", () => ({
   chatRepository: { listByChatIds: vi.fn(async () => []) },
 }));
 vi.mock("../../src/utils/activityLog", () => ({ recordActivity: vi.fn() }));
+vi.mock("../../src/db/repositories/identityObservationRepository", () => ({
+  identityObservationRepository: { record: vi.fn(async () => {}), listByChat: vi.fn(async () => []) },
+}));
 
 import {
   diffIdentity,
@@ -21,6 +24,7 @@ import {
 } from "../../src/features/nameTracking";
 import { userRepository } from "../../src/db/repositories/userRepository";
 import { chatRepository } from "../../src/db/repositories/chatRepository";
+import { identityObservationRepository } from "../../src/db/repositories/identityObservationRepository";
 import { fullName } from "../../src/bot/helpers/fullName";
 import { IChat } from "../../src/types";
 
@@ -77,6 +81,18 @@ describe("diffIdentity", () => {
       { from: "licuadodefresas", to: undefined }
     );
   });
+
+  // Production: "️h → ️" — the new name is a lone variation selector, which prints nothing.
+  // Those code points must survive comparison (emoji need them) but never pass as a name.
+  it("treats a name of variation selectors / ZWJ as unreadable without breaking emoji", () => {
+    expect(diffIdentity({ name: "\uFE0Fh" }, { name: "\uFE0F" })?.nameChange).toEqual({
+      from: "\uFE0Fh",
+      to: "(nombre invisible)",
+    });
+    expect(diffIdentity({ name: "\uFE0F" }, { name: "\u200D" })).toBeNull();
+    expect(diffIdentity({ name: "❤️" }, { name: "❤️" })).toBeNull();
+    expect(diffIdentity({ name: "👨‍👩‍👧" }, { name: "👨‍👩‍👧" })).toBeNull();
+  });
 });
 
 describe("buildIdentityChangeMessage", () => {
@@ -84,36 +100,139 @@ describe("buildIdentityChangeMessage", () => {
     const msg = buildIdentityChangeMessage(7807562391, { name: "Simo", username: "simo" }, { name: "Simon", username: "simo" });
     expect(msg).toContain("ha actualizado su perfil");
     expect(msg).toContain("<code>7807562391</code>");
-    expect(msg).not.toContain('<a href="tg://user?id=7807562391">Simo</a>'); // old name: plain
-    expect(msg).toContain('<b><a href="tg://user?id=7807562391">Simon</a></b>'); // new name: linked + bold
-    expect(msg).toContain('<a href="tg://user?id=7807562391">@simo</a>'); // unchanged username: linked
+    expect(msg).not.toContain('<a href="https://t.me/simo">Simo</a>'); // old name: plain
+    expect(msg).toContain('<b><a href="https://t.me/simo">Simon</a></b>'); // new name: linked + bold
+    expect(msg).toContain('<a href="https://t.me/simo">@simo</a>'); // unchanged username: linked
     expect(msg).toContain("perfil:\n"); // the change starts on its own line
   });
 
   // A freed @handle can be re-registered by a stranger, and Telegram auto-links any bare
-  // @handle in the text — so the replaced one must not be left as plain text.
-  it("username change: old @handle is inert <code>, new @handle linked and bold", () => {
+  // @handle in the text — so the replaced one keeps neither the @ nor a link.
+  it("username change: old handle inert and @-less, new @handle linked and bold", () => {
     const msg = buildIdentityChangeMessage(1, { name: "Simo", username: "simoo" }, { name: "Simo", username: "simon2" });
-    expect(msg).toContain("<code>@simoo</code>");
-    expect(msg).not.toContain("(@simoo)");
-    expect(msg).not.toContain('<a href="tg://user?id=1">@simoo</a>');
-    expect(msg).toContain('<b><a href="tg://user?id=1">@simon2</a></b>');
-    expect(msg).toContain('<a href="tg://user?id=1">Simo</a>'); // unchanged name: linked, not bold
-    expect(msg).not.toContain('<b><a href="tg://user?id=1">Simo</a></b>');
+    expect(msg).toContain("<i>‹simoo›</i>");
+    expect(msg).not.toContain("@simoo");
+    expect(msg).toContain('<b><a href="https://t.me/simon2">@simon2</a></b>');
+    expect(msg).toContain('<a href="https://t.me/simon2">Simo</a>'); // unchanged name: linked, not bold
+    expect(msg).not.toContain('<b><a href="https://t.me/simon2">Simo</a></b>');
   });
 
   it("both change: only the new values are linked and bold", () => {
     const msg = buildIdentityChangeMessage(5, { name: "Ana", username: "ana" }, { name: "Ana María", username: "ana_m" });
     expect(msg).toContain("Ana ("); // old name plain
-    expect(msg).toContain("<code>@ana</code>"); // old username inert
-    expect(msg).toContain('<b><a href="tg://user?id=5">Ana María</a></b>');
-    expect(msg).toContain('<b><a href="tg://user?id=5">@ana_m</a></b>');
+    expect(msg).toContain("<i>‹ana›</i>"); // old username inert
+    expect(msg).toContain('<b><a href="https://t.me/ana_m">Ana María</a></b>');
+    expect(msg).toContain('<b><a href="https://t.me/ana_m">@ana_m</a></b>');
   });
 
   it("gained a username: no leftover placeholder, new side shows the linked @handle", () => {
     const msg = buildIdentityChangeMessage(9, { name: "Ana" }, { name: "Ana María", username: "ana_m" });
     expect(msg).not.toContain("(ninguno)");
-    expect(msg).toContain('<a href="tg://user?id=9">@ana_m</a>');
+    expect(msg).toContain('<a href="https://t.me/ana_m">@ana_m</a>');
+  });
+
+  // tg://user?id= only resolves for peers the client already knows, so it is the fallback:
+  // without a handle there is nothing better, with one the t.me link always works.
+  it("falls back to tg://user?id= only when the user has no handle at all", () => {
+    const msg = buildIdentityChangeMessage(8776230225, { name: "Kk" }, { name: "Kl" });
+    expect(msg).toContain('<b><a href="tg://user?id=8776230225">Kl</a></b>');
+    expect(msg).toContain("<code>8776230225</code>");
+  });
+
+  // Both halves said "(nombre invisible)" while the only real news was the handle.
+  it("drops an unreadable name entirely when only the handle moved", () => {
+    const invisible = "\u00AD\u00AD\u00AD";
+    const msg = buildIdentityChangeMessage(
+      7946622105,
+      { name: invisible, username: "licuadodefresas" },
+      { name: invisible, username: "otro" }
+    );
+    expect(msg).not.toContain("(nombre invisible)");
+    expect(msg).toContain("<i>‹licuadodefresas›</i>");
+    expect(msg).toContain('<b><a href="https://t.me/otro">@otro</a></b>');
+  });
+
+  it("handle-only notice spells out a removed handle without a bare @", () => {
+    const invisible = "\u00AD";
+    const msg = buildIdentityChangeMessage(1, { name: invisible, username: "licuadodefresas" }, { name: invisible });
+    expect(msg).toContain("<b>sin alias</b>");
+    expect(msg).not.toContain("@usuario");
+  });
+});
+
+describe("identity observation trail", () => {
+  const chat = (identityObservations: boolean): IChat =>
+    ({
+      chatId: -100111,
+      logsTo: -100999,
+      features: { trackNameChanges: true, identityObservations },
+    }) as unknown as IChat;
+  const api = { sendMessage: vi.fn(async () => ({ message_id: 1 })) } as never;
+  const confirmed = new Date("2026-08-01T00:00:00Z");
+  const record = (): ReturnType<typeof vi.mocked<typeof identityObservationRepository.record>> =>
+    vi.mocked(identityObservationRepository.record);
+
+  beforeEach(() => {
+    record().mockClear();
+    vi.mocked(userRepository.findByUserAndChat).mockResolvedValue({
+      userId: 42,
+      chatId: -100111,
+      name: "Simo",
+      username: "simo",
+      identityConfirmedAt: confirmed,
+    } as never);
+  });
+
+  it("records nothing while its own flag is off (G16: diagnostics never ride on another flag)", async () => {
+    await trackIdentity(api, chat(false), 42, -100111, { name: "Simon", username: "simo" }, "message");
+    expect(record()).not.toHaveBeenCalled();
+  });
+
+  it("records the announced change with its source", async () => {
+    await trackIdentity(api, chat(true), 42, -100111, { name: "Simon", username: "simo" }, "bio_rotation");
+    expect(record()).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 42,
+        chatId: -100111,
+        source: "bio_rotation",
+        outcome: "announced",
+        storedName: "Simo",
+        observedName: "Simon",
+      })
+    );
+  });
+
+  // The two ways a change goes unannounced — this is what the trail exists to tell apart.
+  it("distinguishes a silent baseline adoption from an unreadable observation", async () => {
+    vi.mocked(userRepository.findByUserAndChat).mockResolvedValue({
+      userId: 42,
+      chatId: -100111,
+      name: "Simo",
+      username: "simo",
+    } as never);
+    await trackIdentity(api, chat(true), 42, -100111, { name: "Simon", username: "simo" }, "message");
+    expect(record()).toHaveBeenCalledWith(expect.objectContaining({ outcome: "baseline_adopted" }));
+
+    record().mockClear();
+    await trackIdentity(api, chat(true), 42, -100111, { name: "  " }, "presence_probe");
+    expect(record()).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "blank_skipped", source: "presence_probe" })
+    );
+  });
+
+  it("records a reading that matched, so 'never seen' is not confused with 'seen and equal'", async () => {
+    await trackIdentity(api, chat(true), 42, -100111, { name: "Simo", username: "simo" }, "message");
+    expect(record()).toHaveBeenCalledWith(expect.objectContaining({ outcome: "no_diff" }));
+  });
+
+  it("marks a confirmed change as notice_disabled when trackNameChanges is off", async () => {
+    const muted = {
+      chatId: -100111,
+      logsTo: -100999,
+      features: { trackNameChanges: false, identityObservations: true },
+    } as unknown as IChat;
+    await trackIdentity(api, muted, 42, -100111, { name: "Simon", username: "simo" }, "message");
+    expect(record()).toHaveBeenCalledWith(expect.objectContaining({ outcome: "notice_disabled" }));
   });
 });
 
@@ -245,17 +364,18 @@ describe("trackIdentity", () => {
     // Each chat still decides on its own flag (G16): only the tracking one announces.
     expect(dests()).toEqual([-100999]);
   });
-  // The invisible-name case the admins saw: the notice must still say what actually changed.
-  it("spells out a dropped @handle instead of silently losing the token", () => {
+  // The invisible-name case the admins saw: the notice must still say what actually changed,
+  // and with an unreadable name it is now the handle alone that carries it.
+  it("spells out a dropped handle instead of silently losing the token", () => {
     const invisible = "\u00AD\u00AD\u00AD";
     const msg = buildIdentityChangeMessage(
       7946622105,
       { name: invisible, username: "licuadodefresas" },
       { name: invisible }
     );
-    expect(msg).toContain("(nombre invisible)");
-    expect(msg).toContain("<code>@licuadodefresas</code>");
-    expect(msg).toContain("sin @usuario");
+    expect(msg).not.toContain("(nombre invisible)");
+    expect(msg).toContain("<i>‹licuadodefresas›</i>");
+    expect(msg).toContain("sin alias");
   });
 });
 describe("identity captured from the CSAM rotation", () => {

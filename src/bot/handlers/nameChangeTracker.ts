@@ -28,7 +28,7 @@ export async function nameChangeTracker(ctx: BotContext, next: NextFunction): Pr
     };
     const changed = await trackIdentity(ctx.api, chatConfig, from.id, msg.chat.id, current);
     // Only a real change is worth the cross-chat lookups; the steady state stays two queries.
-    if (changed) await trackIdentityEverywhere(ctx.api, from.id, current, msg.chat.id);
+    if (changed) await trackIdentityEverywhere(ctx.api, from.id, current, msg.chat.id, "fanout");
   } catch (err) {
     logger.error({ action: "nameChangeTracker", error: String(err) });
   }

@@ -65,6 +65,10 @@ const chatSchema = new Schema<IChat>({
       type: Boolean,
       default: false,
     },
+    identityObservations: {
+      type: Boolean,
+      default: false,
+    },
     topicReminders: {
       type: Boolean,
       default: false,

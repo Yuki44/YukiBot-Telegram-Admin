@@ -105,6 +105,9 @@ export const CSAM_ALERT_DEDUP_MS = CSAM_URGENT_COOLDOWN_MS;
 /** How long a sent message's id is kept around for the on-ban bulk-delete (seconds). */
 export const CSAM_RECENT_MESSAGE_TTL_S = 48 * 60 * 60;
 
+/** How long an identity observation is kept (seconds) — diagnostics, not state. */
+export const IDENTITY_OBSERVATION_TTL_S = 14 * 24 * 60 * 60;
+
 // ── CSAM/impostor image OCR ──────────────────────────────────────────
 
 /** Longest edge (px) an image is capped to before OCR — bounds inference latency only. */

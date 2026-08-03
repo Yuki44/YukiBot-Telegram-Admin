@@ -19,24 +19,30 @@ export function mention(name: string, username?: string): string {
 }
 
 /**
- * Always-clickable mention: wraps the display text in a `tg://user?id=` link so it
- * opens the user's profile even when they have no public @username (plain `@username`
- * text only auto-links when Telegram can resolve a username — a bare name never does).
+ * `https://t.me/<handle>` resolves for any viewer; `tg://user?id=` only for peers the viewer's
+ * client already knows — dead in a log channel. Only the *current* handle may be used: a freed
+ * one now points at whoever registered it next. The charset test guards href injection.
  */
+export function profileHref(id: number, currentUsername?: string): string {
+  return currentUsername && /^[A-Za-z0-9_]+$/.test(currentUsername)
+    ? `https://t.me/${currentUsername}`
+    : `tg://user?id=${id}`;
+}
+
+/** Clickable even without a public @username, which bare text never is. */
 export function mentionHtml(id: number, name: string, username?: string): string {
   const label = username ? `@${username}` : esc(name);
-  return `<a href="tg://user?id=${id}">${label}</a>`;
+  return `<a href="${profileHref(id, username)}">${label}</a>`;
 }
 
 /** Profile link with explicit display text (unlike mentionHtml, never swaps in @username). */
-export function profileLink(id: number, label: string): string {
-  return `<a href="tg://user?id=${id}">${esc(label)}</a>`;
+export function profileLink(id: number, label: string, currentUsername?: string): string {
+  return `<a href="${profileHref(id, currentUsername)}">${esc(label)}</a>`;
 }
 
 /**
- * Canonical mention for user-facing notices: clickable full name plus the clickable
- * `(@username)` when there is one. `idFallback` adds a tap-to-copy `(id)` instead when
- * the user has no username — used in admin notifications where the ID is actionable.
+ * Canonical mention for user-facing notices. `idFallback` adds a tap-to-copy id when there is
+ * no username — for admin notifications where the id is actionable.
  */
 export function mentionFullHtml(
   id: number,
@@ -44,7 +50,7 @@ export function mentionFullHtml(
   username?: string,
   options?: { idFallback?: boolean }
 ): string {
-  const link = profileLink(id, name);
-  if (username) return `${link} (<a href="tg://user?id=${id}">@${esc(username)}</a>)`;
+  const link = profileLink(id, name, username);
+  if (username) return `${link} (<a href="${profileHref(id, username)}">@${esc(username)}</a>)`;
   return options?.idFallback ? `${link} (<code>${id}</code>)` : link;
 }

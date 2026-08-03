@@ -57,7 +57,8 @@ describe("cross-chat propagation", () => {
       expect.anything(),
       42,
       { name: "Simon B", username: "simon" },
-      -100111
+      -100111,
+      "fanout"
     );
   });
 

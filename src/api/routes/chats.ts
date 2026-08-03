@@ -24,6 +24,7 @@ const FEATURE_KEYS: ReadonlyArray<keyof IChat["features"]> = [
   "csamDetection",
   "trackNameChanges",
   "nameChangesVisible",
+  "identityObservations",
   "topicReminders",
 ];
 

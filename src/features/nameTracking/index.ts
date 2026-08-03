@@ -1,10 +1,11 @@
-import { Api } from "grammy";
-import { IChat } from "../../types";
+﻿import { Api } from "grammy";
+import { IChat, IdentityObservationInput, IdentitySource } from "../../types";
 import { userRepository } from "../../db/repositories/userRepository";
 import { chatRepository } from "../../db/repositories/chatRepository";
+import { identityObservationRepository } from "../../db/repositories/identityObservationRepository";
 import { recordActivity } from "../../utils/activityLog";
 import { logger } from "../../utils/logger";
-import { esc, profileLink, mentionHtml } from "../../bot/helpers/html";
+import { esc, profileLink } from "../../bot/helpers/html";
 import { t } from "../../locales/i18n";
 
 /**
@@ -48,9 +49,31 @@ const norm = (s?: string | null): string =>
     .replace(/\s+/g, " ")
     .trim();
 
+/**
+ * True when nothing of the string reaches the screen. Variation selectors and ZWJ stay out of
+ * INVISIBLE_CODES so emoji still compare intact, but a name made only of them renders blank.
+ */
+const rendersAsNothing = (s: string): boolean =>
+  [...s].every((c) => {
+    const cp = c.codePointAt(0)!;
+    return (
+      INVISIBLE_CODES.has(cp) ||
+      cp === 0x200d ||
+      (cp >= 0xfe00 && cp <= 0xfe0f) ||
+      (cp >= 0xe0100 && cp <= 0xe01ef) ||
+      /\s/.test(c)
+    );
+  });
+
 /** A name that is real but renders as nothing still needs something to show and compare. */
-const display = (s?: string | null): string =>
-  norm(s) || ((s ?? "").trim() ? t("nameTracker.invisibleName") : "");
+const display = (s?: string | null): string => {
+  if (!(s ?? "").trim()) return "";
+  const value = norm(s);
+  return value && !rendersAsNothing(value) ? value : t("nameTracker.invisibleName");
+};
+
+/** Replaced handles can never link: the account may have freed one, and Telegram links bare @. */
+const inertHandle = (username: string): string => `<i>‹${esc(username)}›</i>`;
 
 /** Pure diff. null = nothing to announce. A first sighting (no stored name) is never a change. */
 export function diffIdentity(stored: Identity, current: Identity): IdentityChange | null {
@@ -74,6 +97,8 @@ interface SideOptions {
   linkUser: boolean;
   boldName?: boolean;
   boldUser?: boolean;
+  /** The user's *current* handle — what any working link has to point at. */
+  currentUsername?: string;
 }
 
 const bold = (html: string, on?: boolean): string => (on ? `<b>${html}</b>` : html);
@@ -82,26 +107,47 @@ const bold = (html: string, on?: boolean): string => (on ? `<b>${html}</b>` : ht
 function renderSide(userId: number, id: Identity, opts: SideOptions): string {
   const name = display(id.name);
   const username = norm(id.username);
-  const namePart = bold(opts.linkName ? profileLink(userId, name) : esc(name), opts.boldName);
+  const namePart = bold(
+    opts.linkName ? profileLink(userId, name, opts.currentUsername) : esc(name),
+    opts.boldName
+  );
   if (!username) return namePart;
-  // Replaced handles go in <code>: Telegram auto-links any bare @handle, so a freed handle
-  // renders as a live link to whoever registered it next — or to nothing at all.
   const userPart = opts.linkUser
-    ? bold(mentionHtml(userId, name, username), opts.boldUser)
-    : `<code>@${esc(username)}</code>`;
+    ? bold(profileLink(userId, `@${username}`, username), opts.boldUser)
+    : inertHandle(username);
   return `${namePart} (${userPart})`;
+}
+
+/** Unreadable names carry nothing: with only the handle moving, it is the whole notice. */
+function buildHandleOnlyMessage(userId: number, before: Identity, after: Identity): string {
+  const oldHandle = norm(before.username);
+  const newHandle = norm(after.username);
+  const from = oldHandle ? inertHandle(oldHandle) : t("nameTracker.usernameRemoved");
+  const to = newHandle
+    ? `<b>${profileLink(userId, `@${newHandle}`, newHandle)}</b>`
+    : `<b>${t("nameTracker.usernameRemoved")}</b>`;
+  return t("nameTracker.profileUpdated", { id: userId, from, to });
 }
 
 /** Builds the HTML notice (pure, testable). */
 export function buildIdentityChangeMessage(userId: number, before: Identity, after: Identity): string {
   const nameChanged = display(before.name) !== display(after.name);
   const userChanged = norm(before.username) !== norm(after.username);
-  const from = renderSide(userId, before, { linkName: !nameChanged, linkUser: !userChanged });
+  if (!nameChanged && userChanged && display(after.name) === t("nameTracker.invisibleName")) {
+    return buildHandleOnlyMessage(userId, before, after);
+  }
+  const currentUsername = norm(after.username) || undefined;
+  const from = renderSide(userId, before, {
+    linkName: !nameChanged,
+    linkUser: !userChanged,
+    currentUsername,
+  });
   let to = renderSide(userId, after, {
     linkName: true,
     linkUser: true,
     boldName: nameChanged,
     boldUser: userChanged,
+    currentUsername,
   });
   // Dropping a handle otherwise reads as "nothing happened": the new side just loses a token.
   if (norm(before.username) && !norm(after.username)) to += ` (<b>${t("nameTracker.usernameRemoved")}</b>)`;
@@ -126,6 +172,12 @@ async function announce(api: Api, chatConfig: IChat, chatId: number, text: strin
   }
 }
 
+/** Diagnostics on its own flag (G16): tells a change we swallowed from one we never saw. */
+function observe(chatConfig: IChat, obs: IdentityObservationInput): void {
+  if (!chatConfig.features?.identityObservations) return;
+  void identityObservationRepository.record(obs);
+}
+
 /** Plain-text form of a change, for the queryable audit trail. */
 export function describeIdentityChange(change: IdentityChange): string {
   const parts: string[] = [];
@@ -148,13 +200,21 @@ export async function trackIdentity(
   chatConfig: IChat,
   userId: number,
   chatId: number,
-  current: Identity
+  current: Identity,
+  source: IdentitySource = "message"
 ): Promise<boolean> {
   // A blank name means Telegram gave us nothing readable (deleted account, unresolved peer).
   // Announcing it prints an empty half ("Va (@vavabaa) → ") and persisting it wipes good data.
   // An invisible-but-present name is not that case: it keeps its row and shows a placeholder.
   if (!(current.name ?? "").trim()) {
     logger.warn({ action: "name_change_blank_observation", chatId, userId });
+    observe(chatConfig, {
+      userId,
+      chatId,
+      source,
+      outcome: "blank_skipped",
+      observedUsername: current.username,
+    });
     return false;
   }
 
@@ -165,14 +225,24 @@ export async function trackIdentity(
   // An unconfirmed row holds an unverified leftover (first name alone, or a lurker never read),
   // so adopting the first reading silently is what keeps that backlog out of the channel.
   const change = row?.identityConfirmedAt ? diff : null;
-  // A silent adoption looks exactly like a missed change from outside — log it so "SangMata saw
-  // it, Yuki didn't" is answerable without guessing.
   if (diff && !change) {
     logger.info({ action: "name_change_baseline_adopted", chatId, userId, before, current });
   }
+  const announced = change !== null && chatConfig.features?.trackNameChanges === true;
+
+  observe(chatConfig, {
+    userId,
+    chatId,
+    source,
+    outcome: announced ? "announced" : change ? "notice_disabled" : diff ? "baseline_adopted" : "no_diff",
+    storedName: before.name,
+    storedUsername: before.username,
+    observedName: current.name,
+    observedUsername: current.username,
+  });
 
   // Persisting is bookkeeping, not the feature: only the notice is flagged (G16).
-  if (change && chatConfig.features?.trackNameChanges) {
+  if (announced) {
     logger.info({ action: "name_change", chatId, userId, change });
     recordActivity({
       chatId,
@@ -192,13 +262,14 @@ export async function trackIdentity(
 /**
  * Same observation, every chat the user belongs to — each chat still compares against its own
  * row and announces on its own flag. Name and @username are global, so a read taken for one
- * chat is valid for all; withholding it left the other chats stale.
+ * chat is valid for all.
  */
 export async function trackIdentityEverywhere(
   api: Api,
   userId: number,
   current: Identity,
-  exceptChatId?: number
+  exceptChatId?: number,
+  source: IdentitySource = "fanout"
 ): Promise<void> {
   const rows = await userRepository.findAllForUser(userId);
   const chatIds = [...new Set(rows.map((r) => r.chatId))].filter((id) => id !== exceptChatId);
@@ -208,7 +279,7 @@ export async function trackIdentityEverywhere(
   for (const chatConfig of chats) {
     if (chatConfig.isActive === false) continue;
     try {
-      await trackIdentity(api, chatConfig, userId, chatConfig.chatId, current);
+      await trackIdentity(api, chatConfig, userId, chatConfig.chatId, current, source);
     } catch (err) {
       logger.error({ action: "track_identity_chat", chatId: chatConfig.chatId, userId, error: String(err) });
     }

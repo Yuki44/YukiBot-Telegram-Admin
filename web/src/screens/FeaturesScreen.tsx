@@ -70,6 +70,11 @@ const FEATURE_META: FeatureMeta[] = [
     desc: "Publica también en el grupo los avisos de «Seguimiento de nombres». Si está apagado, solo se ven en el canal de registro.",
   },
   {
+    id: "identityObservations",
+    name: "Registro de lecturas de perfil (diagnóstico)",
+    desc: "Guarda cada lectura de nombre/@usuario con su origen y qué se hizo con ella, durante 14 días. Sirve para saber por qué un cambio no se avisó; no cambia ningún aviso.",
+  },
+  {
     id: "topicReminders",
     name: "Recordatorio de normas por tema",
     desc: "Republica las normas de cada tema (como máximo cada 4 horas y solo si hay actividad), borrando el recordatorio anterior. Configura el texto de cada tema y el botón en Reglas por tema.",

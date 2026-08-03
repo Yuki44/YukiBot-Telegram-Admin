@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+﻿import { describe, it, expect } from "vitest";
 import { esc, displayName, mention, mentionHtml, mentionFullHtml } from "../../src/bot/helpers/html";
 
 describe("esc", () => {
@@ -48,8 +48,8 @@ describe("mention", () => {
 });
 
 describe("mentionHtml", () => {
-  it("wraps @username in a tg://user?id= link when available", () => {
-    expect(mentionHtml(42, "John", "johndoe")).toBe('<a href="tg://user?id=42">@johndoe</a>');
+  it("links a @username through t.me — the only target that resolves for every viewer", () => {
+    expect(mentionHtml(42, "John", "johndoe")).toBe('<a href="https://t.me/johndoe">@johndoe</a>');
   });
 
   it("falls back to the escaped name, still wrapped in a clickable link, without a username", () => {
@@ -61,7 +61,7 @@ describe("mentionFullHtml", () => {
   it("renders the clickable name plus the clickable @username", () => {
     expect(mentionFullHtml(42, "Harry")).toBe('<a href="tg://user?id=42">Harry</a>');
     expect(mentionFullHtml(42, "Harry", "hrush")).toBe(
-      '<a href="tg://user?id=42">Harry</a> (<a href="tg://user?id=42">@hrush</a>)'
+      '<a href="https://t.me/hrush">Harry</a> (<a href="https://t.me/hrush">@hrush</a>)'
     );
   });
 
@@ -71,7 +71,8 @@ describe("mentionFullHtml", () => {
     );
   });
 
-  it("escapes HTML in the name and the username", () => {
+  // A handle that can't be a handle must never reach the href unescaped.
+  it("escapes HTML in the name and the username, and refuses it as a link target", () => {
     expect(mentionFullHtml(42, "<b>H</b>", "<i>u</i>")).toBe(
       '<a href="tg://user?id=42">&lt;b&gt;H&lt;/b&gt;</a> (<a href="tg://user?id=42">@&lt;i&gt;u&lt;/i&gt;</a>)'
     );
