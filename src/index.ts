@@ -68,6 +68,22 @@ const bot = new Bot<BotContext>(token);
 // so a hostile flood can't wedge the process.
 bot.api.config.use(autoRetry({ maxRetryAttempts: 3, maxDelaySeconds: 30 }));
 
+// Profile links (https://t.me/<handle>) render a preview card with a "SEND MESSAGE"
+// button — a moderation notice must never invite the group to DM the target (G5).
+bot.api.config.use(async (prev, method, payload, signal) => {
+  if (method === "sendMessage" || method === "editMessageText") {
+    return prev(
+      method,
+      {
+        link_preview_options: { is_disabled: true },
+        ...payload,
+      } as typeof payload,
+      signal
+    );
+  }
+  return prev(method, payload, signal);
+});
+
 // Global error handler — prevents unhandled Grammy errors from crashing the process
 bot.catch((err) => {
   logger.error({
