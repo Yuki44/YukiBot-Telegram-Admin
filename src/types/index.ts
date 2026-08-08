@@ -217,8 +217,12 @@ export interface IUser extends Document {
   photoCheckedAt?: Date;
   /** Last time the rolling CSAM bio scanner checked this user's bio (undefined = never). */
   lastBioCheckAt?: Date;
+  /** Last time we refreshed identity fields from any source (message, callback, probe...). */
+  lastIdentityCheckAt?: Date;
   /** Consecutive getChat failures for this user; drives the scanner's presence probe. */
   bioMissCount?: number;
+  /** Last time a presence probe (getChatMember) was attempted for this chat row. */
+  lastPresenceProbeAt?: Date;
   /** Undefined = the stored name was never verified against Telegram, so it is not a baseline. */
   identityConfirmedAt?: Date;
   /**
@@ -313,7 +317,16 @@ export interface IActivityLog extends Document {
   timestamp: Date;
 }
 
-export const IDENTITY_SOURCES = ["message", "join", "bio_rotation", "presence_probe", "fanout"] as const;
+export const IDENTITY_SOURCES = [
+  "message",
+  "join",
+  "bio_rotation",
+  "presence_probe",
+  "fanout",
+  "chat_member",
+  "edited_message",
+  "callback_query",
+] as const;
 export type IdentitySource = (typeof IDENTITY_SOURCES)[number];
 
 /** `notice_disabled` = a real change confirmed while `trackNameChanges` was off. */

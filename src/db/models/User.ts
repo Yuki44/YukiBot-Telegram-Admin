@@ -54,9 +54,15 @@ const userSchema = new Schema<IUser>({
   lastBioCheckAt: {
     type: Date,
   },
+  lastIdentityCheckAt: {
+    type: Date,
+  },
   bioMissCount: {
     type: Number,
     default: 0,
+  },
+  lastPresenceProbeAt: {
+    type: Date,
   },
   notMemberAt: {
     type: Date,

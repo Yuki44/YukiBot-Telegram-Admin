@@ -24,8 +24,10 @@ vi.mock("../../src/db/repositories/userRepository", () => ({
     findDueForBioScan: vi.fn(),
     findByUserAndChat: vi.fn(async () => null),
     markBioChecked: vi.fn(async () => {}),
+    markIdentityChecked: vi.fn(async () => {}),
     recordBioMiss: vi.fn(async () => 1),
     clearBioMiss: vi.fn(async () => {}),
+    claimPresenceProbeSlot: vi.fn(async () => true),
     markNotMember: vi.fn(async () => true),
     syncPhotoAcrossChats: vi.fn(async () => {}),
   },
@@ -37,7 +39,6 @@ import { runBioScanBatch, isDefinitiveAbsence } from "../../src/features/csamDet
 import { userRepository } from "../../src/db/repositories/userRepository";
 import { chatRepository } from "../../src/db/repositories/chatRepository";
 import { trackIdentityEverywhere } from "../../src/features/nameTracking";
-import { CSAM_SCAN_MISS_LIMIT } from "../../src/config/constants";
 
 const CHAT = -100111;
 const USER = 4242;
@@ -70,6 +71,7 @@ beforeEach(() => {
     { userId: USER, chatId: CHAT, name: "Simo" },
   ] as never);
   vi.mocked(userRepository.recordBioMiss).mockResolvedValue(1);
+  vi.mocked(userRepository.claimPresenceProbeSlot).mockResolvedValue(true);
   vi.mocked(userRepository.markNotMember).mockResolvedValue(true);
 });
 
@@ -81,8 +83,20 @@ describe("presence probe (finding #1)", () => {
     expect(userRepository.clearBioMiss).toHaveBeenCalledWith(USER, CHAT);
   });
 
-  it("does not probe before the miss limit is reached", async () => {
-    vi.mocked(userRepository.recordBioMiss).mockResolvedValue(CSAM_SCAN_MISS_LIMIT - 1);
+  it("probes as soon as a miss happens when cooldown allows it", async () => {
+    vi.mocked(userRepository.recordBioMiss).mockResolvedValue(1);
+    const bot = makeBot({
+      getChat: vi.fn(async () => {
+        throw new Error("400: chat not found");
+      }),
+    });
+    await runBioScanBatch(bot, actor);
+    expect(bot.api.getChatMember).toHaveBeenCalled();
+    expect(userRepository.markNotMember).not.toHaveBeenCalled();
+  });
+
+  it("skips probe while cooldown slot is not available", async () => {
+    vi.mocked(userRepository.claimPresenceProbeSlot).mockResolvedValue(false);
     const bot = makeBot({
       getChat: vi.fn(async () => {
         throw new Error("400: chat not found");
@@ -90,11 +104,10 @@ describe("presence probe (finding #1)", () => {
     });
     await runBioScanBatch(bot, actor);
     expect(bot.api.getChatMember).not.toHaveBeenCalled();
-    expect(userRepository.markNotMember).not.toHaveBeenCalled();
   });
 
   it("prunes the row once getChatMember confirms the user left", async () => {
-    vi.mocked(userRepository.recordBioMiss).mockResolvedValue(CSAM_SCAN_MISS_LIMIT);
+    vi.mocked(userRepository.recordBioMiss).mockResolvedValue(2);
     const bot = makeBot({
       getChat: vi.fn(async () => {
         throw new Error("400: chat not found");
@@ -107,7 +120,7 @@ describe("presence probe (finding #1)", () => {
   });
 
   it("treats an unresolvable member as absent rather than retrying forever", async () => {
-    vi.mocked(userRepository.recordBioMiss).mockResolvedValue(CSAM_SCAN_MISS_LIMIT);
+    vi.mocked(userRepository.recordBioMiss).mockResolvedValue(2);
     const bot = makeBot({
       getChat: vi.fn(async () => {
         throw new Error("400: chat not found");
@@ -121,7 +134,7 @@ describe("presence probe (finding #1)", () => {
   });
 
   it("keeps a still-present lurker and harvests the identity getChat could not give", async () => {
-    vi.mocked(userRepository.recordBioMiss).mockResolvedValue(CSAM_SCAN_MISS_LIMIT);
+    vi.mocked(userRepository.recordBioMiss).mockResolvedValue(2);
     vi.mocked(chatRepository.listAll).mockResolvedValue([
       chatConfig({ trackNameChanges: true }),
     ] as never);
@@ -148,7 +161,7 @@ describe("presence probe (finding #1)", () => {
   // R1: an outage or a demoted bot makes every probe in a chat fail at once. Reading that as
   // absence would delete good rows wholesale, so an inconclusive answer must never prune.
   it("never prunes when the probe fails for a chat-level reason", async () => {
-    vi.mocked(userRepository.recordBioMiss).mockResolvedValue(CSAM_SCAN_MISS_LIMIT);
+    vi.mocked(userRepository.recordBioMiss).mockResolvedValue(2);
     const bot = makeBot({
       getChat: vi.fn(async () => {
         throw new Error("400: chat not found");
@@ -162,7 +175,7 @@ describe("presence probe (finding #1)", () => {
   });
 
   it("never prunes on a transient network error", async () => {
-    vi.mocked(userRepository.recordBioMiss).mockResolvedValue(CSAM_SCAN_MISS_LIMIT);
+    vi.mocked(userRepository.recordBioMiss).mockResolvedValue(2);
     const bot = makeBot({
       getChat: vi.fn(async () => {
         throw new Error("400: chat not found");
@@ -176,7 +189,7 @@ describe("presence probe (finding #1)", () => {
   });
 
   it("prunes on a definitive per-user answer (deleted account)", async () => {
-    vi.mocked(userRepository.recordBioMiss).mockResolvedValue(CSAM_SCAN_MISS_LIMIT);
+    vi.mocked(userRepository.recordBioMiss).mockResolvedValue(2);
     const bot = makeBot({
       getChat: vi.fn(async () => {
         throw new Error("400: chat not found");
@@ -191,7 +204,7 @@ describe("presence probe (finding #1)", () => {
 
   // A user who already left yields no identity to record, whatever the flags say.
   it("probes and prunes without recording an identity for a departed user", async () => {
-    vi.mocked(userRepository.recordBioMiss).mockResolvedValue(CSAM_SCAN_MISS_LIMIT);
+    vi.mocked(userRepository.recordBioMiss).mockResolvedValue(2);
     const bot = makeBot({
       getChat: vi.fn(async () => {
         throw new Error("400: chat not found");

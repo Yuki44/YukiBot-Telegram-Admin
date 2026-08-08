@@ -204,12 +204,25 @@ export const userRepository = {
 
   /** Persist an identity read from Telegram and mark it trustworthy. Unsets a removed username. */
   async confirmIdentity(userId: number, chatId: number, name?: string, username?: string): Promise<void> {
-    const set: Record<string, unknown> = { identityConfirmedAt: new Date() };
+    const now = new Date();
+    const set: Record<string, unknown> = { identityConfirmedAt: now, lastIdentityCheckAt: now };
     const update: Record<string, unknown> = { $setOnInsert: { userId, chatId } };
     if (name && name.trim()) set.name = name.trim();
     if (username && username.trim()) set.username = username.trim();
     else update.$unset = { username: 1 };
     update.$set = set;
+    await User.updateOne({ userId, chatId }, update, { upsert: true, setDefaultsOnInsert: true });
+  },
+
+  /** Persist a username-only observation without promoting an unconfirmed name baseline. */
+  async updateIdentityUsername(userId: number, chatId: number, username?: string): Promise<void> {
+    const now = new Date();
+    const update: Record<string, unknown> = {
+      $set: { lastIdentityCheckAt: now },
+      $setOnInsert: { userId, chatId },
+    };
+    if (username && username.trim()) (update.$set as Record<string, unknown>).username = username.trim();
+    else update.$unset = { username: 1 };
     await User.updateOne({ userId, chatId }, update, { upsert: true, setDefaultsOnInsert: true });
   },
 
@@ -401,6 +414,11 @@ export const userRepository = {
     await User.updateMany({ userId }, { $set: { lastBioCheckAt: when } });
   },
 
+  /** Stamp lastIdentityCheckAt on every chat doc for this user. */
+  async markIdentityChecked(userId: number, when: Date = new Date()): Promise<void> {
+    await User.updateMany({ userId }, { $set: { lastIdentityCheckAt: when } });
+  },
+
   /**
    * Atomically claim the right to raise a CP_ALERTA (false = already raised inside the window).
    * When the row fails the condition the upsert collides on userId+chatId, and that E11000 is
@@ -460,6 +478,32 @@ export const userRepository = {
 
   async clearBioMiss(userId: number, chatId: number): Promise<void> {
     await User.updateOne({ userId, chatId }, { $set: { bioMissCount: 0 } });
+  },
+
+  /**
+   * Atomically reserve a presence probe slot for this row, honoring cooldown.
+   * Returns false when still cooling down.
+   */
+  async claimPresenceProbeSlot(
+    userId: number,
+    chatId: number,
+    cooldownMs: number,
+    now: Date = new Date()
+  ): Promise<boolean> {
+    const cutoff = new Date(now.getTime() - cooldownMs);
+    const res = await User.updateOne(
+      {
+        userId,
+        chatId,
+        $or: [{ lastPresenceProbeAt: { $exists: false } }, { lastPresenceProbeAt: { $lt: cutoff } }],
+      },
+      {
+        $set: { lastPresenceProbeAt: now },
+        $setOnInsert: { userId, chatId },
+      },
+      { upsert: true, setDefaultsOnInsert: true }
+    );
+    return (res.modifiedCount ?? 0) > 0 || (res.upsertedCount ?? 0) > 0;
   },
 
   /**

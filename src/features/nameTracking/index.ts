@@ -133,7 +133,8 @@ function buildHandleOnlyMessage(userId: number, before: Identity, after: Identit
 export function buildIdentityChangeMessage(userId: number, before: Identity, after: Identity): string {
   const nameChanged = display(before.name) !== display(after.name);
   const userChanged = norm(before.username) !== norm(after.username);
-  if (!nameChanged && userChanged && display(after.name) === t("nameTracker.invisibleName")) {
+  const afterName = display(after.name);
+  if (!nameChanged && userChanged && (!afterName || afterName === t("nameTracker.invisibleName"))) {
     return buildHandleOnlyMessage(userId, before, after);
   }
   const currentUsername = norm(after.username) || undefined;
@@ -203,10 +204,12 @@ export async function trackIdentity(
   current: Identity,
   source: IdentitySource = "message"
 ): Promise<boolean> {
-  // A blank name means Telegram gave us nothing readable (deleted account, unresolved peer).
-  // Announcing it prints an empty half ("Va (@vavabaa) → ") and persisting it wipes good data.
-  // An invisible-but-present name is not that case: it keeps its row and shows a placeholder.
-  if (!(current.name ?? "").trim()) {
+  const row = await userRepository.findByUserAndChat(userId, chatId);
+  const before: Identity = { name: row?.name, username: row?.username };
+  const nameMissing = !(current.name ?? "").trim();
+  const usernameMissing = !norm(current.username);
+
+  if (nameMissing && usernameMissing) {
     logger.warn({ action: "name_change_blank_observation", chatId, userId });
     observe(chatConfig, {
       userId,
@@ -218,9 +221,14 @@ export async function trackIdentity(
     return false;
   }
 
-  const row = await userRepository.findByUserAndChat(userId, chatId);
-  const before: Identity = { name: row?.name, username: row?.username };
-  const diff = diffIdentity(before, current);
+  const effectiveCurrent: Identity = {
+    name: nameMissing ? before.name : current.name,
+    username: current.username,
+  };
+  if (nameMissing) {
+    logger.warn({ action: "name_change_blank_observation", chatId, userId, fallback: "username_only" });
+  }
+  const diff = diffIdentity(before, effectiveCurrent);
 
   // An unconfirmed row holds an unverified leftover (first name alone, or a lurker never read),
   // so adopting the first reading silently is what keeps that backlog out of the channel.
@@ -237,7 +245,7 @@ export async function trackIdentity(
     outcome: announced ? "announced" : change ? "notice_disabled" : diff ? "baseline_adopted" : "no_diff",
     storedName: before.name,
     storedUsername: before.username,
-    observedName: current.name,
+    observedName: effectiveCurrent.name,
     observedUsername: current.username,
   });
 
@@ -248,14 +256,18 @@ export async function trackIdentity(
       chatId,
       type: "name_change",
       source: "auto",
-      actor: { id: userId, name: current.name, username: current.username },
-      target: { id: userId, name: current.name, username: current.username },
+      actor: { id: userId, name: effectiveCurrent.name, username: effectiveCurrent.username },
+      target: { id: userId, name: effectiveCurrent.name, username: effectiveCurrent.username },
       reason: describeIdentityChange(change),
     });
-    await announce(api, chatConfig, chatId, buildIdentityChangeMessage(userId, before, current));
+    await announce(api, chatConfig, chatId, buildIdentityChangeMessage(userId, before, effectiveCurrent));
   }
 
-  await userRepository.confirmIdentity(userId, chatId, current.name, current.username);
+  if (nameMissing) {
+    await userRepository.updateIdentityUsername(userId, chatId, current.username);
+  } else {
+    await userRepository.confirmIdentity(userId, chatId, current.name, current.username);
+  }
   return diff !== null;
 }
 

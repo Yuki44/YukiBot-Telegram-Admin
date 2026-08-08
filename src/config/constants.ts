@@ -60,6 +60,10 @@ export const AUTO_DELETE_SHORT_MS = 1_000;
 
 /** How many consecutive getChat misses before we spend a tick on a getChatMember presence probe. */
 export const CSAM_SCAN_MISS_LIMIT = 3;
+/** Base cooldown after a presence probe fails inconclusively. */
+export const CSAM_PRESENCE_PROBE_BASE_COOLDOWN_MS = 10 * 60 * 1000;
+/** Upper bound for exponential probe cooldown. */
+export const CSAM_PRESENCE_PROBE_MAX_COOLDOWN_MS = 3 * 60 * 60 * 1000;
 
 /**
  * How long a row confirmed absent stays out of the scan queue before we re-probe it. A missed
