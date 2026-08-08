@@ -148,3 +148,24 @@ export const LANGUAGE_MIN_WORDS = 2;
 
 /** Bulk-delete window (ms) on offense #2+ — "the last couple of hours" of a user's messages. */
 export const LANGUAGE_BULK_DELETE_WINDOW_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * Below this word count the local pre-filter never skips: short text is where language
+ * identification is least reliable and where the loanword nuance ("Ey bro, abre") lives,
+ * so those messages always reach the classifier.
+ */
+export const LANGUAGE_PREFILTER_MIN_WORDS = 4;
+
+/**
+ * Minimum es/ca confidence for the local pre-filter to skip the API call. Measured es/ca
+ * scores on real traffic sit at 0.69-0.83, so this keeps the clearly-Spanish long messages
+ * and sends everything borderline to the classifier.
+ */
+export const LANGUAGE_PREFILTER_MIN_CONFIDENCE = 0.7;
+
+/**
+ * Fraction of pre-filter skips still sent to the classifier, purely to measure what the
+ * skip swallowed. Without it a missed offense leaves no trace anywhere — nobody watches
+ * the group closely enough to notice silence.
+ */
+export const LANGUAGE_SHADOW_SAMPLE_RATE = 0.02;
