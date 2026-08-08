@@ -24,8 +24,10 @@ vi.mock("../../src/db/repositories/userRepository", () => ({
     findDueForBioScan: vi.fn(),
     findByUserAndChat: vi.fn(async () => null),
     markBioChecked: vi.fn(async () => {}),
+    markIdentityChecked: vi.fn(async () => {}),
     recordBioMiss: vi.fn(async () => 1),
     clearBioMiss: vi.fn(async () => {}),
+    claimPresenceProbeSlot: vi.fn(async () => true),
     markNotMember: vi.fn(async () => true),
     syncPhotoAcrossChats: vi.fn(async () => {}),
   },
@@ -70,6 +72,7 @@ beforeEach(() => {
     { userId: USER, chatId: CHAT, name: "Simo" },
   ] as never);
   vi.mocked(userRepository.recordBioMiss).mockResolvedValue(1);
+  vi.mocked(userRepository.claimPresenceProbeSlot).mockResolvedValue(true);
   vi.mocked(userRepository.markNotMember).mockResolvedValue(true);
 });
 
@@ -91,6 +94,17 @@ describe("presence probe (finding #1)", () => {
     await runBioScanBatch(bot, actor);
     expect(bot.api.getChatMember).not.toHaveBeenCalled();
     expect(userRepository.markNotMember).not.toHaveBeenCalled();
+  });
+
+  it("skips probe while cooldown slot is not available", async () => {
+    vi.mocked(userRepository.claimPresenceProbeSlot).mockResolvedValue(false);
+    const bot = makeBot({
+      getChat: vi.fn(async () => {
+        throw new Error("400: chat not found");
+      }),
+    });
+    await runBioScanBatch(bot, actor);
+    expect(bot.api.getChatMember).not.toHaveBeenCalled();
   });
 
   it("prunes the row once getChatMember confirms the user left", async () => {

@@ -17,6 +17,8 @@ import {
   CSAM_SCAN_HEARTBEAT_MS,
   CSAM_URGENT_COOLDOWN_MS,
   CSAM_SCAN_MISS_LIMIT,
+  CSAM_PRESENCE_PROBE_BASE_COOLDOWN_MS,
+  CSAM_PRESENCE_PROBE_MAX_COOLDOWN_MS,
 } from "../../config/constants";
 
 /**
@@ -140,6 +142,23 @@ export function isDefinitiveAbsence(err: unknown): boolean {
   );
 }
 
+type PresenceFailureReason = "flood_wait" | "chat_level" | "network" | "unknown";
+function classifyPresenceFailure(err: unknown): PresenceFailureReason {
+  const d = errorDescription(err);
+  if (d.includes("retry after") || d.includes("too many requests")) return "flood_wait";
+  if (d.includes("chat not found") || d.includes("bot is not a member")) return "chat_level";
+  if (
+    d.includes("etimedout") ||
+    d.includes("econnreset") ||
+    d.includes("econnrefused") ||
+    d.includes("socket hang up") ||
+    d.includes("fetch failed")
+  ) {
+    return "network";
+  }
+  return "unknown";
+}
+
 /**
  * Presence probe for a user getChat keeps missing. getChatMember resolves regardless of the
  * peer cache, so it is the only way to tell a pure lurker from someone who already left —
@@ -156,7 +175,12 @@ async function probePresence(bot: Bot<BotContext>, chatId: number, userId: numbe
   } catch (err) {
     // Never delete on a maybe: an inconclusive answer keeps the row for a later rotation.
     if (!isDefinitiveAbsence(err)) {
-      logger.warn({ action: "csam_scan_presence_inconclusive", chatId, userId, error: String(err) });
+      const reason = classifyPresenceFailure(err);
+      if (reason === "flood_wait") stats.inconclusiveFlood += 1;
+      else if (reason === "chat_level") stats.inconclusiveChat += 1;
+      else if (reason === "network") stats.inconclusiveNetwork += 1;
+      else stats.inconclusiveUnknown += 1;
+      logger.warn({ action: "csam_scan_presence_inconclusive", chatId, userId, reason, error: String(err) });
       return null;
     }
     status = "left";
@@ -178,7 +202,18 @@ async function probePresence(bot: Bot<BotContext>, chatId: number, userId: numbe
 }
 
 /** Rotation counters for the heartbeat. */
-const stats = { checked: 0, urgent: 0, failed: 0, hits: 0, identity: 0, pruned: 0 };
+const stats = {
+  checked: 0,
+  urgent: 0,
+  failed: 0,
+  hits: 0,
+  identity: 0,
+  pruned: 0,
+  inconclusiveFlood: 0,
+  inconclusiveChat: 0,
+  inconclusiveNetwork: 0,
+  inconclusiveUnknown: 0,
+};
 
 /** Snapshot + reset of the heartbeat counters (exported for testing). */
 export function takeScanStats(): typeof stats {
@@ -189,6 +224,10 @@ export function takeScanStats(): typeof stats {
   stats.hits = 0;
   stats.identity = 0;
   stats.pruned = 0;
+  stats.inconclusiveFlood = 0;
+  stats.inconclusiveChat = 0;
+  stats.inconclusiveNetwork = 0;
+  stats.inconclusiveUnknown = 0;
   return snapshot;
 }
 
@@ -221,17 +260,23 @@ async function checkUserBio(
   actor: ActivityActor
 ): Promise<void> {
   const profile = await fetchProfile(bot, target.userId);
-  // Stamp first: a mid-action failure must not wedge the scanner, and an account that
-  // can never be resolved must not starve the rotation by retrying forever.
+  await userRepository.markIdentityChecked(target.userId);
+  // Stamp first: a mid-action failure must not wedge the scanner on one user forever.
   await userRepository.markBioChecked(target.userId);
   stats.checked += 1;
 
   if (profile === null) {
     stats.failed += 1;
     const misses = await userRepository.recordBioMiss(target.userId, chatConfig.chatId).catch(() => 0);
-    // Only after repeated misses: the extra call is amortized over the users getChat
-    // will never resolve, so resolvable members keep their full bio cadence.
     if (misses >= CSAM_SCAN_MISS_LIMIT) {
+      const backoff = Math.min(
+        CSAM_PRESENCE_PROBE_MAX_COOLDOWN_MS,
+        CSAM_PRESENCE_PROBE_BASE_COOLDOWN_MS * Math.pow(2, Math.max(0, misses - 1))
+      );
+      const canProbe = await userRepository
+        .claimPresenceProbeSlot(target.userId, chatConfig.chatId, backoff)
+        .catch(() => false);
+      if (!canProbe) return;
       const identity = await probePresence(bot, chatConfig.chatId, target.userId);
       if (identity) await recordIdentity(bot, target.userId, identity, "presence_probe");
     }

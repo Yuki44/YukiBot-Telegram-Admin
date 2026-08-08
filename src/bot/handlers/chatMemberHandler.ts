@@ -9,6 +9,7 @@ import { clearRecentWelcome } from "../helpers/welcomeTracker";
 import { isKickInProgress, clearKick } from "../helpers/kickTracker";
 import { logger } from "../../utils/logger";
 import { recordActivity } from "../../utils/activityLog";
+import { trackIdentityFromTelegramUser } from "./nameChangeTracker";
 
 type TgUserLike = { id: number; first_name: string; last_name?: string; username?: string };
 
@@ -37,6 +38,13 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
     const chatId = ctx.chat.id;
     const chatName = ctx.chat.title ?? "Unknown";
     const target = toLogUser(newM.user);
+    if (newM.status !== "left" && newM.status !== "kicked") {
+      try {
+        await trackIdentityFromTelegramUser(ctx, newM.user, chatId, "chat_member");
+      } catch (err) {
+        logger.error({ action: "chatMember_identity", chatId, userId, error: String(err) });
+      }
+    }
 
     // --- Admin demotion / promotion ---
     const wasAdmin = oldM.status === "administrator" || oldM.status === "creator";

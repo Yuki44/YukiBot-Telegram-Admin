@@ -4,6 +4,27 @@ import { trackIdentity, trackIdentityEverywhere } from "../../features/nameTrack
 import { fullName } from "../helpers/fullName";
 import { logger } from "../../utils/logger";
 
+type SourceUser = {
+  id: number;
+  is_bot?: boolean;
+  first_name?: string;
+  last_name?: string;
+  username?: string;
+};
+
+export async function trackIdentityFromTelegramUser(
+  ctx: BotContext,
+  from: SourceUser | undefined,
+  chatId: number,
+  source: "message" | "edited_message" | "chat_member" | "callback_query" = "message"
+): Promise<void> {
+  const chatConfig = ctx.chatConfig;
+  if (!chatConfig || !from || from.is_bot) return;
+  const current = { name: fullName(from), username: from.username };
+  const changed = await trackIdentity(ctx.api, chatConfig, from.id, chatId, current, source);
+  if (changed) await trackIdentityEverywhere(ctx.api, from.id, current, chatId, "fanout");
+}
+
 /**
  * On every message: refresh the stored identity and, in a trackNameChanges chat, announce the
  * change. Persisting here (not in trackUser) is what makes the comparison reliable — the
@@ -15,20 +36,10 @@ import { logger } from "../../utils/logger";
  */
 export async function nameChangeTracker(ctx: BotContext, next: NextFunction): Promise<void> {
   try {
-    const chatConfig = ctx.chatConfig;
-    if (!chatConfig) return await next();
-
     const msg = ctx.message;
     const from = msg?.from;
     if (!msg || !from || from.is_bot || msg.chat.type === "private") return await next();
-
-    const current = {
-      name: fullName(from),
-      username: from.username,
-    };
-    const changed = await trackIdentity(ctx.api, chatConfig, from.id, msg.chat.id, current);
-    // Only a real change is worth the cross-chat lookups; the steady state stays two queries.
-    if (changed) await trackIdentityEverywhere(ctx.api, from.id, current, msg.chat.id, "fanout");
+    await trackIdentityFromTelegramUser(ctx, from, msg.chat.id, "message");
   } catch (err) {
     logger.error({ action: "nameChangeTracker", error: String(err) });
   }

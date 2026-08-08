@@ -46,7 +46,7 @@ import { startTopicSweep } from "./features/topicSync/sweep";
 import { csamImageScan } from "./bot/handlers/csamImageHandler";
 import { warmupOcr } from "./features/csamDetection/ocr";
 import { csamBioTrigger } from "./bot/handlers/csamBioTrigger";
-import { nameChangeTracker } from "./bot/handlers/nameChangeTracker";
+import { nameChangeTracker, trackIdentityFromTelegramUser } from "./bot/handlers/nameChangeTracker";
 import { promoSpamDetection } from "./features/promoSpamDetection";
 import { languageDetection } from "./features/languageDetection";
 import { spamHandler } from "./bot/commands/spam";
@@ -141,10 +141,29 @@ bot.on("message:new_chat_members", newChatMembersHandler);
 
 // Callback query router: CSAM alert buttons vs. spam ✅/❌ buttons (by data prefix)
 bot.on("callback_query", async (ctx) => {
+  if (ctx.chat && ctx.chat.type !== "private") {
+    try {
+      await trackIdentityFromTelegramUser(ctx, ctx.callbackQuery.from, ctx.chat.id, "callback_query");
+    } catch (err) {
+      logger.error({ action: "identity_callback_query", chatId: ctx.chat.id, error: String(err) });
+    }
+  }
   const data = ctx.callbackQuery.data ?? "";
   if (data.startsWith("csam_")) return await csamCallbackHandler(ctx);
   if (data.startsWith("langgrace_")) return await languageCallbackHandler(ctx);
   return await spamCallbackHandler(ctx);
+});
+
+bot.on("edited_message", async (ctx, next) => {
+  const msg = ctx.editedMessage;
+  if (msg && msg.chat.type !== "private") {
+    try {
+      await trackIdentityFromTelegramUser(ctx, msg.from, msg.chat.id, "edited_message");
+    } catch (err) {
+      logger.error({ action: "identity_edited_message", chatId: msg.chat.id, error: String(err) });
+    }
+  }
+  return await next();
 });
 
 bot.on("message:forum_topic_created", async (ctx) => {
@@ -250,7 +269,7 @@ async function start() {
 
   logger.info({ action: "startup", status: "starting bot polling..." });
   await bot.start({
-    allowed_updates: ["message", "chat_member", "callback_query", "channel_post"],
+    allowed_updates: ["message", "edited_message", "chat_member", "callback_query", "channel_post"],
     onStart: () => {
       logger.info({ action: "startup", status: "YukiBot is running" });
       // botInfo is populated by now — safe to boot the rolling CSAM bio scanner.

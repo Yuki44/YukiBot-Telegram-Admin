@@ -33,7 +33,7 @@ describe("nameChangeTracker gate (G16/G18)", () => {
     expect(trackIdentity).toHaveBeenCalledWith(expect.anything(), expect.anything(), 42, -100111, {
       name: "Simon B",
       username: "simon",
-    });
+    }, "message");
     expect(next).toHaveBeenCalled();
   });
 
