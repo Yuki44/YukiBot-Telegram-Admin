@@ -52,7 +52,10 @@ describe("diffIdentity", () => {
   // Emoji are ordinary characters here: they must compare, and change, like any other.
   it("treats emoji as part of the name", () => {
     expect(diffIdentity({ name: "🧸" }, { name: "🧸" })).toBeNull();
-    expect(diffIdentity({ name: "Ana" }, { name: "Ana 🌸" })?.nameChange).toEqual({ from: "Ana", to: "Ana 🌸" });
+    expect(diffIdentity({ name: "Ana" }, { name: "Ana 🌸" })?.nameChange).toEqual({
+      from: "Ana",
+      to: "Ana 🌸",
+    });
     expect(diffIdentity({ name: "🌸 🧸" }, { name: "🧸 🌸" })).not.toBeNull();
     expect(diffIdentity({ name: "👨‍👩‍👧" }, { name: "👨‍👩‍👧" })).toBeNull(); // ZWJ sequence kept intact
     expect(diffIdentity({ name: "❤️" }, { name: "❤️" })).toBeNull(); // variation selector kept
@@ -73,13 +76,13 @@ describe("diffIdentity", () => {
     const filler = "\u3164\u115F";
     expect(diffIdentity({ name: invisible }, { name: filler })).toBeNull();
     expect(diffIdentity({ name: invisible }, { name: "Ana" })?.nameChange).toEqual({
-      from: "(nombre invisible)",
+      from: "⬚",
       to: "Ana",
     });
     // The username still changes on its own, and that is what gets announced.
-    expect(diffIdentity({ name: invisible, username: "licuadodefresas" }, { name: invisible })?.usernameChange).toEqual(
-      { from: "licuadodefresas", to: undefined }
-    );
+    expect(
+      diffIdentity({ name: invisible, username: "licuadodefresas" }, { name: invisible })?.usernameChange
+    ).toEqual({ from: "licuadodefresas", to: undefined });
   });
 
   // Production: "️h → ️" — the new name is a lone variation selector, which prints nothing.
@@ -87,7 +90,7 @@ describe("diffIdentity", () => {
   it("treats a name of variation selectors / ZWJ as unreadable without breaking emoji", () => {
     expect(diffIdentity({ name: "\uFE0Fh" }, { name: "\uFE0F" })?.nameChange).toEqual({
       from: "\uFE0Fh",
-      to: "(nombre invisible)",
+      to: "⬚",
     });
     expect(diffIdentity({ name: "\uFE0F" }, { name: "\u200D" })).toBeNull();
     expect(diffIdentity({ name: "❤️" }, { name: "❤️" })).toBeNull();
@@ -97,19 +100,28 @@ describe("diffIdentity", () => {
 
 describe("buildIdentityChangeMessage", () => {
   it("name change: old name plain, new name linked, unchanged username linked on both sides", () => {
-    const msg = buildIdentityChangeMessage(7807562391, { name: "Simo", username: "simo" }, { name: "Simon", username: "simo" });
-    expect(msg).toContain("ha actualizado su perfil");
+    const msg = buildIdentityChangeMessage(
+      7807562391,
+      { name: "Simo", username: "simo" },
+      { name: "Simon", username: "simo" }
+    );
+    expect(msg).toContain("ha actualizado su nombre");
     expect(msg).toContain("<code>7807562391</code>");
     expect(msg).not.toContain('<a href="https://t.me/simo">Simo</a>'); // old name: plain
     expect(msg).toContain('<b><a href="https://t.me/simo">Simon</a></b>'); // new name: linked + bold
     expect(msg).toContain('<a href="https://t.me/simo">@simo</a>'); // unchanged username: linked
-    expect(msg).toContain("perfil:\n"); // the change starts on its own line
+    expect(msg).toContain("nombre:\n"); // the change starts on its own line
   });
 
   // A freed @handle can be re-registered by a stranger, and Telegram auto-links any bare
   // @handle in the text — so the replaced one keeps neither the @ nor a link.
   it("username change: old handle inert and @-less, new @handle linked and bold", () => {
-    const msg = buildIdentityChangeMessage(1, { name: "Simo", username: "simoo" }, { name: "Simo", username: "simon2" });
+    const msg = buildIdentityChangeMessage(
+      1,
+      { name: "Simo", username: "simoo" },
+      { name: "Simo", username: "simon2" }
+    );
+    expect(msg).toContain("ha actualizado su nombre de usuario");
     expect(msg).toContain("<i>‹simoo›</i>");
     expect(msg).not.toContain("@simoo");
     expect(msg).toContain('<b><a href="https://t.me/simon2">@simon2</a></b>');
@@ -118,7 +130,12 @@ describe("buildIdentityChangeMessage", () => {
   });
 
   it("both change: only the new values are linked and bold", () => {
-    const msg = buildIdentityChangeMessage(5, { name: "Ana", username: "ana" }, { name: "Ana María", username: "ana_m" });
+    const msg = buildIdentityChangeMessage(
+      5,
+      { name: "Ana", username: "ana" },
+      { name: "Ana María", username: "ana_m" }
+    );
+    expect(msg).toContain("ha actualizado su perfil");
     expect(msg).toContain("Ana ("); // old name plain
     expect(msg).toContain("<i>‹ana›</i>"); // old username inert
     expect(msg).toContain('<b><a href="https://t.me/ana_m">Ana María</a></b>');
@@ -147,14 +164,20 @@ describe("buildIdentityChangeMessage", () => {
       { name: invisible, username: "licuadodefresas" },
       { name: invisible, username: "otro" }
     );
-    expect(msg).not.toContain("(nombre invisible)");
+    expect(msg).not.toContain("⬚");
+    expect(msg).toContain("ha actualizado su nombre de usuario");
     expect(msg).toContain("<i>‹licuadodefresas›</i>");
     expect(msg).toContain('<b><a href="https://t.me/otro">@otro</a></b>');
   });
 
   it("handle-only notice spells out a removed handle without a bare @", () => {
     const invisible = "\u00AD";
-    const msg = buildIdentityChangeMessage(1, { name: invisible, username: "licuadodefresas" }, { name: invisible });
+    const msg = buildIdentityChangeMessage(
+      1,
+      { name: invisible, username: "licuadodefresas" },
+      { name: invisible }
+    );
+    expect(msg).toContain("ha actualizado su nombre de usuario");
     expect(msg).toContain("<b>sin alias</b>");
     expect(msg).not.toContain("@usuario");
   });
@@ -373,7 +396,7 @@ describe("trackIdentity", () => {
       { name: invisible, username: "licuadodefresas" },
       { name: invisible }
     );
-    expect(msg).not.toContain("(nombre invisible)");
+    expect(msg).not.toContain("⬚");
     expect(msg).toContain("<i>‹licuadodefresas›</i>");
     expect(msg).toContain("sin alias");
   });
