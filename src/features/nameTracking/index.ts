@@ -118,6 +118,12 @@ function renderSide(userId: number, id: Identity, opts: SideOptions): string {
   return `${namePart} (${userPart})`;
 }
 
+/** perfil (both moved) · nombre (name only) · nombre de usuario (handle only). */
+function changedWord(nameChanged: boolean, userChanged: boolean): string {
+  if (nameChanged && userChanged) return t("nameTracker.profileWord");
+  return nameChanged ? t("nameTracker.nameWord") : t("nameTracker.usernameWord");
+}
+
 /** Unreadable names carry nothing: with only the handle moving, it is the whole notice. */
 function buildHandleOnlyMessage(userId: number, before: Identity, after: Identity): string {
   const oldHandle = norm(before.username);
@@ -126,7 +132,7 @@ function buildHandleOnlyMessage(userId: number, before: Identity, after: Identit
   const to = newHandle
     ? `<b>${profileLink(userId, `@${newHandle}`, newHandle)}</b>`
     : `<b>${t("nameTracker.usernameRemoved")}</b>`;
-  return t("nameTracker.profileUpdated", { id: userId, from, to });
+  return t("nameTracker.profileUpdated", { id: userId, what: t("nameTracker.usernameWord"), from, to });
 }
 
 /** Builds the HTML notice (pure, testable). */
@@ -152,7 +158,12 @@ export function buildIdentityChangeMessage(userId: number, before: Identity, aft
   });
   // Dropping a handle otherwise reads as "nothing happened": the new side just loses a token.
   if (norm(before.username) && !norm(after.username)) to += ` (<b>${t("nameTracker.usernameRemoved")}</b>)`;
-  return t("nameTracker.profileUpdated", { id: userId, from, to });
+  return t("nameTracker.profileUpdated", {
+    id: userId,
+    what: changedWord(nameChanged, userChanged),
+    from,
+    to,
+  });
 }
 
 async function announce(api: Api, chatConfig: IChat, chatId: number, text: string): Promise<void> {
