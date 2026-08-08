@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../../src/features/languageDetection/preScreen", () => ({
   isCandidate: vi.fn(),
+  countWords: vi.fn().mockReturnValue(10),
+}));
+vi.mock("../../src/features/languageDetection/localDetect", () => ({
+  detectLocally: vi.fn().mockResolvedValue({ skip: false }),
 }));
 vi.mock("../../src/features/languageDetection/classifier", () => ({
   classifyLanguage: vi.fn(),
@@ -18,6 +22,7 @@ vi.mock("../../src/utils/logger", () => ({
 
 import { languageDetection } from "../../src/features/languageDetection";
 import { isCandidate } from "../../src/features/languageDetection/preScreen";
+import { detectLocally } from "../../src/features/languageDetection/localDetect";
 import { classifyLanguage } from "../../src/features/languageDetection/classifier";
 import { handleLanguageOffense } from "../../src/features/languageDetection/actions";
 import { adminRepository } from "../../src/db/repositories/adminRepository";
@@ -59,7 +64,25 @@ describe("languageDetection — middleware chain", () => {
     vi.clearAllMocks();
     (adminRepository.isChatAdmin as ReturnType<typeof vi.fn>).mockResolvedValue(false);
     (isCandidate as ReturnType<typeof vi.fn>).mockReturnValue(true);
+    (detectLocally as ReturnType<typeof vi.fn>).mockResolvedValue({ skip: false });
     (classifyLanguage as ReturnType<typeof vi.fn>).mockResolvedValue({ verdict: "FOREIGN_BLATANT" });
+  });
+
+  it("skips the classifier when the local detector is confident it is Spanish/Catalan", async () => {
+    (detectLocally as ReturnType<typeof vi.fn>).mockResolvedValue({ skip: true, language: "es", confidence: 0.8 });
+    const next = vi.fn().mockResolvedValue(undefined);
+    await languageDetection(makeCtx(), next);
+    expect(classifyLanguage).not.toHaveBeenCalled();
+    expect(handleLanguageOffense).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("still classifies when the local detector is unsure — doubt costs a call, never a miss", async () => {
+    (detectLocally as ReturnType<typeof vi.fn>).mockResolvedValue({ skip: false, language: "en" });
+    const next = vi.fn().mockResolvedValue(undefined);
+    await languageDetection(makeCtx(), next);
+    expect(classifyLanguage).toHaveBeenCalled();
+    expect(handleLanguageOffense).toHaveBeenCalled();
   });
 
   it("calls next() when the feature flag is off", async () => {

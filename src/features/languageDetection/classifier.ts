@@ -62,7 +62,15 @@ export async function classifyLanguage(text: string): Promise<ClassifyResult> {
     const response = await getClient().messages.parse({
       model: "claude-sonnet-5",
       max_tokens: 1024,
-      system: SYSTEM_PROMPT,
+      // The system prompt is ~2.4k tokens against ~40 tokens of output, so it dominates the
+      // bill; a 1h TTL matches the traffic, where 99% of calls land within an hour of the last.
+      system: [
+        {
+          type: "text",
+          text: SYSTEM_PROMPT,
+          cache_control: { type: "ephemeral", ttl: "1h" },
+        },
+      ],
       messages: [{ role: "user", content: buildUserPrompt(text) }],
       output_config: {
         effort: "medium",
@@ -72,6 +80,8 @@ export async function classifyLanguage(text: string): Promise<ClassifyResult> {
 
     const inputTokens = response.usage.input_tokens;
     const outputTokens = response.usage.output_tokens;
+    const cacheReadTokens = response.usage.cache_read_input_tokens ?? 0;
+    const cacheWriteTokens = response.usage.cache_creation_input_tokens ?? 0;
 
     if (response.stop_reason === "refusal" || !response.parsed_output) {
       logger.warn({
@@ -79,8 +89,11 @@ export async function classifyLanguage(text: string): Promise<ClassifyResult> {
         verdict: "UNSURE",
         refusal: true,
         stopReason: response.stop_reason,
+        text,
         inputTokens,
         outputTokens,
+        cacheReadTokens,
+        cacheWriteTokens,
       });
       return { verdict: "UNSURE" };
     }
@@ -89,8 +102,11 @@ export async function classifyLanguage(text: string): Promise<ClassifyResult> {
       action: "language_classify_call",
       verdict: response.parsed_output.verdict,
       reason: response.parsed_output.reason,
+      text,
       inputTokens,
       outputTokens,
+      cacheReadTokens,
+      cacheWriteTokens,
     });
     return response.parsed_output;
   } catch (err) {

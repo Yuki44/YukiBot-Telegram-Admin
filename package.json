@@ -44,6 +44,7 @@
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.3.1",
+    "eld": "^2.0.3",
     "express": "^4.21.2",
     "grammy": "^1.41.1",
     "jsonwebtoken": "^9.0.2",
