@@ -38,10 +38,12 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
     const chatId = ctx.chat.id;
     const chatName = ctx.chat.title ?? "Unknown";
     const target = toLogUser(newM.user);
-    try {
-      await trackIdentityFromTelegramUser(ctx, newM.user, chatId, "chat_member");
-    } catch (err) {
-      logger.error({ action: "chatMember_identity", chatId, userId, error: String(err) });
+    if (newM.status !== "left" && newM.status !== "kicked") {
+      try {
+        await trackIdentityFromTelegramUser(ctx, newM.user, chatId, "chat_member");
+      } catch (err) {
+        logger.error({ action: "chatMember_identity", chatId, userId, error: String(err) });
+      }
     }
 
     // --- Admin demotion / promotion ---

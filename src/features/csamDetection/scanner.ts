@@ -16,6 +16,7 @@ import {
   CSAM_SCAN_MIN_INTERVAL_MS,
   CSAM_SCAN_HEARTBEAT_MS,
   CSAM_URGENT_COOLDOWN_MS,
+  CSAM_SCAN_MISS_LIMIT,
   CSAM_PRESENCE_PROBE_BASE_COOLDOWN_MS,
   CSAM_PRESENCE_PROBE_MAX_COOLDOWN_MS,
 } from "../../config/constants";
@@ -260,26 +261,28 @@ async function checkUserBio(
 ): Promise<void> {
   const profile = await fetchProfile(bot, target.userId);
   await userRepository.markIdentityChecked(target.userId);
+  // Stamp first: a mid-action failure must not wedge the scanner on one user forever.
+  await userRepository.markBioChecked(target.userId);
   stats.checked += 1;
 
   if (profile === null) {
     stats.failed += 1;
     const misses = await userRepository.recordBioMiss(target.userId, chatConfig.chatId).catch(() => 0);
-    const backoff = Math.min(
-      CSAM_PRESENCE_PROBE_MAX_COOLDOWN_MS,
-      CSAM_PRESENCE_PROBE_BASE_COOLDOWN_MS * Math.pow(2, Math.max(0, misses - 1))
-    );
-    const canProbe = await userRepository
-      .claimPresenceProbeSlot(target.userId, chatConfig.chatId, backoff)
-      .catch(() => false);
-    if (canProbe && misses >= 1) {
+    if (misses >= CSAM_SCAN_MISS_LIMIT) {
+      const backoff = Math.min(
+        CSAM_PRESENCE_PROBE_MAX_COOLDOWN_MS,
+        CSAM_PRESENCE_PROBE_BASE_COOLDOWN_MS * Math.pow(2, Math.max(0, misses - 1))
+      );
+      const canProbe = await userRepository
+        .claimPresenceProbeSlot(target.userId, chatConfig.chatId, backoff)
+        .catch(() => false);
+      if (!canProbe) return;
       const identity = await probePresence(bot, chatConfig.chatId, target.userId);
       if (identity) await recordIdentity(bot, target.userId, identity, "presence_probe");
     }
     return;
   }
 
-  await userRepository.markBioChecked(target.userId);
   await userRepository.clearBioMiss(target.userId, chatConfig.chatId).catch(() => {});
 
   // The avatar rides along in the getChat response, so caching it costs no API call. Only a
