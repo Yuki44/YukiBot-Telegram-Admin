@@ -15,7 +15,7 @@ import { t } from "../../locales/i18n";
  * Notices go to the chat's `logsTo`; they reach the group itself only when
  * `nameChangesVisible` is also on.
  *
- * Notice: "Usuario <id> ha actualizado su perfil: <before> → <after>". The id is tap-to-copy
+ * Notice: "<id> ha actualizado su <what>: <before> → <after>". The id is tap-to-copy
  * (<code>); a value is a clickable profile link only when it is the user's *current* value,
  * so old/replaced values stay plain and the change pops visually.
  */
@@ -72,8 +72,9 @@ const display = (s?: string | null): string => {
   return value && !rendersAsNothing(value) ? value : t("nameTracker.invisibleName");
 };
 
-/** Replaced handles can never link: the account may have freed one, and Telegram links bare @. */
-const inertHandle = (username: string): string => `<i>‹${esc(username)}›</i>`;
+/** Replaced handles never link: the account may have freed one, and Telegram links bare @.
+ * The word joiner after @ keeps it visible as @handle yet un-clickable. */
+const inertHandle = (username: string): string => `<i>@\u2060${esc(username)}</i>`;
 
 /** Pure diff. null = nothing to announce. A first sighting (no stored name) is never a change. */
 export function diffIdentity(stored: Identity, current: Identity): IdentityChange | null {
@@ -99,6 +100,8 @@ interface SideOptions {
   boldUser?: boolean;
   /** The user's *current* handle — what any working link has to point at. */
   currentUsername?: string;
+  /** When the handle changed, an empty side reads "(vacío)" so the add/remove is explicit. */
+  showEmptyUsername?: boolean;
 }
 
 const bold = (html: string, on?: boolean): string => (on ? `<b>${html}</b>` : html);
@@ -111,7 +114,10 @@ function renderSide(userId: number, id: Identity, opts: SideOptions): string {
     opts.linkName ? profileLink(userId, name, opts.currentUsername) : esc(name),
     opts.boldName
   );
-  if (!username) return namePart;
+  if (!username) {
+    if (!opts.showEmptyUsername) return namePart;
+    return `${namePart} (${bold(t("nameTracker.usernameRemoved"), opts.boldUser)})`;
+  }
   const userPart = opts.linkUser
     ? bold(profileLink(userId, `@${username}`, username), opts.boldUser)
     : inertHandle(username);
@@ -148,16 +154,16 @@ export function buildIdentityChangeMessage(userId: number, before: Identity, aft
     linkName: !nameChanged,
     linkUser: !userChanged,
     currentUsername,
+    showEmptyUsername: userChanged,
   });
-  let to = renderSide(userId, after, {
+  const to = renderSide(userId, after, {
     linkName: true,
     linkUser: true,
     boldName: nameChanged,
     boldUser: userChanged,
     currentUsername,
+    showEmptyUsername: userChanged,
   });
-  // Dropping a handle otherwise reads as "nothing happened": the new side just loses a token.
-  if (norm(before.username) && !norm(after.username)) to += ` (<b>${t("nameTracker.usernameRemoved")}</b>)`;
   return t("nameTracker.profileUpdated", {
     id: userId,
     what: changedWord(nameChanged, userChanged),

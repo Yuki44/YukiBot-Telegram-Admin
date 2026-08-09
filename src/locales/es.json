@@ -1,11 +1,11 @@
 {
   "nameTracker": {
-    "profileUpdated": "Usuario <code>{id}</code> ha actualizado su {what}:\n{from} → {to}",
+    "profileUpdated": "<code>{id}</code> ha actualizado su {what}:\n{from} → {to}",
     "profileWord": "perfil",
     "nameWord": "nombre",
-    "usernameWord": "nombre de usuario",
+    "usernameWord": "usuario",
     "invisibleName": "⬚",
-    "usernameRemoved": "sin alias"
+    "usernameRemoved": "vacío"
   },
   "errors": {
     "userNotFound": "⚠️ No se encontró al usuario.",
