@@ -38,9 +38,10 @@ of accumulated drift at once, as happened on 2026-08-02.
   stays tap-to-copy as the permanent fallback. The choice lives in **one** place, `profileHref` in
   `src/bot/helpers/html.ts` (G17), and every mention the bot writes — notices, admin alerts, and the
   welcome message — goes through it.
-- **Replaced handles.** Rendered `<i>‹handle›</i>`: no `@`, no link, since Telegram auto-links any
-  bare `@handle` to whoever holds it now, and a freed handle may belong to a stranger. The removal
-  marker reads "sin alias" for the same reason.
+- **Replaced handles.** Rendered `<i>@⁠handle</i>` with a word joiner after the `@`: visible as
+  `@handle` yet never a link, since Telegram auto-links any bare `@handle` to whoever holds it now
+  and a freed handle may belong to a stranger. The empty/removed marker reads "vacío" for the same
+  reason. Every notice starts with the tap-to-copy `<code>id</code>`.
 
 ## Trails
 

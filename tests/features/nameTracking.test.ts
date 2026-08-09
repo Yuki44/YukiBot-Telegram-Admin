@@ -121,8 +121,8 @@ describe("buildIdentityChangeMessage", () => {
       { name: "Simo", username: "simoo" },
       { name: "Simo", username: "simon2" }
     );
-    expect(msg).toContain("ha actualizado su nombre de usuario");
-    expect(msg).toContain("<i>‹simoo›</i>");
+    expect(msg).toContain("ha actualizado su usuario");
+    expect(msg).toContain("<i>@\u2060simoo</i>");
     expect(msg).not.toContain("@simoo");
     expect(msg).toContain('<b><a href="https://t.me/simon2">@simon2</a></b>');
     expect(msg).toContain('<a href="https://t.me/simon2">Simo</a>'); // unchanged name: linked, not bold
@@ -137,14 +137,14 @@ describe("buildIdentityChangeMessage", () => {
     );
     expect(msg).toContain("ha actualizado su perfil");
     expect(msg).toContain("Ana ("); // old name plain
-    expect(msg).toContain("<i>‹ana›</i>"); // old username inert
+    expect(msg).toContain("<i>@\u2060ana</i>"); // old username inert
     expect(msg).toContain('<b><a href="https://t.me/ana_m">Ana María</a></b>');
     expect(msg).toContain('<b><a href="https://t.me/ana_m">@ana_m</a></b>');
   });
 
-  it("gained a username: no leftover placeholder, new side shows the linked @handle", () => {
+  it("gained a username: old side shows (vacío), new side shows the linked @handle", () => {
     const msg = buildIdentityChangeMessage(9, { name: "Ana" }, { name: "Ana María", username: "ana_m" });
-    expect(msg).not.toContain("(ninguno)");
+    expect(msg).toContain("(vacío)");
     expect(msg).toContain('<a href="https://t.me/ana_m">@ana_m</a>');
   });
 
@@ -165,8 +165,8 @@ describe("buildIdentityChangeMessage", () => {
       { name: invisible, username: "otro" }
     );
     expect(msg).not.toContain("⬚");
-    expect(msg).toContain("ha actualizado su nombre de usuario");
-    expect(msg).toContain("<i>‹licuadodefresas›</i>");
+    expect(msg).toContain("ha actualizado su usuario");
+    expect(msg).toContain("<i>@\u2060licuadodefresas</i>");
     expect(msg).toContain('<b><a href="https://t.me/otro">@otro</a></b>');
   });
 
@@ -177,8 +177,8 @@ describe("buildIdentityChangeMessage", () => {
       { name: invisible, username: "licuadodefresas" },
       { name: invisible }
     );
-    expect(msg).toContain("ha actualizado su nombre de usuario");
-    expect(msg).toContain("<b>sin alias</b>");
+    expect(msg).toContain("ha actualizado su usuario");
+    expect(msg).toContain("<b>vacío</b>");
     expect(msg).not.toContain("@usuario");
   });
 });
@@ -397,8 +397,8 @@ describe("trackIdentity", () => {
       { name: invisible }
     );
     expect(msg).not.toContain("⬚");
-    expect(msg).toContain("<i>‹licuadodefresas›</i>");
-    expect(msg).toContain("sin alias");
+    expect(msg).toContain("<i>@\u2060licuadodefresas</i>");
+    expect(msg).toContain("vacío");
   });
 });
 describe("identity captured from the CSAM rotation", () => {
