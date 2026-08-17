@@ -156,6 +156,27 @@ describe("buildIdentityChangeMessage", () => {
     expect(msg).toContain("<code>8776230225</code>");
   });
 
+  // Group copy: the pinging tg://user?id= link is withheld, the name stays bold. A user with a
+  // handle keeps their silent https link, so mentionSafe changes nothing for them.
+  it("mentionSafe drops the tg:// name link but keeps it bold", () => {
+    const msg = buildIdentityChangeMessage(8776230225, { name: "Kk" }, { name: "Kl" }, { mentionSafe: true });
+    expect(msg).not.toContain("tg://user?id=");
+    expect(msg).toContain("<b>Kl</b>");
+    expect(msg).toContain("<code>8776230225</code>");
+  });
+
+  it("mentionSafe leaves an @handle user's https link untouched", () => {
+    const plain = buildIdentityChangeMessage(1, { name: "Simo", username: "simo" }, { name: "Simon", username: "simo" });
+    const safe = buildIdentityChangeMessage(
+      1,
+      { name: "Simo", username: "simo" },
+      { name: "Simon", username: "simo" },
+      { mentionSafe: true }
+    );
+    expect(safe).toBe(plain);
+    expect(safe).toContain('<a href="https://t.me/simo">Simon</a>');
+  });
+
   // Both halves said "(nombre invisible)" while the only real news was the handle.
   it("drops an unreadable name entirely when only the handle moved", () => {
     const invisible = "\u00AD\u00AD\u00AD";
@@ -266,7 +287,10 @@ describe("trackIdentity", () => {
       logsTo: -100999,
       features: { trackNameChanges: true, nameChangesVisible },
     }) as unknown as IChat;
-  const api = { sendMessage: vi.fn(async () => ({ message_id: 1 })) } as never;
+  const api = {
+    sendMessage: vi.fn(async () => ({ message_id: 77 })),
+    editMessageText: vi.fn(async () => ({ message_id: 77 })),
+  } as never;
 
   const confirmed = new Date("2026-08-01T00:00:00Z");
   const row = (r: Record<string, unknown> | null): void => {
@@ -280,6 +304,7 @@ describe("trackIdentity", () => {
     vi.mocked(userRepository.findByUserAndChat).mockResolvedValue(null as never);
     vi.mocked(userRepository.confirmIdentity).mockClear();
     (api as { sendMessage: ReturnType<typeof vi.fn> }).sendMessage.mockClear();
+    (api as { editMessageText: ReturnType<typeof vi.fn> }).editMessageText.mockClear();
   });
 
   it("sends only to the log channel while nameChangesVisible is off", async () => {
@@ -298,6 +323,39 @@ describe("trackIdentity", () => {
 
     expect(dests()).toContain(-100111);
     expect(dests()).toContain(-100999);
+  });
+
+  // Ninja-edit: a username-less user's group notice is posted mention-free (bold, no tg:// link),
+  // then the profile link is edited in — the edit carries the mention without pinging.
+  it("posts the group copy mention-free then edits the tg:// link in, for a handle-less user", async () => {
+    row({ userId: 42, chatId: -100111, name: "Kk", identityConfirmedAt: confirmed });
+    const send = (api as { sendMessage: ReturnType<typeof vi.fn> }).sendMessage;
+    const edit = (api as { editMessageText: ReturnType<typeof vi.fn> }).editMessageText;
+
+    await trackIdentity(api, config(true), 42, -100111, { name: "Kl" });
+
+    const groupSend = send.mock.calls.find((c) => c[0] === -100111)!;
+    expect(groupSend[1]).not.toContain("tg://user?id=");
+    expect(groupSend[1]).toContain("<b>Kl</b>");
+
+    expect(edit).toHaveBeenCalledTimes(1);
+    expect(edit.mock.calls[0][0]).toBe(-100111);
+    expect(edit.mock.calls[0][1]).toBe(77);
+    expect(edit.mock.calls[0][2]).toContain('<a href="tg://user?id=42">Kl</a>');
+
+    // The log channel keeps the full tg:// link in a single send — no edit dance there.
+    const logSend = send.mock.calls.find((c) => c[0] === -100999)!;
+    expect(logSend[1]).toContain('<a href="tg://user?id=42">Kl</a>');
+  });
+
+  // A user with a handle needs no trick: the https link is silent, so one send, no edit.
+  it("does not edit when the user has a handle (https link never pings)", async () => {
+    row({ userId: 42, chatId: -100111, name: "Simo", username: "simo", identityConfirmedAt: confirmed });
+    const edit = (api as { editMessageText: ReturnType<typeof vi.fn> }).editMessageText;
+
+    await trackIdentity(api, config(true), 42, -100111, { name: "Simon", username: "simo" });
+
+    expect(edit).not.toHaveBeenCalled();
   });
 
   // The incident: rows never verified against Telegram held a first-name-only leftover, so the
