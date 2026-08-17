@@ -155,6 +155,8 @@ export interface IBroadcastPost {
   enabled: boolean;
   lastSentSlot: string | null;
   retryAttempts: number;
+  /** message_id of this post's last send; deleted when this same post goes out again. */
+  lastMessageId: number | null;
 }
 
 /**

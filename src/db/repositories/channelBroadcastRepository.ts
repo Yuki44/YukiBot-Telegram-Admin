@@ -80,12 +80,21 @@ export const channelBroadcastRepository = {
     return await doc.save();
   },
 
-  async markPostSent(channelId: number, key: string, slot: string): Promise<void> {
+  async markPostSent(channelId: number, key: string, slot: string, messageId?: number): Promise<void> {
     const doc = await ChannelBroadcast.findOne({ channelId });
     const post = doc?.posts.find((p) => p.key === key);
     if (!doc || !post) return;
     post.lastSentSlot = slot;
     post.retryAttempts = 0;
+    if (typeof messageId === "number") post.lastMessageId = messageId;
+    await doc.save();
+  },
+
+  async setPostMessageId(channelId: number, key: string, messageId: number): Promise<void> {
+    const doc = await ChannelBroadcast.findOne({ channelId });
+    const post = doc?.posts.find((p) => p.key === key);
+    if (!doc || !post) return;
+    post.lastMessageId = messageId;
     await doc.save();
   },
 

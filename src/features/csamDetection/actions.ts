@@ -96,7 +96,11 @@ export function buildCsamAlert(
   // Compact heads-up for the admin chat (detail lives in the log). Ends with the
   // mention so the admins get pinged; the buttons carry the ids to act on.
   const verdictShort = verdict === "AUTO_BAN" ? "baneo automático" : "silenciado — revisar";
-  const notifyLines = [`🚨 #CP_ALERTA — ${verdictShort}`, `${who} · ${grupo}`, CSAM_NOTIFY_MENTION];
+  const notifyLines = [
+    `🚨 #CP_ALERTA — ${verdictShort}`,
+    `${who} · ${esc(params.chatName)}`,
+    CSAM_NOTIFY_MENTION,
+  ];
 
   const keyboard =
     verdict === "AUTO_BAN"

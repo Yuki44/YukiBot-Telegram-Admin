@@ -86,6 +86,7 @@ interface AddWordSheetProps {
   defaultTopicId?: number;
   topics: Topic[];
   showTopicChoice: boolean;
+  notifyConfigured: boolean;
   onClose: () => void;
   onSubmit: (body: BannedWordCreateBody) => Promise<void>;
 }
@@ -96,6 +97,7 @@ function AddWordSheet({
   defaultTopicId,
   topics,
   showTopicChoice,
+  notifyConfigured,
   onClose,
   onSubmit,
 }: AddWordSheetProps) {
@@ -111,6 +113,7 @@ function AddWordSheet({
       ? { delete: initial.actions.delete, warn: initial.actions.warn, silence: initial.actions.silence }
       : { delete: false, warn: true, silence: false }
   );
+  const [flag, setFlag] = useState(initial?.flag ?? false);
   const [warnReason, setWarnReason] = useState(initial?.warnReason ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -142,7 +145,7 @@ function AddWordSheet({
       setError("Selecciona un tema.");
       return;
     }
-    if (!combo.delete && !combo.warn && !combo.silence) {
+    if (!combo.delete && !combo.warn && !combo.silence && !flag) {
       setError("Elige al menos una acción.");
       return;
     }
@@ -157,7 +160,7 @@ function AddWordSheet({
         word: trimmedWord,
         actions: combo,
         kick: false,
-        flag: false,
+        flag,
         warnReason: combo.warn ? warnReason.trim() : undefined,
         exactMatch: exact,
         scope,
@@ -310,31 +313,59 @@ function AddWordSheet({
                 </div>
               )}
 
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: 12,
-                  border: "1.5px solid var(--ink-100)",
-                  background: "var(--bg-sunken)",
-                  borderRadius: 14,
-                  cursor: "default",
-                  opacity: 0.55,
-                }}
-                aria-disabled="true"
-              >
-                <input type="checkbox" checked={false} disabled />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, display: "flex", gap: 8, alignItems: "center" }}>
-                    Avisar a admins
-                    <span className="yk-chip">Próximamente</span>
+              {notifyConfigured ? (
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: 12,
+                    border: `1.5px solid ${flag ? "var(--brand-400)" : "var(--ink-100)"}`,
+                    background: flag ? "var(--brand-50)" : "transparent",
+                    borderRadius: 14,
+                    cursor: busy ? "default" : "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={flag}
+                    onChange={(e) => setFlag(e.target.checked)}
+                    disabled={busy}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700 }}>Avisar a admins</div>
+                    <div style={{ fontSize: 12, color: "var(--ink-500)" }}>
+                      Aviso privado al chat de administradores cuando alguien la use.
+                    </div>
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--ink-500)" }}>
-                    Notificación al canal de logs sin actuar sobre el usuario.
+                </label>
+              ) : (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: 12,
+                    border: "1.5px solid var(--ink-100)",
+                    background: "var(--bg-sunken)",
+                    borderRadius: 14,
+                    cursor: "default",
+                    opacity: 0.55,
+                  }}
+                  aria-disabled="true"
+                >
+                  <input type="checkbox" checked={false} disabled />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, display: "flex", gap: 8, alignItems: "center" }}>
+                      Avisar a admins
+                      <span className="yk-chip">Próximamente</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--ink-500)" }}>
+                      Configura el chat de notificaciones para activarlo.
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
@@ -673,6 +704,7 @@ export function BannedWordsScreen() {
           defaultTopicId={topicId}
           topics={topics}
           showTopicChoice={isTopicsChat}
+          notifyConfigured={chat?.notifyChatId != null}
           onClose={() => {
             setShowAdd(false);
             setEditing(null);

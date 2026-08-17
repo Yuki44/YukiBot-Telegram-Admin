@@ -102,6 +102,9 @@ interface SideOptions {
   currentUsername?: string;
   /** When the handle changed, an empty side reads "(vacío)" so the add/remove is explicit. */
   showEmptyUsername?: boolean;
+  /** Group copy: never emit a tg://user?id= name link — that mention is what pings the user.
+   * Without a handle the name falls back to bold text (still pops, no notification). */
+  mentionSafe?: boolean;
 }
 
 const bold = (html: string, on?: boolean): string => (on ? `<b>${html}</b>` : html);
@@ -110,8 +113,11 @@ const bold = (html: string, on?: boolean): string => (on ? `<b>${html}</b>` : ht
 function renderSide(userId: number, id: Identity, opts: SideOptions): string {
   const name = display(id.name);
   const username = norm(id.username);
+  // A name link with no current handle can only be tg://user?id= — the mention that pings.
+  // In the group copy we withhold that link; the caller edits it back in silently afterward.
+  const nameLinked = opts.linkName && !(opts.mentionSafe && !opts.currentUsername);
   const namePart = bold(
-    opts.linkName ? profileLink(userId, name, opts.currentUsername) : esc(name),
+    nameLinked ? profileLink(userId, name, opts.currentUsername) : esc(name),
     opts.boldName
   );
   if (!username) {
@@ -141,8 +147,16 @@ function buildHandleOnlyMessage(userId: number, before: Identity, after: Identit
   return t("nameTracker.profileUpdated", { id: userId, what: t("nameTracker.usernameWord"), from, to });
 }
 
-/** Builds the HTML notice (pure, testable). */
-export function buildIdentityChangeMessage(userId: number, before: Identity, after: Identity): string {
+/**
+ * Builds the HTML notice (pure, testable). With `mentionSafe`, a name that would otherwise link
+ * via tg://user?id= is rendered as bold text instead — the group copy that must not ping.
+ */
+export function buildIdentityChangeMessage(
+  userId: number,
+  before: Identity,
+  after: Identity,
+  opts: { mentionSafe?: boolean } = {}
+): string {
   const nameChanged = display(before.name) !== display(after.name);
   const userChanged = norm(before.username) !== norm(after.username);
   const afterName = display(after.name);
@@ -155,6 +169,7 @@ export function buildIdentityChangeMessage(userId: number, before: Identity, aft
     linkUser: !userChanged,
     currentUsername,
     showEmptyUsername: userChanged,
+    mentionSafe: opts.mentionSafe,
   });
   const to = renderSide(userId, after, {
     linkName: true,
@@ -163,6 +178,7 @@ export function buildIdentityChangeMessage(userId: number, before: Identity, aft
     boldUser: userChanged,
     currentUsername,
     showEmptyUsername: userChanged,
+    mentionSafe: opts.mentionSafe,
   });
   return t("nameTracker.profileUpdated", {
     id: userId,
@@ -172,18 +188,38 @@ export function buildIdentityChangeMessage(userId: number, before: Identity, aft
   });
 }
 
-async function announce(api: Api, chatConfig: IChat, chatId: number, text: string): Promise<void> {
+async function announce(
+  api: Api,
+  chatConfig: IChat,
+  chatId: number,
+  userId: number,
+  before: Identity,
+  after: Identity
+): Promise<void> {
+  const send = { parse_mode: "HTML", disable_notification: true } as const;
+  const fullText = buildIdentityChangeMessage(userId, before, after);
+
   // The log channel always gets the notice; the group only when the visibility flag is on.
   if (chatConfig.features?.nameChangesVisible) {
     try {
-      await api.sendMessage(chatId, text, { parse_mode: "HTML", disable_notification: true });
+      const safeText = buildIdentityChangeMessage(userId, before, after, { mentionSafe: true });
+      if (safeText === fullText) {
+        // No tg:// mention in play (handle links and https links never ping) — one send.
+        await api.sendMessage(chatId, fullText, send);
+      } else {
+        // Ninja-edit: post the mention-free bold copy, then edit the tg://user?id= profile
+        // link in. A mention added by an edit keeps the colour and the tap-to-profile without
+        // ever firing the notification a fresh mention would.
+        const sent = await api.sendMessage(chatId, safeText, send);
+        await api.editMessageText(chatId, sent.message_id, fullText, { parse_mode: "HTML" });
+      }
     } catch (err) {
       logger.error({ action: "name_change_announce_group", chatId, error: String(err) });
     }
   }
   if (chatConfig.logsTo && chatConfig.logsTo !== chatId) {
     try {
-      await api.sendMessage(chatConfig.logsTo, text, { parse_mode: "HTML", disable_notification: true });
+      await api.sendMessage(chatConfig.logsTo, fullText, send);
     } catch (err) {
       logger.error({ action: "name_change_announce_log", chatId, error: String(err) });
     }
@@ -277,7 +313,7 @@ export async function trackIdentity(
       target: { id: userId, name: effectiveCurrent.name, username: effectiveCurrent.username },
       reason: describeIdentityChange(change),
     });
-    await announce(api, chatConfig, chatId, buildIdentityChangeMessage(userId, before, effectiveCurrent));
+    await announce(api, chatConfig, chatId, userId, before, effectiveCurrent);
   }
 
   if (nameMissing) {

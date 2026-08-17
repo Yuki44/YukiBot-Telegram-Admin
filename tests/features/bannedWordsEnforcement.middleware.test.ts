@@ -229,6 +229,61 @@ describe("bannedWordsEnforcement — middleware chain", () => {
     expect(silencioPayload!.repliedMsg).toBeUndefined();
   });
 
+  it("flag + warn + silence pings notifyChatId with the combined 'avisado y silenciado'", async () => {
+    (applyWarn as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ warnMsgId: 1, warned: true, banned: false });
+    const rule = makeRule({
+      severity: "aviso",
+      actions: { delete: true, warn: true, silence: true },
+      kick: false,
+      flag: true,
+    } as Partial<IBannedWord>);
+    (getActiveRules as ReturnType<typeof vi.fn>).mockResolvedValueOnce([rule]);
+    (findMatchingRule as ReturnType<typeof vi.fn>).mockReturnValueOnce(rule);
+    const ctx = makeCtx({ chatConfig: makeChatConfig({ notifyChatId: -100777 }) });
+
+    await bannedWordsEnforcement(ctx, vi.fn().mockResolvedValue(undefined));
+
+    const notifyCall = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls.find((c) => c[0] === -100777);
+    expect(notifyCall).toBeDefined();
+    expect(notifyCall![1]).toContain("avisado y silenciado");
+  });
+
+  it("flag-only rule pings notifyChatId with 'no he actuado' and enforces nothing", async () => {
+    const rule = makeRule({
+      severity: "flag",
+      actions: { delete: false, warn: false, silence: false },
+      kick: false,
+      flag: true,
+    } as Partial<IBannedWord>);
+    (getActiveRules as ReturnType<typeof vi.fn>).mockResolvedValueOnce([rule]);
+    (findMatchingRule as ReturnType<typeof vi.fn>).mockReturnValueOnce(rule);
+    const ctx = makeCtx({ chatConfig: makeChatConfig({ notifyChatId: -100777 }) });
+
+    await bannedWordsEnforcement(ctx, vi.fn().mockResolvedValue(undefined));
+
+    const notifyCall = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls.find((c) => c[0] === -100777);
+    expect(notifyCall).toBeDefined();
+    expect(notifyCall![1]).toContain("no he actuado");
+    expect(applyWarn).not.toHaveBeenCalled();
+    expect(silenceUser).not.toHaveBeenCalled();
+  });
+
+  it("does NOT ping when flag is set but notifyChatId is unconfigured", async () => {
+    const rule = makeRule({
+      severity: "flag",
+      actions: { delete: false, warn: false, silence: false },
+      kick: false,
+      flag: true,
+    } as Partial<IBannedWord>);
+    (getActiveRules as ReturnType<typeof vi.fn>).mockResolvedValueOnce([rule]);
+    (findMatchingRule as ReturnType<typeof vi.fn>).mockReturnValueOnce(rule);
+    const ctx = makeCtx(); // default config: logsTo set, notifyChatId absent
+
+    await bannedWordsEnforcement(ctx, vi.fn().mockResolvedValue(undefined));
+
+    expect(ctx.api.sendMessage).not.toHaveBeenCalled();
+  });
+
   it("silence-only rule (no warn) STILL forwards original on SILENCIO log", async () => {
     // Behavior matches executeSilence.ts:172-173 — when no warn follows, the silence log carries the forward.
     const rule = makeRule({

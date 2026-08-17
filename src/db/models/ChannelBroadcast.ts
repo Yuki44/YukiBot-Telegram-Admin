@@ -19,6 +19,7 @@ const postSchema = new Schema<IChannelBroadcast["posts"][number]>(
     enabled: { type: Boolean, default: true },
     lastSentSlot: { type: String, default: null },
     retryAttempts: { type: Number, default: 0 },
+    lastMessageId: { type: Number, default: null },
   },
   { _id: false }
 );
