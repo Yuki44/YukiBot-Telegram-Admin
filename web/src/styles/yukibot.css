@@ -266,6 +266,20 @@ body {
   border: 1.5px solid var(--ink-200);
 }
 .yk-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.yk-btn-ghost {
+  font-family: inherit; font-size: 14px; font-weight: 600;
+  padding: 10px 14px; border-radius: 12px; width: auto;
+  background: transparent; color: var(--ink-900); border: 1.5px solid var(--ink-200);
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+}
+.yk-btn-ghost:active { background: var(--ink-100); }
+.yk-btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
+.yk-icon-btn {
+  background: var(--ink-100); color: var(--ink-900); border: 0;
+  padding: 8px; border-radius: 10px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.yk-icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Form */
 .yk-field { margin-bottom: 14px; }

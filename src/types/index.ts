@@ -137,6 +137,42 @@ export interface IChat extends Document {
   };
 }
 
+/**
+ * A curated invite-link post the channel broadcaster sends on its own hourly
+ * schedule. The image slot is the switch: with no image we send a text message so
+ * Telegram renders the native request-to-join preview; with an image we send the
+ * photo instead (the Bot API can't detect whether a preview rendered, so this is
+ * the per-post choice). `hours` are wall-clock hours (0-23) in Europe/Madrid;
+ * `lastSentSlot` ("YYYY-MM-DD-HH") guards against re-sending the same slot.
+ */
+export interface IBroadcastPost {
+  key: string;
+  label: string;
+  caption: string;
+  url: string;
+  image: { data: Buffer; filename: string; contentType: string } | null;
+  hours: number[];
+  enabled: boolean;
+  lastSentSlot: string | null;
+  retryAttempts: number;
+}
+
+/**
+ * Scheduled invite-link broadcaster for one channel. Stored apart from moderated
+ * `chats` (a channel is neither "normal" nor "topics"). No master on/off flag: the
+ * enabled posts with a URL are the switch. Each post carries its own fixed hourly
+ * schedule. `channelName`/`photoFileId` are synced from Telegram like chats.
+ */
+export interface IChannelBroadcast extends Document {
+  channelId: number;
+  channelName: string;
+  photoFileId: string | null;
+  photoCheckedAt: Date | null;
+  /** Inline call-to-action button appended under every post (a photo can't itself be a link). */
+  button: { enabled: boolean; text: string };
+  posts: IBroadcastPost[];
+}
+
 export interface IAdmin extends Document {
   userId: number;
   username: string;

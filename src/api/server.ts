@@ -15,6 +15,7 @@ import { createAdminsRouter } from "./routes/admins";
 import { createPhotosRouter } from "./routes/photos";
 import { createSpamDetectionsRouter } from "./routes/spamDetections";
 import { createCsamWatchlistRouter } from "./routes/csamWatchlist";
+import { createChannelBroadcastsRouter } from "./routes/channelBroadcasts";
 import { BOT_LOGIN_DOMAIN, BOT_USERNAME } from "../config";
 
 const WEB_DIST = path.join(__dirname, "..", "..", "web", "dist");
@@ -44,6 +45,7 @@ export function createApiServer(bot: Bot<BotContext>): Express {
   app.use("/api/chats/:chatId/admins", createAdminsRouter(bot));
   app.use("/api/chats/:chatId/spam-detections", createSpamDetectionsRouter());
   app.use("/api/csam/watchlist", createCsamWatchlistRouter());
+  app.use("/api/channel-broadcasts", createChannelBroadcastsRouter(bot));
   app.use("/api/photos", createPhotosRouter(bot));
 
   app.use(express.static(WEB_DIST));

@@ -17,6 +17,7 @@ import { LogsScreen } from "./screens/LogsScreen";
 import { AdminsScreen } from "./screens/AdminsScreen";
 import { MigrationScreen } from "./screens/MigrationScreen";
 import { CsamWatchlistScreen } from "./screens/CsamWatchlistScreen";
+import { ChannelBroadcastScreen } from "./screens/ChannelBroadcastScreen";
 import { AccountSettingsScreen } from "./screens/AccountSettingsScreen";
 import { isAuthenticated } from "./lib/auth";
 
@@ -128,6 +129,14 @@ export function App() {
           element={
             <ProtectedRoute>
               <MigrationScreen />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/channel-broadcasts/:channelId"
+          element={
+            <ProtectedRoute>
+              <ChannelBroadcastScreen />
             </ProtectedRoute>
           }
         />

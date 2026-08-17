@@ -8,7 +8,7 @@ import { api } from "../lib/api";
 import { ApiError } from "../lib/api";
 import { clearSession, getStoredUser } from "../lib/auth";
 import { formatMembers } from "../lib/utils";
-import type { ChatSummary } from "../types/api";
+import type { ChannelBroadcast, ChatSummary } from "../types/api";
 
 function ChatRow({ chat, onClick }: { chat: ChatSummary; onClick: () => void }) {
   const icon = chat.type === "topics" ? I.hash({ size: 22 }) : I.group({ size: 22 });
@@ -36,6 +36,7 @@ export function ChatsScreen() {
   const navigate = useNavigate();
   const storedUser = getStoredUser();
   const [chats, setChats] = useState<ChatSummary[] | null>(null);
+  const [broadcasts, setBroadcasts] = useState<ChannelBroadcast[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -50,6 +51,11 @@ export function ChatsScreen() {
         }
         setError(err instanceof Error ? err.message : "error");
       });
+    // Super-admin only; a 403 for other roles just leaves the section empty.
+    api.channelBroadcasts
+      .list()
+      .then(setBroadcasts)
+      .catch(() => setBroadcasts([]));
   }, [navigate]);
 
   const greetingName = storedUser?.name?.split(" ")[0] ?? storedUser?.username ?? "admin";
@@ -100,6 +106,31 @@ export function ChatsScreen() {
             <div className="yk-card">
               {chats.map((c) => (
                 <ChatRow key={c.chatId} chat={c} onClick={() => navigate(`/chats/${c.chatId}`)} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {broadcasts.length > 0 && (
+          <div className="yk-section">
+            <div className="yk-section-label">CANALES DE DIFUSIÓN</div>
+            <div className="yk-card">
+              {broadcasts.map((b) => (
+                <button
+                  key={b.channelId}
+                  className="yk-row"
+                  onClick={() => navigate(`/channel-broadcasts/${b.channelId}`)}
+                >
+                  <ChatAvatar chatId={b.channelId} photoFileId={b.photoFileId} glyph={I.channel({ size: 22 })} />
+                  <div className="yk-row-body">
+                    <div className="yk-row-title">{b.channelName || "Canal"}</div>
+                    <div className="yk-row-sub">
+                      Difusión
+                      {b.nextLabel && ` · próximo: ${b.nextLabel}`}
+                    </div>
+                  </div>
+                  <div className="yk-row-trail">{I.chevR()}</div>
+                </button>
               ))}
             </div>
           </div>

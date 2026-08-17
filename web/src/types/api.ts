@@ -22,6 +22,27 @@ export interface AuthResponse {
   user: AuthUser;
 }
 
+export interface BroadcastPost {
+  key: string;
+  label: string;
+  caption: string;
+  url: string;
+  enabled: boolean;
+  hours: number[];
+  image: { filename: string; contentType: string; url: string } | null;
+}
+
+export interface ChannelBroadcast {
+  channelId: number;
+  channelName: string;
+  photoFileId: string | null;
+  button: { enabled: boolean; text: string };
+  nextKey: string | null;
+  nextLabel: string | null;
+  nextAt: string | null;
+  posts: BroadcastPost[];
+}
+
 export type ChatRole = "owner" | "admin" | "super";
 
 export interface ChatSummary {
