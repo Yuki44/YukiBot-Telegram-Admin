@@ -5,6 +5,12 @@ FROM node:20-bookworm-slim
 # Set working directory
 WORKDIR /app
 
+# Skip onnxruntime-node's postinstall download of the CUDA/TensorRT GPU execution
+# provider (~hundreds of MB fetched from NuGet at install time). Railway is CPU-only
+# and OCR uses the CPU binaries bundled in the npm package, so this download is dead
+# weight — and its network fetch has failed the build with ETIMEDOUT.
+ENV ONNXRUNTIME_NODE_INSTALL=skip
+
 # Copy root package files first for better layer caching
 COPY package.json package-lock.json ./
 
