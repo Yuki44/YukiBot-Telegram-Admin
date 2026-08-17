@@ -70,6 +70,15 @@
     "adminNotifyWarn": "elav a {user} por idioma {current}/{max} en {chat} @edjoker",
     "adminNotifyBanned": "{user} ha sido baneado por {max}/{max} avisos por idioma en {chat} @edjoker"
   },
+  "bannedWord": {
+    "notifyDelete": "He borrado un mensaje de {user} por palabra prohibida en {chat} @edjoker",
+    "notifyWarn": "He avisado a {user} por palabra prohibida en {chat} @edjoker",
+    "notifySilence": "He silenciado a {user} por palabra prohibida en {chat} @edjoker",
+    "notifyWarnSilence": "He avisado y silenciado a {user} por palabra prohibida en {chat} @edjoker",
+    "notifyBanned": "He baneado a {user} por acumular 3 avisos por palabra prohibida en {chat} @edjoker",
+    "notifyKick": "He echado del grupo a {user} (puede volver a entrar) por palabra prohibida en {chat} @edjoker",
+    "notifyNone": "{user} ha usado una palabra prohibida en {chat}, no he actuado @edjoker"
+  },
   "commands": {
     "title": "📋 <b>Lista de comandos de administración</b>",
     "sectionWarnings": "<b>— Avisos —</b>",

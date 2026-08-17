@@ -97,7 +97,8 @@ function parseBody(req: Request, res: Response): ParsedBody | null {
   };
   const flag = !!body.flag;
 
-  const hasAction = actions.delete || actions.warn || actions.silence;
+  // flag ("avisar admins") is a valid standalone action — notify only, no enforcement.
+  const hasAction = actions.delete || actions.warn || actions.silence || flag;
   if (!hasAction) {
     res.status(400).json({ error: "no_action_selected" });
     return null;

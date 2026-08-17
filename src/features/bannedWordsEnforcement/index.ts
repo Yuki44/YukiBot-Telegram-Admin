@@ -12,6 +12,8 @@ import { SILENCE_DURATION_S } from "../../config/constants";
 import { getActiveRules } from "./cache";
 import { findMatchingRule } from "./matcher";
 import { fullName } from "../../bot/helpers/fullName";
+import { esc, mentionHtml } from "../../bot/helpers/html";
+import { t } from "../../locales/i18n";
 
 /**
  * Scan each incoming message against the chat's BannedWord rules and dispatch the
@@ -95,18 +97,33 @@ export async function bannedWordsEnforcement(ctx: BotContext, next: NextFunction
       word: rule.word,
     }).catch(() => {});
 
-    // Independent admin notification — runs alongside any enforcement.
-    if (ruleActions.flag && chatConfig.logsTo) {
+    // Ping notifyChatId after enforcement with the real outcome, so it never
+    // claims an action that didn't happen. Gated on the rule's flag.
+    const notifyAdmins = async (outcome: {
+      deleted?: boolean;
+      warned?: boolean;
+      banned?: boolean;
+      silenced?: boolean;
+      kicked?: boolean;
+    }): Promise<void> => {
+      if (!ruleActions.flag || !chatConfig.notifyChatId) return;
+      let key: string;
+      if (outcome.banned) key = "bannedWord.notifyBanned";
+      else if (outcome.kicked) key = "bannedWord.notifyKick";
+      else if (outcome.warned && outcome.silenced) key = "bannedWord.notifyWarnSilence";
+      else if (outcome.warned) key = "bannedWord.notifyWarn";
+      else if (outcome.silenced) key = "bannedWord.notifySilence";
+      else if (outcome.deleted) key = "bannedWord.notifyDelete";
+      else key = "bannedWord.notifyNone";
       try {
-        await ctx.api.sendMessage(
-          chatConfig.logsTo,
-          `🚩 <b>Palabra marcada</b>\n• Usuario: <a href="tg://user?id=${sender.id}">${senderName}</a> [<code>${sender.id}</code>]\n• Palabra: <code>${rule.word}</code>\n• Mensaje: <i>${text.slice(0, 200)}</i>`,
-          { parse_mode: "HTML" }
-        );
-      } catch {
-        /* silent (G10) */
+        const user = mentionHtml(sender.id, senderName, senderUsername);
+        await ctx.api.sendMessage(chatConfig.notifyChatId, t(key, { user, chat: esc(chatName) }), {
+          parse_mode: "HTML",
+        });
+      } catch (err) {
+        logger.error({ action: "bannedWordsEnforcement_notify", chatId, error: String(err) });
       }
-    }
+    };
 
     // Kick supersedes everything else.
     if (ruleActions.kick) {
@@ -151,30 +168,39 @@ export async function bannedWordsEnforcement(ctx: BotContext, next: NextFunction
           messageText: text,
         });
       }
+      await notifyAdmins({ kicked });
       return;
     }
 
     // Multi-action combo: apply each enabled action in a stable order.
+    let deleted = false;
     if (ruleActions.delete || ruleActions.silence) {
       try {
         await ctx.deleteMessage();
+        deleted = true;
       } catch {
         /* silent (G10) */
       }
     }
 
+    let warned = false;
+    let banned = false;
     if (ruleActions.warn) {
-      await applyWarn(ctx, sender.id, chatId, senderName, senderUsername, reason, {
+      const result = await applyWarn(ctx, sender.id, chatId, senderName, senderUsername, reason, {
         chatConfig,
         chatName,
         topicId: threadId,
         actor: botActor,
         repliedMsg: msg,
       });
+      warned = !!result.warned;
+      banned = !!result.banned;
     }
 
+    let silenced = false;
     if (ruleActions.silence) {
       const ok = await silenceUser(ctx, sender.id, chatId);
+      silenced = ok;
       if (ok) {
         const muteUntil = new Date(Date.now() + SILENCE_DURATION_S * 1000);
         // AVISO above already forwards the original (when warn fires); skip here to avoid duplicate Mensaje original
@@ -202,6 +228,8 @@ export async function bannedWordsEnforcement(ctx: BotContext, next: NextFunction
         });
       }
     }
+
+    await notifyAdmins({ deleted, warned, banned, silenced });
   } catch (err) {
     logger.error({ action: "bannedWordsEnforcement", error: String(err) });
   }
