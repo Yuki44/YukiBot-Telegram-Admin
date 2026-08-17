@@ -187,7 +187,11 @@ export function createChannelBroadcastsRouter(bot: Bot<BotContext>): Router {
       }
 
       try {
-        const cfg = await channelBroadcastRepository.setImage(channelId, index, { data, filename, contentType });
+        const cfg = await channelBroadcastRepository.setImage(channelId, index, {
+          data,
+          filename,
+          contentType,
+        });
         if (!cfg) {
           res.status(404).json({ error: "not_found" });
           return;
