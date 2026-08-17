@@ -43,6 +43,7 @@ import { csamCallbackHandler } from "./bot/handlers/csamCallbackHandler";
 import { languageCallbackHandler } from "./bot/handlers/languageCallbackHandler";
 import { startCsamScanner } from "./features/csamDetection/scanner";
 import { startTopicSweep } from "./features/topicSync/sweep";
+import { startBroadcastScheduler } from "./bot/scheduler/broadcastScheduler";
 import { csamImageScan } from "./bot/handlers/csamImageHandler";
 import { warmupOcr } from "./features/csamDetection/ocr";
 import { csamBioTrigger } from "./bot/handlers/csamBioTrigger";
@@ -275,6 +276,7 @@ async function start() {
       // botInfo is populated by now — safe to boot the rolling CSAM bio scanner.
       startCsamScanner(bot);
       startTopicSweep(bot);
+      startBroadcastScheduler(bot);
       warmupOcr();
     },
   });

@@ -7,6 +7,7 @@ import type {
   AuthUser,
   BannedWord,
   BannedWordCreateBody,
+  ChannelBroadcast,
   ChatDetail,
   ChatFeatures,
   ChatStats,
@@ -297,6 +298,62 @@ export const api = {
     },
     undo: (chatId: number | string, id: string): Promise<void> =>
       request<void>("POST", `/chats/${chatId}/logs/${id}/undo`),
+  },
+  channelBroadcasts: {
+    list: (): Promise<ChannelBroadcast[]> => request<ChannelBroadcast[]>("GET", "/channel-broadcasts"),
+    get: (channelId: number | string): Promise<ChannelBroadcast> =>
+      request<ChannelBroadcast>("GET", `/channel-broadcasts/${channelId}`),
+    updatePost: (
+      channelId: number | string,
+      index: number,
+      patch: Partial<{ caption: string; url: string; enabled: boolean }>
+    ): Promise<ChannelBroadcast> =>
+      request<ChannelBroadcast>("PUT", `/channel-broadcasts/${channelId}/posts/${index}`, patch),
+    updateButton: (
+      channelId: number | string,
+      button: { enabled: boolean; text: string }
+    ): Promise<ChannelBroadcast> =>
+      request<ChannelBroadcast>("PUT", `/channel-broadcasts/${channelId}/button`, button),
+    removeImage: (channelId: number | string, index: number): Promise<ChannelBroadcast> =>
+      request<ChannelBroadcast>("DELETE", `/channel-broadcasts/${channelId}/posts/${index}/image`),
+    sendNow: (channelId: number | string): Promise<ChannelBroadcast> =>
+      request<ChannelBroadcast>("POST", `/channel-broadcasts/${channelId}/send-now`),
+    uploadImage: async (
+      channelId: number | string,
+      index: number,
+      file: File
+    ): Promise<ChannelBroadcast> => {
+      const token = getToken();
+      loading.begin();
+      try {
+        const res = await fetch(`${BASE}/channel-broadcasts/${channelId}/posts/${index}/image`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": file.type,
+            "X-Filename": file.name,
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: file,
+        });
+        if (res.status === 401) {
+          clearSession();
+          throw new ApiError(401, "unauthenticated");
+        }
+        if (!res.ok) {
+          let code = "request_failed";
+          try {
+            const data = (await res.json()) as { error?: string };
+            if (data.error) code = data.error;
+          } catch {
+            /* ignore */
+          }
+          throw new ApiError(res.status, code);
+        }
+        return (await res.json()) as ChannelBroadcast;
+      } finally {
+        loading.end();
+      }
+    },
   },
   csam: {
     getWatchlist: (): Promise<CsamWatchlistData> => request<CsamWatchlistData>("GET", "/csam/watchlist"),
