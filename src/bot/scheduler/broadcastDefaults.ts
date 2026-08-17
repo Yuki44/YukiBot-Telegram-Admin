@@ -17,6 +17,7 @@ export function defaultPosts(): IBroadcastPost[] {
       enabled: true,
       lastSentSlot: null,
       retryAttempts: 0,
+      lastMessageId: null,
     },
     {
       key: "catalunya",
@@ -28,6 +29,7 @@ export function defaultPosts(): IBroadcastPost[] {
       enabled: true,
       lastSentSlot: null,
       retryAttempts: 0,
+      lastMessageId: null,
     },
   ];
 }

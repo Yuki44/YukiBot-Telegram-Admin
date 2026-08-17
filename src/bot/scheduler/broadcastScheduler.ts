@@ -33,8 +33,8 @@ async function tick(bot: Bot<BotContext>): Promise<void> {
         continue;
       }
       try {
-        await sendBroadcastPost(bot, cfg.channelId, post, cfg.button);
-        await channelBroadcastRepository.markPostSent(cfg.channelId, post.key, slot);
+        const messageId = await sendBroadcastPost(bot, cfg.channelId, post, cfg.button, post.lastMessageId);
+        await channelBroadcastRepository.markPostSent(cfg.channelId, post.key, slot, messageId);
       } catch (err) {
         const attempts = post.retryAttempts + 1;
         if (attempts > MAX_RETRIES) {
@@ -77,5 +77,6 @@ export async function broadcastNow(bot: Bot<BotContext>, channelId: number): Pro
   if (!next) throw new Error("nothing_to_send");
   const post = cfg.posts.find((p) => p.key === next.key);
   if (!post) throw new Error("nothing_to_send");
-  await sendBroadcastPost(bot, channelId, post, cfg.button);
+  const messageId = await sendBroadcastPost(bot, channelId, post, cfg.button, post.lastMessageId);
+  await channelBroadcastRepository.setPostMessageId(channelId, post.key, messageId);
 }
