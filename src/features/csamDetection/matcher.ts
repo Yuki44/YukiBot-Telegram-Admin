@@ -140,10 +140,13 @@ export function evaluateBio(bio: string, config: WatchConfig): BioResult {
  * is lower confidence and needs the explicit CSAM keyword beside it — with only a
  * generic sale word (or nothing) it silences for human review (G3: bans never revert).
  */
-export function evaluateImageText(text: string, config: WatchConfig): ImageResult {
-  const folded = normalizeAndFold(text ?? "");
-  const foldedSpaced = collapseSpaces(folded);
-  const compact = compactAlnum(folded);
+export function evaluateImageText(text: string, config: WatchConfig, captionText: string = ""): ImageResult {
+  // Edit-distance fuzz runs on `compact` (OCR text) ONLY; strict matching covers
+  // caption+OCR. Fuzzing clean caption text manufactures FPs ("de chile" ≈ child).
+  const ocr = normalizeAndFold(text ?? "");
+  const folded = collapseSpaces([normalizeAndFold(captionText ?? ""), ocr].filter(Boolean).join(" "));
+  const foldedSpaced = folded;
+  const compact = compactAlnum(ocr);
 
   const strictHandle = firstMatch(folded, foldedSpaced, config.handles);
   const handle = strictHandle ?? looseImageHandle(compact, config.handles);

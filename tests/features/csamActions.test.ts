@@ -73,6 +73,20 @@ describe("buildCsamAlert", () => {
     expect(notifyText.trimEnd().endsWith("@edjoker")).toBe(true);
   });
 
+  it("notify header distinguishes silence-for-review from a ban at a glance", () => {
+    const ban = buildCsamAlert("AUTO_BAN", base).notifyText.split("\n")[0];
+    const silence = buildCsamAlert("SILENCE", base).notifyText.split("\n")[0];
+    expect(ban).not.toBe(silence);
+    expect(ban.startsWith("🚨")).toBe(true);
+    expect(silence.startsWith("⚠️")).toBe(true);
+    expect(silence).toContain("REVISAR");
+  });
+
+  it("log header uses the ⚠️ silence cue too, matching the notify chat", () => {
+    expect(buildCsamAlert("SILENCE", base).logText.startsWith("⚠️")).toBe(true);
+    expect(buildCsamAlert("AUTO_BAN", base).logText.startsWith("🚨")).toBe(true);
+  });
+
   it("escapes HTML in the target name", () => {
     const { logText } = buildCsamAlert("SILENCE", {
       ...base,

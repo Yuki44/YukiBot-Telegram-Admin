@@ -65,8 +65,8 @@
     "adminNotify": "He avisado a {user} por spam en {chat} @edjoker"
   },
   "language": {
-    "graceNotice": "{user} En este chat hablamos solo Español y/o Catalán.",
-    "warnReason": "En este chat hablamos solo Español y/o Catalán.",
+    "graceNotice": "{user} En este chat escribimos solo en Español y/o Catalán.",
+    "warnReason": "En este chat escribimos solo en Español y/o Catalán.",
     "adminNotifyWarn": "elav a {user} por idioma {current}/{max} en {chat} @edjoker",
     "adminNotifyBanned": "{user} ha sido baneado por {max}/{max} avisos por idioma en {chat} @edjoker"
   },

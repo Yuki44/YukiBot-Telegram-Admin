@@ -5,15 +5,20 @@ import { logger } from "../../utils/logger";
 const HEADER = "💬 <b>Mensaje original:</b>";
 
 /**
- * Sends the "Mensaje original" header above the message in the log channel,
- * always as two separate messages so all types are consistent.
+ * Sends the header above the message in the log channel, always as two separate
+ * messages so all types are consistent. `header` overrides the default label.
  */
-export async function forwardToLog(api: Api, logsTo: number, msg: Message): Promise<void> {
+export async function forwardToLog(
+  api: Api,
+  logsTo: number,
+  msg: Message,
+  header: string = HEADER
+): Promise<void> {
   const chatId = msg.chat.id;
   const msgId = msg.message_id;
 
   try {
-    await api.sendMessage(logsTo, HEADER, { parse_mode: "HTML" });
+    await api.sendMessage(logsTo, header, { parse_mode: "HTML" });
   } catch (err) {
     logger.error({ action: "forwardToLog_header", logsTo, error: String(err) });
     return;

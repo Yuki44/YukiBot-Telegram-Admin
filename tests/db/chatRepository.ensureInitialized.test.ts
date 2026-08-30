@@ -52,6 +52,7 @@ const ALL_LOGFLAG_KEYS = [
   "logFlags.logEntries",
   "logFlags.logExits",
   "logFlags.logBannedWords",
+  "logFlags.logReports",
 ];
 
 describe("chatRepository.ensureInitialized", () => {
@@ -129,6 +130,7 @@ describe("chatRepository.ensureInitialized", () => {
         logEntries: false,
         logExits: false,
         logBannedWords: false,
+        logReports: false,
       },
       notifyFlags: { notifySpam: true },
     });
@@ -175,6 +177,7 @@ describe("chatRepository.ensureInitialized", () => {
         logEntries: false,
         logExits: false,
         logBannedWords: false,
+        logReports: false,
       },
       notifyFlags: { notifySpam: true },
     });

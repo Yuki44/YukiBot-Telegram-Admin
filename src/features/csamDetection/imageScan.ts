@@ -57,7 +57,8 @@ export async function scanImage(candidate: ScanCandidate, deps: ImageScanDeps): 
   const caption = candidate.caption?.trim() ?? "";
 
   if (caption) {
-    const cap = evaluateImageText(caption, config);
+    // Caption is clean typed text → strict-only (no OCR edit-distance fuzz).
+    const cap = evaluateImageText("", config, caption);
     if (cap.verdict !== "NONE") {
       return {
         verdict: cap.verdict,
@@ -76,8 +77,7 @@ export async function scanImage(candidate: ScanCandidate, deps: ImageScanDeps): 
     if (cached.reviewedSafe) {
       return { verdict: "NONE", matched: false, text: cached.text, solicitation: [], source: "cache" };
     }
-    const combined = [caption, cached.text].filter(Boolean).join(" ");
-    const r = evaluateImageText(combined, config);
+    const r = evaluateImageText(cached.text, config, caption);
     return {
       verdict: r.verdict,
       matched: r.matched,
@@ -157,8 +157,7 @@ export async function scanImage(candidate: ScanCandidate, deps: ImageScanDeps): 
   }
   await deps.cacheSet(candidate.fileUniqueId, text);
 
-  const combined = [caption, text].filter(Boolean).join(" ");
-  const r = evaluateImageText(combined, config);
+  const r = evaluateImageText(text, config, caption);
   // Log what OCR read (text only) so a miss is diagnosable, not silent.
   logger.info({
     action: "csam_ocr_result",
