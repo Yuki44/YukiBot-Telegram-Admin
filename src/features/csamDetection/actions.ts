@@ -6,6 +6,7 @@ import { csamRecentMessageRepository } from "../../db/repositories/csamRecentMes
 import { recordActivity, ActivityActor } from "../../utils/activityLog";
 import { logger } from "../../utils/logger";
 import { esc, mentionHtml } from "../../bot/helpers/html";
+import { enqueueLogSend } from "../../bot/helpers/logSendQueue";
 import { SILENCE_DURATION_S, SILENCE_DURATION_MS, CSAM_ALERT_DEDUP_MS } from "../../config/constants";
 
 /**
@@ -156,10 +157,10 @@ export async function sendCsamAlert(
   if (chatConfig.logsTo) {
     notifyKeyboard = undefined;
     try {
-      const sent = await api.sendMessage(chatConfig.logsTo, alert.logText, {
-        parse_mode: "HTML",
-        reply_markup: alert.keyboard,
-      });
+      const dest = chatConfig.logsTo;
+      const sent = await enqueueLogSend(dest, () =>
+        api.sendMessage(dest, alert.logText, { parse_mode: "HTML", reply_markup: alert.keyboard })
+      );
       notifyKeyboard = buildRegistroKeyboard(chatConfig.logsTo, sent.message_id);
       delivered = true;
     } catch (err) {

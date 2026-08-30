@@ -138,6 +138,7 @@ const chatSchema = new Schema<IChat>({
     logEntries: { type: Boolean, default: false },
     logExits: { type: Boolean, default: false },
     logBannedWords: { type: Boolean, default: false },
+    logReports: { type: Boolean, default: false },
   },
   notifyFlags: {
     notifySpam: { type: Boolean, default: false },

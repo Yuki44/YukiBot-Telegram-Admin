@@ -35,6 +35,10 @@ export const TOPIC_REMINDER_INTERVAL_MS = 4 * 60 * 60 * 1000;
 export const TOPIC_REMINDER_DEBOUNCE_MS = 10 * 1000;
 export const TOPIC_REMINDER_MAX_WAIT_MS = 60 * 1000;
 
+// Extra @handles (besides the bot's own username) that summon admins and count as a
+// report. Matched case-insensitively; the leading @ is added by the matcher.
+export const REPORT_MENTION_HANDLES = ["admin"];
+
 // ── Deleted-topic reconciliation sweep ───────────────────────────────
 
 /** How often every cached topic is probed against Telegram. */

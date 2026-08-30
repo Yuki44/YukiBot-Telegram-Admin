@@ -93,6 +93,7 @@ export const chatRepository = {
       "logEntries",
       "logExits",
       "logBannedWords",
+      "logReports",
     ] as const;
     const existingLogFlags = existing?.logFlags as Record<string, unknown> | undefined;
     for (const k of logFlagKeys) {

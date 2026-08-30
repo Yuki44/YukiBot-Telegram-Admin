@@ -128,6 +128,7 @@ export interface IChat extends Document {
     logEntries: boolean;
     logExits: boolean;
     logBannedWords: boolean;
+    logReports: boolean;
   };
   /** Per-notification-type toggles for the `notifyChatId` destination (mirrors `logFlags`). */
   notifyFlags?: {

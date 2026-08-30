@@ -16,6 +16,7 @@ import { trackTopic } from "./bot/middleware/trackTopic";
 import { topicFiltering } from "./features/topicFiltering";
 import { bannedWordsEnforcement } from "./features/bannedWordsEnforcement";
 import { topicReminders } from "./features/topicReminders";
+import { reportLog } from "./features/reportLog";
 import { setupHandler } from "./bot/commands/setup";
 import { migrarHandler } from "./bot/commands/migrar";
 import { addTopicHandler } from "./bot/commands/addTopic";
@@ -198,6 +199,8 @@ bot.on("message:forum_topic_edited", async (ctx) => {
 // Record the message id + queue the bio check BEFORE the slow OCR, so a ban firing mid-OCR still finds it stored.
 bot.on("message", csamBioTrigger);
 bot.on("message", nameChangeTracker);
+// Early, so a report is logged before any later filter could act on the message.
+bot.on("message", reportLog);
 bot.on("message", csamImageScan);
 bot.on("message", mediaForwardHandler);
 bot.on("message", topicFiltering);

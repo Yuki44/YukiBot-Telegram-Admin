@@ -3,6 +3,7 @@ import { Message } from "grammy/types";
 import { IChat } from "../../types";
 import { esc } from "./html";
 import { forwardToLog } from "./forwardToLog";
+import { enqueueLogSend } from "./logSendQueue";
 import { logger } from "../../utils/logger";
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -18,7 +19,8 @@ export type LogAction =
   | "Q_AVISO"
   | "ENTRADA_USUARIO"
   | "SALIDA_USUARIO"
-  | "PALABRA_PROHIBIDA";
+  | "PALABRA_PROHIBIDA"
+  | "REPORTE";
 
 export interface LogUser {
   id: number;
@@ -46,6 +48,8 @@ export interface LogPayload {
   refMsgId?: number;
   /** The original message the admin replied to — forwarded via forwardToLog */
   repliedMsg?: Message;
+  /** REPORTE: the reporter's own /report or @mention message — forwarded for context */
+  reporterMsg?: Message;
   /** The matched banned word (PALABRA_PROHIBIDA only) */
   word?: string;
 }
@@ -64,6 +68,7 @@ const FLAG_MAP: Record<LogAction, keyof IChat["logFlags"]> = {
   ENTRADA_USUARIO: "logEntries",
   SALIDA_USUARIO: "logExits",
   PALABRA_PROHIBIDA: "logBannedWords",
+  REPORTE: "logReports",
 };
 
 const EMOJI_MAP: Record<LogAction, string> = {
@@ -78,6 +83,7 @@ const EMOJI_MAP: Record<LogAction, string> = {
   ENTRADA_USUARIO: "➕",
   SALIDA_USUARIO: "➖",
   PALABRA_PROHIBIDA: "🆎",
+  REPORTE: "🆘",
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -338,14 +344,44 @@ export async function sendLog(
         ];
         break;
       }
+
+      case "REPORTE": {
+        // actor = reporter (De); target = reported author (A), absent when the
+        // report wasn't a reply (then target === actor, so the A line is skipped).
+        const reporter = payload.actor ?? payload.target;
+        const reported = payload.target.id !== reporter.id ? payload.target : undefined;
+        const cid = chatIdForLink(payload.chatId);
+        const link = `https://t.me/c/${cid}/${payload.refMsgId ?? 1}`;
+        lines = [`${emoji} #REPORTE`, `• De: ${userLink(reporter)}`];
+        if (reported) lines.push(`• A: ${userLink(reported)}`);
+        lines.push(`• Grupo: ${grupo}`);
+        lines.push(`• <a href="${link}">⬅️ Ir al mensaje</a>`);
+        lines.push(`• Fecha: ${fecha}`);
+        lines.push(reported ? `#id${reporter.id} #id${reported.id}` : `#id${reporter.id}`);
+        break;
+      }
     }
 
     const text = lines.join("\n");
-    await api.sendMessage(chatConfig.logsTo, text, { parse_mode: "HTML" });
+    const dest = chatConfig.logsTo;
 
-    if (payload.repliedMsg) {
-      await forwardToLog(api, chatConfig.logsTo, payload.repliedMsg);
-    }
+    // Serialize the whole block per destination so a multi-message entry (main line +
+    // forwarded blocks) is never split by another log posting concurrently.
+    await enqueueLogSend(dest, async () => {
+      await api.sendMessage(dest, text, { parse_mode: "HTML" });
+
+      if (payload.action === "REPORTE") {
+        // Two blocks: the reporter's own message, then (if it was a reply) the reported one.
+        if (payload.reporterMsg) {
+          await forwardToLog(api, dest, payload.reporterMsg, "💬 <b>Reporte:</b>");
+        }
+        if (payload.repliedMsg) {
+          await forwardToLog(api, dest, payload.repliedMsg, "💬 <b>Mensaje reportado:</b>");
+        }
+      } else if (payload.repliedMsg) {
+        await forwardToLog(api, dest, payload.repliedMsg);
+      }
+    });
   } catch (err) {
     logger.error({ action: "sendLog", logAction: payload.action, error: String(err) });
   }
