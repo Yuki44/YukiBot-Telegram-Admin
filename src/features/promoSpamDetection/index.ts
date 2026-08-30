@@ -10,6 +10,7 @@ import { forwardToLog } from "../../bot/helpers/forwardToLog";
 import { getChatTitle } from "../../bot/helpers/contextHelpers";
 import { esc, mentionHtml } from "../../bot/helpers/html";
 import { logger } from "../../utils/logger";
+import { formatMadridDateTime } from "../../utils/datetime";
 import { SILENCE_DURATION_S } from "../../config/constants";
 import { t } from "../../locales/i18n";
 import { IChat } from "../../types";
@@ -114,22 +115,7 @@ export async function sendSpamLog(
     const grupo = `${esc(chatName)} [<code>${chatId}</code>]`;
     const cid = String(chatId).replace(/^-100/, "");
 
-    const now = new Date();
-    const meses = [
-      "Enero",
-      "Febrero",
-      "Marzo",
-      "Abril",
-      "Mayo",
-      "Junio",
-      "Julio",
-      "Agosto",
-      "Septiembre",
-      "Octubre",
-      "Noviembre",
-      "Diciembre",
-    ];
-    const fecha = `${now.getDate()} de ${meses[now.getMonth()]} ${now.getFullYear()} a las ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+    const fecha = formatMadridDateTime(new Date());
 
     const header = options?.unconfirmed ? "⚠️ #POSIBLE_SPAM (sin confirmar)" : "🚫 #SPAM";
     const lines = [header, `• A: ${targetLink}`, `• Grupo: ${grupo}`];

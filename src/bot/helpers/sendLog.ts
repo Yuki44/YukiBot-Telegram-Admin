@@ -4,6 +4,7 @@ import { IChat } from "../../types";
 import { esc } from "./html";
 import { forwardToLog } from "./forwardToLog";
 import { enqueueLogSend } from "./logSendQueue";
+import { formatMadridDateTime, formatMadridShortDate } from "../../utils/datetime";
 import { logger } from "../../utils/logger";
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -101,39 +102,6 @@ function topicLink(chatId: number, topicId: number, topicName: string): string {
   return `<a href="https://t.me/c/${cid}/${topicId}">${esc(topicName)}</a>`;
 }
 
-const MESES_ES = [
-  "enero",
-  "febrero",
-  "marzo",
-  "abril",
-  "mayo",
-  "junio",
-  "julio",
-  "agosto",
-  "septiembre",
-  "octubre",
-  "noviembre",
-  "diciembre",
-];
-
-function formatDate(d: Date): string {
-  const day = d.getDate();
-  const month = MESES_ES[d.getMonth()];
-  const monthCap = month.charAt(0).toUpperCase() + month.slice(1);
-  const year = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  const ss = String(d.getSeconds()).padStart(2, "0");
-  return `${day} de ${monthCap} ${year} a las ${hh}:${mm}:${ss}`;
-}
-
-function formatShortDate(d: Date): string {
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  return `${dd}/${mm}/${yyyy}`;
-}
-
 function hashIds(target: LogUser, actor?: LogUser): string {
   let tags = `#id${target.id}`;
   if (actor && actor.id !== target.id) tags += ` #id${actor.id}`;
@@ -183,7 +151,7 @@ export async function sendLog(
     const emoji = EMOJI_MAP[payload.action];
     const now = new Date();
     const grupo = `${esc(payload.chatName)} [<code>${payload.chatId}</code>]`;
-    const fecha = formatDate(now);
+    const fecha = formatMadridDateTime(now);
     const navLine = buildNavLine(payload.chatId, payload.chatType, payload.topicId, payload.refMsgId);
 
     let lines: string[] = [];
@@ -206,7 +174,7 @@ export async function sendLog(
 
       case "SILENCIO": {
         const until = payload.muteUntil ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-        const untilStr = formatShortDate(until);
+        const untilStr = formatMadridShortDate(until);
         lines = [
           `${emoji} #SILENCIO`,
           `• De: ${payload.actor ? userLink(payload.actor) : "Sistema"}`,
