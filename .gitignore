@@ -151,8 +151,9 @@ vite.config.ts.timestamp-*
 # Claude Code
 .claude/memory/
 .claude/worktrees/
-# Local junctions mirroring .agents/skills/ so Claude Code discovers them (see AGENTS.md#skills)
+# Local junctions mirroring .agents/skills/ so Claude Code / Junie discover them (see AGENTS.md#skills)
 .claude/skills/
+.junie/skills/
 
 # Web — design handoff reference (extracted ZIP, kept locally only)
 web/.design-reference/

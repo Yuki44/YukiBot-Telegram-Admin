@@ -231,6 +231,34 @@ describe("evaluateImageText — OCR handle garble (real 2026-07-27/28 gallery)",
   });
 });
 
+describe("evaluateImageText — captions are strict, OCR stays fuzzy (2026-08-30 false positives)", () => {
+  const kw: WatchConfig = { handles: [], solicitation: [], negation: [], keywords: ["child"] };
+
+  it("does NOT match a clean caption one real letter from a keyword ('...de chile' ≠ child)", () => {
+    expect(evaluateImageText("", kw, "Hola alguien de santiago de chile").matched).toBe(false);
+  });
+
+  it("does NOT match the caption word 'chill'", () => {
+    expect(evaluateImageText("", kw, "just chill bro").matched).toBe(false);
+  });
+
+  it("still matches the exact keyword typed in a caption (leet included)", () => {
+    expect(evaluateImageText("", kw, "vendo child aqui").matched).toBe(true);
+    expect(evaluateImageText("", kw, "ch1ld").matched).toBe(true);
+  });
+
+  it("keeps OCR edit-distance tolerance: 'chill' read from an image still matches", () => {
+    expect(evaluateImageText("chill", kw).matched).toBe(true);
+  });
+
+  it("does not fuzz a caption even when OCR text is also present", () => {
+    // 'chile' rides in on the (strict) caption, 'chill' on the (fuzzy) OCR text.
+    const capOnly: WatchConfig = kw;
+    expect(evaluateImageText("", capOnly, "de chile").matched).toBe(false);
+    expect(evaluateImageText("chill", capOnly, "de chile").matched).toBe(true);
+  });
+});
+
 describe("evaluateImageText — OCR-noise tolerance (edit distance, keywords only)", () => {
   const kw: WatchConfig = {
     handles: ["nomax16"],

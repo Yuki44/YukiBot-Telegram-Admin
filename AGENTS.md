@@ -236,15 +236,18 @@ The agent maintains it **unprompted**: capture each decision as it lands, archiv
 
 Reusable agent procedures, installed once as a single canonical copy — **no per-agent duplication**. Regardless of which tool is driving (Claude Code, Copilot CLI, …), read the linked `SKILL.md` when its trigger matches the current task.
 
-**Claude Code setup note:** Claude Code only auto-discovers skills under `.claude/skills/`, not `.agents/skills/`. On a fresh clone (or new machine), bridge them with a per-skill directory junction so Claude Code can see them without duplicating content:
+**Setup note (Claude Code & Junie):** Claude Code only auto-discovers skills under `.claude/skills/`, and Junie under `.junie/skills/` — neither reads `.agents/skills/` directly. On a fresh clone (or new machine), bridge them with per-skill directory junctions so both tools see the canonical skills without duplicating content:
 
 ```powershell
-Get-ChildItem ".agents\skills" -Directory | ForEach-Object {
-  New-Item -ItemType Junction -Path ".claude\skills\$($_.Name)" -Target $_.FullName
+foreach ($dest in ".claude\skills", ".junie\skills") {
+  New-Item -ItemType Directory $dest -Force | Out-Null
+  Get-ChildItem ".agents\skills" -Directory | ForEach-Object {
+    New-Item -ItemType Junction -Path "$dest\$($_.Name)" -Target $_.FullName
+  }
 }
 ```
 
-`.claude/skills/` is gitignored (machine-local junctions, not tracked content).
+Both `.claude/skills/` and `.junie/skills/` are gitignored (machine-local junctions, not tracked content). Junie also auto-loads `.junie/guidelines.md`, which points back here.
 
 | Skill                      | Path                                                | When to use                                                                     |
 | -------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------- |

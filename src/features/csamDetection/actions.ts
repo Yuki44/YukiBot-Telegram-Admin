@@ -77,7 +77,7 @@ export function buildCsamAlert(
   const header =
     verdict === "AUTO_BAN"
       ? "🚨 #CP_ALERTA — BANEO AUTOMÁTICO"
-      : "🚨 #CP_ALERTA — SILENCIADO (revisión manual)";
+      : "⚠️ #CP_ALERTA — SILENCIADO (revisión manual)";
 
   // Full audit detail for the log channel — no @edjoker ping here (G5 trail).
   const logLines = [
@@ -94,13 +94,11 @@ export function buildCsamAlert(
   logLines.push(`#id${params.targetId}`);
 
   // Compact heads-up for the admin chat (detail lives in the log). Ends with the
-  // mention so the admins get pinged; the buttons carry the ids to act on.
-  const verdictShort = verdict === "AUTO_BAN" ? "baneo automático" : "silenciado — revisar";
-  const notifyLines = [
-    `🚨 #CP_ALERTA — ${verdictShort}`,
-    `${who} · ${esc(params.chatName)}`,
-    CSAM_NOTIFY_MENTION,
-  ];
+  // mention so the admins get pinged; the buttons carry the ids to act on. Silence
+  // leads with ⚠️ + REVISAR so a pending-review alert is distinct at a glance from a ban.
+  const notifyHeader =
+    verdict === "AUTO_BAN" ? "🚨 #CP_ALERTA — BANEADO" : "⚠️ #CP_ALERTA — REVISAR (silenciado)";
+  const notifyLines = [notifyHeader, `${who} · ${esc(params.chatName)}`, CSAM_NOTIFY_MENTION];
 
   const keyboard =
     verdict === "AUTO_BAN"
