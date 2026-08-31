@@ -33,6 +33,7 @@ import { clearSession, getToken } from "./auth";
 import { loading } from "./loading";
 
 const BASE = "/api";
+const REQUEST_TIMEOUT_MS = 20000;
 
 class ApiError extends Error {
   status: number;
@@ -56,12 +57,26 @@ async function request<T>(
 
   // Ref-counted global loading indicator. See lib/loading.ts.
   loading.begin();
+  // Time out reads so a stalled connection can't pin the overlay forever;
+  // mutations can run long (migration, dedup), so leave them unbounded.
+  const controller = new AbortController();
+  const timeout =
+    method === "GET" ? setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS) : null;
   try {
-    const res = await fetch(`${BASE}${path}`, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${BASE}${path}`, {
+        method,
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        throw new ApiError(0, "timeout");
+      }
+      throw new ApiError(0, "network_error");
+    }
 
     if (res.status === 401) {
       clearSession();
@@ -82,6 +97,7 @@ async function request<T>(
     if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
   } finally {
+    if (timeout) clearTimeout(timeout);
     loading.end();
   }
 }

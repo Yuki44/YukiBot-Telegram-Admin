@@ -93,7 +93,7 @@ export function createChannelBroadcastsRouter(bot: Bot<BotContext>): Router {
 
   router.get("/", async (_req: Request, res: Response) => {
     try {
-      const configs = await channelBroadcastRepository.listAll();
+      const configs = await channelBroadcastRepository.listAllMeta();
       for (const cfg of configs) refreshChannelMeta(bot, cfg);
       res.json(configs.map(toDto));
     } catch (err) {
