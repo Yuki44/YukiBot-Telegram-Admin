@@ -38,6 +38,11 @@ export const channelBroadcastRepository = {
     return await ChannelBroadcast.find({}).sort({ channelName: 1 });
   },
 
+  // Omits the inline image buffers; never use for sending — the scheduler needs image.data.
+  async listAllMeta(): Promise<IChannelBroadcast[]> {
+    return await ChannelBroadcast.find({}).select("-posts.image.data").sort({ channelName: 1 });
+  },
+
   async findByChannelId(channelId: number): Promise<IChannelBroadcast | null> {
     return await ChannelBroadcast.findOne({ channelId });
   },
