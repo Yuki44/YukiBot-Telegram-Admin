@@ -208,6 +208,13 @@ describe("chatMemberHandler — welcome", () => {
     }
   });
 
+  it("does NOT welcome when the bot itself caused the transition (e.g. silence's restrict)", async () => {
+    const ctx = makeCtx({ oldStatus: "left", status: "restricted" });
+    (ctx.chatMember as { from: { id: number } }).from = { id: 999 }; // === me.id
+    await chatMemberHandler(ctx as never);
+    expect(sendWelcome).not.toHaveBeenCalled();
+  });
+
   it("falls back to the first name when the user has no username", async () => {
     const ctx = makeCtx({ user: { id: 7, is_bot: false, first_name: "Trinity" } });
     await chatMemberHandler(ctx as never);

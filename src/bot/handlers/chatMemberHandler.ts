@@ -172,6 +172,9 @@ export async function chatMemberHandler(ctx: Filter<BotContext, "chat_member">):
     const wasOut = oldM.status === "left" || oldM.status === "kicked";
     if (!wasOut) return;
 
+    // A transition the bot itself caused (e.g. silence's restrict) is not a join.
+    if (from && from.id === ctx.me.id) return;
+
     // handleUserJoin is shared with newChatMembersHandler: a re-banned user is
     // banned (autoBan), otherwise greeted exactly once. Return early on
     // auto-ban (no ENTRADA log for a re-banned user) and on findOrCreate

@@ -45,7 +45,7 @@ function makeCtx(
       from: { id: 999, is_bot: false, first_name: "Admin" },
     },
     chat: { id: CHAT_ID, type: "supergroup", title: "Test Group" },
-    me: { id: 999 },
+    me: { id: 1 },
     chatConfig: {
       type: "normal",
       logsTo: null,
